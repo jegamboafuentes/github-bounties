@@ -7,7 +7,7 @@
 ## Result: BLOCKED (expected) — no live USDC
 
 This Cloud Agent workspace has **no CDP credentials** in the environment and **no
-gcloud access** to Secret Manager on `github-bounties` (`133702056111`).
+gcloud access** to Secret Manager on `experiment-jegf` (`42206083192`).
 
 A live Base Sepolia fund→release was **not** attempted. No mainnet, no production
 user funds, no secrets committed.
@@ -26,7 +26,7 @@ Create the three required values in the [CDP Portal](https://portal.cdp.coinbase
 (Secret API Key + Wallet Secret), then:
 
 ```bash
-gcloud config set project github-bounties   # 133702056111
+gcloud config set project experiment-jegf   # 42206083192
 gcloud secrets create CDP_API_KEY_ID --replication-policy=automatic
 # ...repeat for CDP_API_KEY_SECRET and CDP_WALLET_SECRET
 echo -n 'VALUE' | gcloud secrets versions add CDP_API_KEY_ID --data-file=-
@@ -74,7 +74,7 @@ BLOCKED: sandbox/dry-run cannot call CDP. Missing credentials:
   - GCP Secret Manager / env: CDP_WALLET_SECRET
 
 Expected location:
-  GCP project github-bounties (133702056111)
+  GCP project experiment-jegf (42206083192)
   Secret IDs: CDP_API_KEY_ID, CDP_API_KEY_SECRET, CDP_WALLET_SECRET
   Create in CDP Portal → Secret API Key + Wallet Secret, then store in Secret Manager.
   Docs: https://docs.cdp.coinbase.com/get-started/docs/cdp-api-keys
@@ -112,7 +112,7 @@ CDP_NETWORK=base node scripts/money-path-dry-run.mjs
 ## Unblock checklist (ADR Accepted)
 
 1. [ADR 0001](../adr/0001-cdp-x402-wallets.md) is **Accepted** (PR #1). Still no prod-wire of escrow into product UI until V1 tickets.
-2. Create CDP sandbox project keys; store the three required secrets in GCP `github-bounties`.
+2. Create CDP sandbox project keys; store the three required secrets in GCP `experiment-jegf`.
 3. Grant runtime SA `secretmanager.secretAccessor`.
 4. Run `CDP_DRY_RUN_LIVE=1` on Base Sepolia only; paste tx hashes into this spike.
 5. Only then consider V1 wiring (still not production user funds until a later go-live).

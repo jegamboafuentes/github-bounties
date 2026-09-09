@@ -65,7 +65,7 @@ Blocked until a staging App and public HTTPS webhook URL exist. Signature checks
 **In**
 
 - ADR (custody, 2% fee, fund → claim-lock → merge/release → refund)
-- Secret Manager key names for GCP project `github-bounties` (`133702056111`)
+- Secret Manager key names for GCP project `experiment-jegf` (`42206083192`)
 - Sandbox/dry-run notes and a credential-safe stub
 
 **Out** (later tickets)
@@ -93,4 +93,18 @@ Copy [.env.example](.env.example) locally. Do not commit `.env`.
 
 - Platform fee: 2% of face
 - V1 claim-lock: 72 hours, exclusive, coordination only
-- GCP: `github-bounties` / `133702056111`
+- GCP: `experiment-jegf` / `42206083192`
+
+## GCP staging (V0-C)
+
+Eng runbook: [docs/gcp-bootstrap.md](docs/gcp-bootstrap.md).
+
+| Item | Lock |
+| --- | --- |
+| Project | `experiment-jegf` / `42206083192` |
+| Labels | `product=github-bounties`, `env=staging` |
+| Hello | `GET /` and `GET /api/health` → 200 (`services/hello`) |
+| Live Cloud Run URL | **blocked: missing gcloud auth / billing** in the bootstrap environment — do not invent a `*.run.app` host |
+| Billing account | `LB_MVP1_Billing_account` |
+
+gcloud/Terraform stubs live under [`infra/`](infra/). Cloud Build stub: [`cloudbuild.yaml`](cloudbuild.yaml). Evidence: [docs/spikes/v0-c-gcp-bootstrap.md](docs/spikes/v0-c-gcp-bootstrap.md).
