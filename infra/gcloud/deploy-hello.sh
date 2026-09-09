@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build the hello image locally (or via Cloud Build) and deploy to Cloud Run.
 # Default dry-run; pass --apply to execute. Will fail here without gcloud + billing + AR.
+# --allow-unauthenticated may still 403 under Domain Restricted Sharing (no allUsers).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -48,3 +49,8 @@ echo
 echo "Live URL (only after a successful deploy):"
 echo "  gcloud run services describe ${HELLO_SERVICE} --region=${REGION} --format='value(status.url)'"
 echo "Do not invent a *.run.app URL if deploy did not happen."
+echo
+echo "Unauth GET may 403 under Domain Restricted Sharing (allUsers blocked) even with"
+echo "--allow-unauthenticated. Use authenticated curl or grant roles/run.invoker to testers;"
+echo "do not add a public invoker binding if org policy forbids it:"
+echo "  curl -sS -H \"Authorization: Bearer \$(gcloud auth print-identity-token)\" \"\$URL/api/health\""
