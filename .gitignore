@@ -2,7 +2,10 @@
 .env.*
 !.env.example
 node_modules/
+dist/
+.data/
 *.pem
 *.key
 cdp_api_key.json
 wallet_secret.txt
+.DS_Store

@@ -1,0 +1,6 @@
+{
+  "comment": "Official GitHub HMAC test vector from docs.github.com (Validating webhook deliveries). This is not a production secret.",
+  "secret": "It's a Secret to Everybody",
+  "payload": "Hello, World!",
+  "signature256": "sha256=757107ea0eb2509fc211221cce984b8a37570b6d7586c22c46f4379c8b043e17"
+}

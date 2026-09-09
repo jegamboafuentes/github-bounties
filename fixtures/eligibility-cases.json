@@ -1,0 +1,438 @@
+[
+  {
+    "id": "fixes-hash",
+    "description": "Merged PR to default branch, body `Fixes #42`",
+    "expected": true,
+    "expectedClosedIssueNumbers": [42],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Fixes #42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "closes-hash",
+    "description": "Merged PR to default branch, body `Closes #42`",
+    "expected": true,
+    "expectedClosedIssueNumbers": [42],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Closes #42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "resolves-colon-uppercase",
+    "description": "Merged PR, body `RESOLVES: #42`",
+    "expected": true,
+    "expectedClosedIssueNumbers": [42],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "RESOLVES: #42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "fixes-in-sentence",
+    "description": "Merged PR, body `This PR fixes #42.`",
+    "expected": true,
+    "expectedClosedIssueNumbers": [42],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "This PR fixes #42.",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "same-repo-owner-prefix",
+    "description": "Merged PR, body `Fixes octo/hello#42` (same repo)",
+    "expected": true,
+    "expectedClosedIssueNumbers": [42],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Fixes octo/hello#42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "issue-url",
+    "description": "Merged PR, body with GitHub issue URL after Fixes",
+    "expected": true,
+    "expectedClosedIssueNumbers": [42],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Fixes https://github.com/octo/hello/issues/42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "multiple-issues",
+    "description": "Merged PR closes two issues; funded table later filters",
+    "expected": true,
+    "expectedClosedIssueNumbers": [10, 42],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Resolves #10, closes #42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "linked-issue-no-keyword",
+    "description": "Manual Development-sidebar link, no keyword in body",
+    "expected": true,
+    "expectedClosedIssueNumbers": [42],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "See the sidebar.",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main",
+        "closingIssueNumbers": [42]
+      }
+    }
+  },
+  {
+    "id": "squash-commit-closes",
+    "description": "Squash-merge: PR body is Refs, squash commit concatenates Closes #42",
+    "expected": true,
+    "expectedClosedIssueNumbers": [42],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Refs #42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main",
+        "mergeCommitMessage": "Fix login\n\nCloses #42"
+      }
+    }
+  },
+  {
+    "id": "commit-message-closes",
+    "description": "Merge commit: keyword only in a commit message, not PR body",
+    "expected": true,
+    "expectedClosedIssueNumbers": [42],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main",
+        "commitMessages": ["Closes #42"]
+      }
+    }
+  },
+  {
+    "id": "github-negation-false-positive",
+    "description": "GitHub still closes on `must NOT close #42` — we match that",
+    "expected": true,
+    "expectedClosedIssueNumbers": [42],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "This must NOT close #42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "refs-not-closing",
+    "description": "`Refs #42` is not a closing keyword",
+    "expected": false,
+    "expectedClosedIssueNumbers": [],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Refs #42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "related-to",
+    "description": "`Related to #42` is not a closing keyword",
+    "expected": false,
+    "expectedClosedIssueNumbers": [],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Related to #42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "duplicate-of",
+    "description": "`Duplicate of #42` is not a closing keyword",
+    "expected": false,
+    "expectedClosedIssueNumbers": [],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Duplicate of #42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "wrong-issue-number",
+    "description": "`Fixes #41` does not close #42 (no closed issues match funded N in V1 filter)",
+    "expected": true,
+    "expectedClosedIssueNumbers": [41],
+    "note": "Engine returns the issues the PR closes. V1 bounty filter drops non-funded N.",
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Fixes #41",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "cross-repo-ignored",
+    "description": "`Fixes other/repo#42` does not close this repo's #42",
+    "expected": false,
+    "expectedClosedIssueNumbers": [],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Fixes other/repo#42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "closed-not-merged",
+    "description": "PR closed without merge, even with Fixes #42",
+    "expected": false,
+    "expectedClosedIssueNumbers": [],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Fixes #42",
+        "merged": false,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "opened-not-closed",
+    "description": "PR opened with Fixes #42 is not eligibility (merge is truth)",
+    "expected": false,
+    "expectedClosedIssueNumbers": [],
+    "input": {
+      "event": "pull_request",
+      "action": "opened",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Fixes #42",
+        "merged": false,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "non-default-base",
+    "description": "Merged to develop, not default branch — GitHub ignores keywords",
+    "expected": false,
+    "expectedClosedIssueNumbers": [],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Fixes #42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "develop"
+      }
+    }
+  },
+  {
+    "id": "issues-event-ignored",
+    "description": "issues.closed is not the eligibility signal (avoids double-fire)",
+    "expected": false,
+    "expectedClosedIssueNumbers": [],
+    "input": {
+      "event": "issues",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main"
+    }
+  },
+  {
+    "id": "squash-body-only-refs-no-commit",
+    "description": "Squash edge: body Refs only, no merge commit text, no linked issues",
+    "expected": false,
+    "expectedClosedIssueNumbers": [],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "Refs #42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  },
+  {
+    "id": "unfixed-not-keyword",
+    "description": "`unfixed #42` must not match as Fixes",
+    "expected": false,
+    "expectedClosedIssueNumbers": [],
+    "input": {
+      "event": "pull_request",
+      "action": "closed",
+      "repositoryFullName": "octo/hello",
+      "defaultBranch": "main",
+      "pullRequest": {
+        "number": 15,
+        "title": "Fix login",
+        "body": "still unfixed #42",
+        "merged": true,
+        "authorLogin": "octocat",
+        "baseRef": "main"
+      }
+    }
+  }
+]

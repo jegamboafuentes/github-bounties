@@ -4,6 +4,8 @@ USDC bounties on GitHub issues. Official name: **GitHub Bounties**.
 
 This is not Lightning Bounties, LB1, or “Lightning Bounties 2”.
 
+**V1 winner:** author of the merged pull request that closes funded issue `#N`. Claim-lock (exclusive **72h**) coordinates work; **merge is truth**.
+
 ## Money path status
 
 [ADR 0001](docs/adr/0001-cdp-x402-wallets.md) is **Accepted** (product sign-off on PR #1).
@@ -24,6 +26,39 @@ Read the decision, sequences, failure modes, and GCP Secret Manager names in:
 
 - [ADR 0001 — CDP wallets + x402 USDC escrow](docs/adr/0001-cdp-x402-wallets.md)
 - [ADR index](docs/adr/README.md)
+
+## V0-B — GitHub App webhooks
+
+Prove App install + signed webhook delivery and the merge→close eligibility predicate **before** bounty CRUD UI.
+
+| Item | Where |
+| --- | --- |
+| Test App setup, minimal permissions, staging URLs | [docs/github-app.md](docs/github-app.md) |
+| Predicate, fixture table, replay | [docs/webhooks.md](docs/webhooks.md) |
+| HMAC verification | [`src/verify-signature.ts`](src/verify-signature.ts) |
+| Eligibility engine | [`src/eligibility.ts`](src/eligibility.ts) |
+| Delivery-id store | [`src/delivery-store.ts`](src/delivery-store.ts) |
+
+Product users will use **Google Sign-In later**. The GitHub App is repo authority only.
+
+```bash
+npm install
+npm test
+cp .env.example .env   # set GITHUB_WEBHOOK_SECRET
+npm start              # POST /webhooks/github
+```
+
+Replay a signed fixture twice (idempotency):
+
+```bash
+GITHUB_WEBHOOK_SECRET='test-secret' npm run replay -- fixtures/pull-request-merged-fixes.json --twice
+```
+
+No secrets belong in git. App private keys (`*.pem`) are gitignored.
+
+### Live GitHub delivery
+
+Blocked until a staging App and public HTTPS webhook URL exist. Signature checks use GitHub’s published HMAC vector and a locally signed `pull_request` payload. Details: [docs/github-app.md](docs/github-app.md#live-delivery-blocker-this-environment).
 
 ## V0-A scope
 

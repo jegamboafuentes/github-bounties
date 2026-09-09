@@ -1,0 +1,30 @@
+{
+  "deliveryId": "72d3162e-cc78-11e3-81ab-4c9367dc0958",
+  "event": "pull_request",
+  "payload": {
+    "action": "closed",
+    "number": 15,
+    "pull_request": {
+      "number": 15,
+      "title": "Fix login",
+      "body": "Fixes #42",
+      "merged": true,
+      "merged_at": "2026-09-09T18:00:00Z",
+      "user": { "login": "octocat" },
+      "base": {
+        "ref": "main",
+        "repo": {
+          "full_name": "octo/hello",
+          "default_branch": "main"
+        }
+      },
+      "merge_commit_sha": "abc123def456"
+    },
+    "repository": {
+      "full_name": "octo/hello",
+      "default_branch": "main"
+    },
+    "installation": { "id": 1 },
+    "sender": { "login": "octocat" }
+  }
+}
