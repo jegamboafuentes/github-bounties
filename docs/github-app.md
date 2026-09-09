@@ -1,6 +1,6 @@
 # GitHub App setup (staging / test app)
 
-This spike uses a **GitHub App** for repository authority (install + webhooks). Product users will sign in with **Google Sign-In later**. Do not implement GitHub user OAuth in V0-B beyond registering the callback URL so the App form is complete.
+This spike uses a **GitHub App** for repository authority (install + webhooks). Product users sign in with **Google Sign-In** ([docs/google-signin.md](google-signin.md)). Do not implement GitHub user OAuth for product login beyond registering the callback URL so the App form is complete.
 
 Official name: **GitHub Bounties**. This is not Lightning Bounties / LB1 / “Lightning Bounties 2”.
 

@@ -39,7 +39,7 @@ Prove App install + signed webhook delivery and the merge→close eligibility pr
 | Eligibility engine | [`src/eligibility.ts`](src/eligibility.ts) |
 | Delivery-id store | [`src/delivery-store.ts`](src/delivery-store.ts) |
 
-Product users will use **Google Sign-In later**. The GitHub App is repo authority only.
+Product users sign in with **Google**. The GitHub App is repo authority only.
 
 ```bash
 npm install
@@ -119,6 +119,20 @@ npm run test:db
 ```
 
 Cloud SQL: export `DATABASE_URL` from Secret Manager (never commit it) and run the same `db:migrate` from `apps/web`. Details: [apps/web/README.md](apps/web/README.md#cloud-sql-staging).
+
+## V1-2 — Google Sign-In + session
+
+Auth.js (NextAuth v5) Google provider in `apps/web`. Session cookie is httpOnly (Secure in production). Login upserts `users` by `google_sub`. Setup: [docs/google-signin.md](docs/google-signin.md).
+
+| Item | Where |
+| --- | --- |
+| Sign in / out | `/signin`, header **Sign out** |
+| Profile | `/settings` (protected) |
+| Session API | `GET /api/me` (401 if anonymous) |
+| Connect GitHub | stub `POST /api/github/connect` → V1-3 |
+| Env | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `AUTH_SECRET` (empty in `.env.example`) |
+
+Without those vars, `/signin` lists the missing names. CI does not call live Google.
 
 ## GCP staging (V0-C)
 

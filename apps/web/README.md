@@ -81,12 +81,33 @@ postgresql://gb_app:PASSWORD@/github_bounties?host=/cloudsql/experiment-jegf:us-
 | `npm run db:generate` | `drizzle-kit generate` after schema edits |
 | `npm run db:migrate` | apply `drizzle/` to `DATABASE_URL` |
 | `npm run db:seed` | sample user / repo / pending_fund + funded bounty |
-| `npm run test:unit` | fee 2% + 72h helpers (no database) |
-| `npm run test:db` | unique indexes + column defaults (needs `DATABASE_URL`) |
+| `npm run test:unit` | fee 2% + 72h helpers + auth env/cookies/paths (no Google, no database) |
+| `npm run test:db` | unique indexes + `users.google_sub` upsert (needs `DATABASE_URL`) |
 | `npm run build` | Next.js standalone |
 
-## Out of scope (this ticket)
+## Google Sign-In (V1-2)
 
-- Real Google / GitHub OAuth
-- Live CDP / x402
+Auth.js / NextAuth v5 with the Google provider. Documented in [docs/google-signin.md](../../docs/google-signin.md).
+
+```bash
+# apps/web/.env — never commit real values
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
+AUTH_SECRET=
+```
+
+Redirect URIs to register on the GCP OAuth **Web** client (`experiment-jegf` / `42206083192`):
+
+- `http://localhost:3000/api/auth/callback/google`
+- `https://<cloud-run-host>/api/auth/callback/google` (use the real Cloud Run URL; do not invent a host)
+
+`/settings` and `GET /api/me` require a session. **Connect GitHub** is a stub until V1-3.
+
+If Google env is missing, `/signin` lists the unset variable names. Home and `/api/health` still work.
+
+## Out of scope (later tickets)
+
+- Real GitHub App install / `github_links` (V1-3)
+- Bounty CRUD / claim-lock UI (V1-4)
+- Live CDP / x402 (V1-5)
 - Participation-pool accounting beyond nullable columns

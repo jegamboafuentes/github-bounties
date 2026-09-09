@@ -41,6 +41,8 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://gb:gb@127.0.0.1:5432/github_bounties
+      # Cookie-signing placeholder for `next build` only. Not a production secret. No live Google in CI.
+      AUTH_SECRET: ci-build-placeholder-not-a-production-secret
     defaults:
       run:
         working-directory: apps/web

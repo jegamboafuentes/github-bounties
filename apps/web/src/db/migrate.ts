@@ -2,6 +2,9 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDb } from "./client";
+import { loadDotenvFiles } from "./load-dotenv";
+
+loadDotenvFiles();
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const migrationsFolder = resolve(here, "../../drizzle");
