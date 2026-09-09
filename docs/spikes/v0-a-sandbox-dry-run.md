@@ -109,9 +109,9 @@ CDP_NETWORK=base node scripts/money-path-dry-run.mjs
 - `CdpClient` faucet or `transfer`
 - Base mainnet
 
-## Unblock checklist (post-ADR sign-off)
+## Unblock checklist (ADR Accepted)
 
-1. Accept [ADR 0001](../adr/0001-cdp-x402-wallets.md).
+1. [ADR 0001](../adr/0001-cdp-x402-wallets.md) is **Accepted** (PR #1). Still no prod-wire of escrow into product UI until V1 tickets.
 2. Create CDP sandbox project keys; store the three required secrets in GCP `github-bounties`.
 3. Grant runtime SA `secretmanager.secretAccessor`.
 4. Run `CDP_DRY_RUN_LIVE=1` on Base Sepolia only; paste tx hashes into this spike.

@@ -4,13 +4,11 @@ USDC bounties on GitHub issues. Official name: **GitHub Bounties**.
 
 This is not Lightning Bounties, LB1, or “Lightning Bounties 2”.
 
-## Do not prod-wire money until the ADR is signed
+## Money path status
 
-**V0-A is docs + a sandbox dry-run stub.** Do not wire Coinbase checkout, CDP transfers,
-or fee collection into a product UI or a production service until
-[ADR 0001](docs/adr/0001-cdp-x402-wallets.md) is **Accepted**.
+[ADR 0001](docs/adr/0001-cdp-x402-wallets.md) is **Accepted** (product sign-off on PR #1).
 
-No real USDC production spend. No production user funds.
+**Accepted** — still no prod-wire of escrow into product UI until V1 tickets; Secret Manager + Sepolia dry-run OK when credentials exist. No real USDC production spend. No production user funds.
 
 ## Money path (V0-A)
 

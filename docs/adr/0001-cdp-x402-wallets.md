@@ -1,13 +1,14 @@
 # ADR 0001: CDP wallets + x402 for USDC escrow (2% platform fee)
 
-- **Status:** Proposed — **do not prod-wire until this ADR is Accepted (signed)**
+- **Status:** Accepted — product sign-off on [PR #1](https://github.com/jegamboafuentes/github-bounties/pull/1) (2026-09-09)
 - **Date:** 2026-09-09
 - **Product:** GitHub Bounties (not Lightning Bounties / LB1 / “Lightning Bounties 2”)
 - **Ticket:** V0-A
 - **GCP project:** `github-bounties` / `133702056111`
 
-> **Stop line.** No production escrow service, no UI checkout wiring, and no real USDC
-> mainnet spend until this ADR is marked **Accepted**. Sandbox/dry-run only.
+> **Accepted** — still no prod-wire of escrow into product UI until V1 tickets;
+> Secret Manager + Sepolia dry-run OK when credentials exist. No real USDC mainnet
+> spend. No production user funds.
 
 ## Context
 
@@ -74,7 +75,7 @@ funded only when the CDP escrow wallet’s confirmed USDC increase matches `face
 | Env | Network | CAIP-2 | USDC |
 | --- | --- | --- | --- |
 | Sandbox / dry-run | Base Sepolia | `eip155:84532` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` (Circle test USDC, 6 decimals) |
-| Future prod (after ADR signed) | Base | `eip155:8453` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+| Future prod (V1 tickets; not this follow-up) | Base | `eip155:8453` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 
 V1 is **Base-only**. Checkouts API `network` enum is currently `base` only.
 
@@ -438,15 +439,15 @@ Wallet secret: CDP Portal → Wallets → Security.
 - CDP idempotency is only 24h; we must persist `tx_hash` ourselves.
 - Hosted-checkout merchant fees are **unconfirmed**; V1 must measure `netAmount`.
 
-## Do not prod-wire until ADR signed
+## Accepted — still no prod-wire of escrow into product UI until V1 tickets
 
-Implementation after **Accepted**:
+Secret Manager + Sepolia dry-run OK when credentials exist.
 
 1. Create sandbox secrets in GCP `github-bounties`.
 2. Re-run `node scripts/money-path-dry-run.mjs` with `CDP_DRY_RUN_LIVE=1` on Base Sepolia only.
-3. Then V0-B/C may build product around this money path.
+3. V1 tickets may then wire product UI; this follow-up does not.
 
-Until then: docs + dry-run stub only. **No production user funds.**
+**No production user funds. No mainnet USDC.**
 
 ## Spike
 
