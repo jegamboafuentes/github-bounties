@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { describe, it } from "node:test";
 import { CLAIM_LOCK_HOURS, FEE_BPS } from "../lib/constants";
 import { createDb } from "./client";
+import { isUniqueViolation } from "./errors";
 import { loadDotenvFiles } from "./load-dotenv";
 
 loadDotenvFiles();
@@ -13,36 +14,6 @@ import {
   repos,
   users,
 } from "./schema";
-
-function isUniqueViolation(err: unknown): boolean {
-  let current: unknown = err;
-  for (let i = 0; i < 6 && current; i++) {
-    if (
-      typeof current === "object" &&
-      current !== null &&
-      "code" in current &&
-      (current as { code?: string }).code === "23505"
-    ) {
-      return true;
-    }
-    const message =
-      current instanceof Error
-        ? current.message
-        : typeof current === "object" &&
-            current !== null &&
-            "message" in current
-          ? String((current as { message?: unknown }).message)
-          : "";
-    if (/duplicate key|unique constraint|23505/i.test(message)) {
-      return true;
-    }
-    current =
-      typeof current === "object" && current !== null && "cause" in current
-        ? (current as { cause?: unknown }).cause
-        : undefined;
-  }
-  return false;
-}
 
 describe("V1 schema (empty-or-seeded Postgres)", () => {
   it("enforces 72h claim-lock default, 2% fee default, and one active bounty/lock", async () => {

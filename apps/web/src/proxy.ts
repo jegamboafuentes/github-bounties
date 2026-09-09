@@ -8,8 +8,8 @@ const { auth } = NextAuth(authConfig);
 
 /**
  * Next.js 16 proxy (replaces middleware.ts).
- * Unauthenticated callers cannot hit /settings, GitHub install return pages,
- * /api/me, or /api/github/connect. Webhooks are not matched (HMAC auth).
+ * Unauthenticated callers cannot hit /settings, /bounties/new, GitHub install
+ * return pages, /api/me, or /api/github/connect. Webhooks are not matched (HMAC).
  */
 export default auth((req) => {
   const pathname = req.nextUrl.pathname;
@@ -36,5 +36,6 @@ export const config = {
     "/api/github/connect",
     "/github/setup",
     "/github/callback",
+    "/bounties/new",
   ],
 };

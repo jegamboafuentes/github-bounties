@@ -32,7 +32,7 @@ export default function Home() {
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 py-14">
         <div className="flex flex-col gap-4">
           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-            V1 scaffold
+            V1-4 bounty board
           </p>
           <h1 className="text-4xl font-semibold tracking-tight">{PRODUCT_NAME}</h1>
           <p className="max-w-xl text-lg leading-8 text-zinc-600 dark:text-zinc-400">
@@ -81,6 +81,14 @@ export default function Home() {
         <p className="text-sm text-zinc-500">
           This is not Lightning Bounties, LB1, or “Lightning Bounties 2”. Sign in with
           Google.{" "}
+          <Link href="/board" className="underline underline-offset-4">
+            Board
+          </Link>
+          {" · "}
+          <Link href="/bounties/new" className="underline underline-offset-4">
+            Post a bounty
+          </Link>
+          {" · "}
           <Link href="/signin" className="underline underline-offset-4">
             Sign in
           </Link>
@@ -88,8 +96,8 @@ export default function Home() {
           <Link href="/settings" className="underline underline-offset-4">
             Settings
           </Link>
-          . Connect GitHub (App install) is on Settings. Bounty CRUD is V1-4. CDP /
-          x402 live calls are V1-5.
+          . Claim-lock is coordination only; merge is still truth. CDP / x402 live
+          calls are V1-5.
         </p>
       </main>
     </div>

@@ -5,7 +5,7 @@
 export const webhooksModule = {
   name: "webhooks" as const,
   wired: true,
-  nextTicket: "V1-4",
+  nextTicket: "V1-5",
   notes:
     "POST /webhooks/github verifies HMAC, is idempotent by delivery id, and marks Claim eligible on merge+close of funded #N.",
 };

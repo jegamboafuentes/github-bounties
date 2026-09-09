@@ -4,7 +4,7 @@ Next.js App Router (TypeScript) for Cloud Run, plus the V1 Postgres schema.
 
 **ORM: Drizzle** — SQL-first, versioned migrations next to the app, no Prisma generate step. Schema is the contract for V1-2…V1-6 ([docs/v1-schema.md](../../docs/v1-schema.md)).
 
-This package hosts the V1-3 GitHub App install UX and `POST /webhooks/github`. The V0-B spike at repo-root `src/` stays in CI (`npm test` from the repository root). `services/hello` remains the Cloud Run canary.
+This package hosts GitHub App install, `POST /webhooks/github`, and the V1-4 bounty board / 72h claim-lock. The V0-B spike at repo-root `src/` stays in CI (`npm test` from the repository root). `services/hello` remains the Cloud Run canary.
 
 ## Product locks
 
@@ -80,9 +80,10 @@ postgresql://gb_app:PASSWORD@/github_bounties?host=/cloudsql/experiment-jegf:us-
 | --- | --- |
 | `npm run db:generate` | `drizzle-kit generate` after schema edits (diff from `drizzle/meta/*_snapshot.json`) |
 | `npm run db:migrate` | apply `drizzle/` SQL to `DATABASE_URL` (`0001_webhook_deliveries.sql` + `0001_snapshot.json`) |
-| `npm run db:seed` | sample user / repo / pending_fund + funded bounty |
-| `npm run test:unit` | fee 2% + 72h + auth + V0-B eligibility fixtures + HMAC + webhook replay (no live GitHub, no database) |
-| `npm run test:db` | unique indexes + `users.google_sub` upsert + eligible Claim from fixture (needs `DATABASE_URL`) |
+| `npm run db:seed` | sample user / repo / pending_fund + claim-locked + open funded bounty |
+| `npm run expire-locks` | expire overdue 72h claim-locks (same function as the cron route) |
+| `npm run test:unit` | fee 2% + 72h + auth + V0-B eligibility fixtures + HMAC + webhook replay + board helpers (no live GitHub, no database) |
+| `npm run test:db` | unique indexes + `users.google_sub` upsert + eligible Claim + claim-lock exclusivity/expiry (needs `DATABASE_URL`) |
 | `npm run build` | Next.js standalone |
 
 ## Google Sign-In (V1-2)
@@ -101,7 +102,7 @@ Redirect URIs to register on the GCP OAuth **Web** client (`experiment-jegf` / `
 - `http://localhost:3000/api/auth/callback/google`
 - `https://<cloud-run-host>/api/auth/callback/google` (use the real Cloud Run URL; do not invent a host)
 
-`/settings` and `GET /api/me` require a session.
+`/settings`, `/bounties/new`, and `GET /api/me` require a session.
 
 ## GitHub App install + webhooks (V1-3)
 
@@ -127,8 +128,19 @@ See [docs/github-app.md](../../docs/github-app.md) and [docs/webhooks.md](../../
 
 If Google env is missing, `/signin` lists the unset variable names. Home and `/api/health` still work. If GitHub App env is missing, Settings shows the documented blocker; webhooks return 503.
 
+## Bounty board + 72h claim-lock (V1-4)
+
+| URL | Auth |
+| --- | --- |
+| `/board` | public list + repo/status filters |
+| `/bounties/new` | Google session; issue URL must match an App-connected repo |
+| `/bounties/[id]` | stub fund (poster), claim-lock (hunter), early/force release |
+| `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` bearer |
+
+Claim-lock is exclusive **72h** coordination. **It does not move money.** Merge is still truth (V1-3 eligible Claim). See [docs/bounties.md](../../docs/bounties.md).
+
 ## Out of scope (later tickets)
 
-- Claim-lock UI / 72h board (V1-4)
 - Live CDP / x402 (V1-5)
+- Payout claim UI (V1-6)
 - Participation-pool accounting beyond nullable columns

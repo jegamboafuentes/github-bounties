@@ -1,6 +1,6 @@
 # Webhooks and claim eligibility
 
-GitHub Bounties pays the **author of the merged pull request that closes funded issue `#N`**. Claim-lock (V1-4: exclusive **72 hours**) coordinates work; **merge is truth**. This path does not move money and does not implement the lock.
+GitHub Bounties pays the **author of the merged pull request that closes funded issue `#N`**. Claim-lock (V1-4: exclusive **72 hours**) coordinates work; **merge is truth**. This webhook path does not move money and does not require an active lock — `funded` and `claim_locked` bounties both accept an eligible Claim. See [bounties.md](bounties.md).
 
 Product login is Google Sign-In. This GitHub App is **repo authority + webhooks**.
 

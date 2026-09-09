@@ -23,6 +23,7 @@ export const SEED = {
   repoId: "00000000-0000-4000-8000-000000000010",
   pendingBountyId: "00000000-0000-4000-8000-000000000021",
   fundedBountyId: "00000000-0000-4000-8000-000000000022",
+  unlockedBountyId: "00000000-0000-4000-8000-000000000023",
   escrowId: "00000000-0000-4000-8000-000000000031",
   lockId: "00000000-0000-4000-8000-000000000041",
   claimId: "00000000-0000-4000-8000-000000000051",
@@ -109,9 +110,27 @@ async function main() {
         amountUsdc: "100.000000",
         currency: "USDC",
         chain: "base",
-        status: "funded",
-        title: "Seed: funded bounty on #42",
+        status: "claim_locked",
+        title: "Seed: claim-locked bounty on #42",
         descriptionSnapshot: "Fixes welcome. Winner = merged PR author that closes #42.",
+        fundedAt,
+      })
+      .onConflictDoNothing();
+
+    await db
+      .insert(bounties)
+      .values({
+        id: SEED.unlockedBountyId,
+        repoId: SEED.repoId,
+        githubIssueNumber: 43,
+        url: "https://github.com/octo/hello/issues/43",
+        posterUserId: SEED.maintainerId,
+        amountUsdc: "40.000000",
+        currency: "USDC",
+        chain: "base",
+        status: "funded",
+        title: "Seed: open funded bounty on #43",
+        descriptionSnapshot: "Unlocked. Hunters can take the 72h claim-lock.",
         fundedAt,
       })
       .onConflictDoNothing();
@@ -203,6 +222,7 @@ async function main() {
     console.log(`  users: maintainer + hunter`);
     console.log(`  repo: octo/hello`);
     console.log(`  bounty pending_fund: ${SEED.pendingBountyId} (#41)`);
+    console.log(`  bounty funded (unlocked): ${SEED.unlockedBountyId} (#43)`);
     console.log(
       `  bounty funded: ${funded?.id ?? SEED.fundedBountyId} status=${funded?.status} amount_usdc=${funded?.amountUsdc}`,
     );

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { authModule } from "../modules/auth";
+import { bountiesModule } from "../modules/bounties";
 import { webhooksModule } from "../modules/webhooks";
 import {
   CLAIM_LOCK_HOURS,
@@ -22,6 +23,8 @@ describe("product locks", () => {
     assert.equal(authModule.name, "auth");
     assert.equal(webhooksModule.wired, true);
     assert.equal(webhooksModule.name, "webhooks");
+    assert.equal(bountiesModule.wired, true);
+    assert.equal(bountiesModule.name, "bounties");
   });
 
   it("computes floor(face * 2%) like ADR 0001", () => {

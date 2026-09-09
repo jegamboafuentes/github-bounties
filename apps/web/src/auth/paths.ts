@@ -1,9 +1,10 @@
-/** Protected surface. Public: /, /signin, /api/health, /api/auth/*, POST /webhooks/github. */
+/** Protected surface. Public: /, /signin, /board, /bounties/[id], /api/health, /api/auth/*, POST /webhooks/github. */
 
 export const PROTECTED_PAGE_PREFIXES = [
   "/settings",
   "/github/setup",
   "/github/callback",
+  "/bounties/new",
 ] as const;
 export const PROTECTED_API_PREFIXES = ["/api/me", "/api/github/connect"] as const;
 

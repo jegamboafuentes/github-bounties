@@ -4,7 +4,7 @@ Contract for tickets **V1-2…V1-6**. Source of truth: [`apps/web/src/db/schema.
 
 **ORM:** Drizzle (SQL-first migrations, no Prisma client runtime).
 
-This is not Lightning Bounties / LB1. Winner later: author of the merged PR that closes funded issue `#N`. Claim-lock is exclusive **72h** coordination and **does not move USDC**. Fee is **2%** (`fee_bps = 200`) at settlement.
+This is not Lightning Bounties / LB1. Winner later: author of the merged PR that closes funded issue `#N`. Claim-lock is exclusive **72h** coordination and **does not move USDC** (V1-4 board + expiry). Fee is **2%** (`fee_bps = 200`) at settlement.
 
 ## Tables
 

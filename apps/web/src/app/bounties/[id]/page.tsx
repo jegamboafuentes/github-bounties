@@ -1,0 +1,160 @@
+import Link from "next/link";
+import { getCurrentPublicUser } from "@/auth/protect";
+import {
+  acquireClaimLockAction,
+  releaseClaimLockAction,
+  stubFundBountyAction,
+} from "@/app/actions/bounties";
+import { bountyStatusLabel, getBoardBounty, LOCK_NOT_MONEY_COPY, STUB_FUND_COPY } from "@/bounties";
+import { AppHeader } from "@/components/header";
+import { getRuntimeDb } from "@/db/runtime";
+import { CLAIM_LOCK_HOURS } from "@/lib/constants";
+
+export const dynamic = "force-dynamic";
+
+export default async function BountyDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { id } = await params;
+  const query = await searchParams;
+  const [user, bounty] = await Promise.all([
+    getCurrentPublicUser(),
+    getBoardBounty(id, getRuntimeDb()).catch(() => null),
+  ]);
+
+  if (!bounty) {
+    return (
+      <div className="flex flex-1 flex-col bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
+        <AppHeader />
+        <main className="mx-auto w-full max-w-xl px-6 py-14">
+          <h1 className="text-2xl font-semibold">Bounty not found</h1>
+          <p className="mt-3 text-sm">
+            <Link href="/board" className="underline underline-offset-4">
+              Back to board
+            </Link>
+          </p>
+        </main>
+      </div>
+    );
+  }
+
+  const isPoster = user?.id === bounty.posterUserId;
+  const isClaimant = user?.id === bounty.activeLock?.hunterUserId;
+  const canFund = Boolean(isPoster && bounty.status === "pending_fund");
+  const canClaim = Boolean(user && bounty.status === "funded" && !bounty.activeLock);
+  const canRelease = Boolean(bounty.activeLock && (isClaimant || isPoster));
+
+  return (
+    <div className="flex flex-1 flex-col bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
+      <AppHeader />
+      <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-6 py-14">
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+            {bounty.repoFullName} · #{bounty.githubIssueNumber}
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight">{bounty.title}</h1>
+          <p className="text-lg font-medium">
+            {trimUsdc(bounty.amountUsdc)} {bounty.currency} · {bountyStatusLabel(bounty.status)}
+          </p>
+        </div>
+
+        <p className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+          {LOCK_NOT_MONEY_COPY}
+        </p>
+
+        {bounty.activeLock ? (
+          <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
+            {bounty.activeLock.caption} ({CLAIM_LOCK_HOURS}h exclusive lock)
+          </p>
+        ) : null}
+
+        {query.error ? (
+          <p className="text-sm text-red-600 dark:text-red-400">{query.error}</p>
+        ) : null}
+
+        <dl className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white text-sm dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
+            <dt className="text-xs uppercase tracking-wide text-zinc-500">Poster</dt>
+            <dd className="sm:col-span-2">{bounty.posterDisplayName}</dd>
+          </div>
+          <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
+            <dt className="text-xs uppercase tracking-wide text-zinc-500">Issue</dt>
+            <dd className="sm:col-span-2">
+              <a href={bounty.url} className="underline underline-offset-4" target="_blank" rel="noreferrer">
+                {bounty.url}
+              </a>
+            </dd>
+          </div>
+        </dl>
+
+        <div className="flex flex-col gap-3">
+          {canFund ? (
+            <form action={stubFundBountyAction}>
+              <input type="hidden" name="bountyId" value={bounty.id} />
+              <button
+                type="submit"
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
+              >
+                Stub fund
+              </button>
+              <p className="mt-2 text-xs text-zinc-500">{STUB_FUND_COPY}</p>
+            </form>
+          ) : null}
+
+          {canClaim ? (
+            <form action={acquireClaimLockAction}>
+              <input type="hidden" name="bountyId" value={bounty.id} />
+              <button
+                type="submit"
+                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
+              >
+                Claim for {CLAIM_LOCK_HOURS}h
+              </button>
+              <p className="mt-2 text-xs text-zinc-500">
+                Exclusive coordination lock. Does not move USDC. Merge is still truth.
+              </p>
+            </form>
+          ) : null}
+
+          {canRelease ? (
+            <form action={releaseClaimLockAction}>
+              <input type="hidden" name="bountyId" value={bounty.id} />
+              <button
+                type="submit"
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
+              >
+                {isPoster && !isClaimant ? "Force-release lock" : "Release lock early"}
+              </button>
+            </form>
+          ) : null}
+
+          {!user ? (
+            <p className="text-sm text-zinc-500">
+              <Link
+                href={`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bounty.id}`)}`}
+                className="underline underline-offset-4"
+              >
+                Sign in with Google
+              </Link>{" "}
+              to fund, claim, or release.
+            </p>
+          ) : null}
+        </div>
+
+        <p className="text-sm text-zinc-500">
+          <Link href="/board" className="underline underline-offset-4">
+            Back to board
+          </Link>
+        </p>
+      </main>
+    </div>
+  );
+}
+
+function trimUsdc(value: string): string {
+  return value.replace(/\.?0+$/, "") || "0";
+}

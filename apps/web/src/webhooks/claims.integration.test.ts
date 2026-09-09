@@ -217,4 +217,82 @@ describe("eligible Claim from merge+close funded #N", () => {
       await sql.end({ timeout: 5 });
     }
   });
+
+  it("still writes eligible Claim when the bounty is claim_locked (lock ≠ money)", async () => {
+    const { db, sql } = createDb();
+    const suffix = randomUUID().slice(0, 8);
+    const posterId = randomUUID();
+    const hunterId = randomUUID();
+    const repoId = randomUUID();
+    const bountyId = randomUUID();
+    const deliveryId = randomUUID();
+    const githubRepoId = BigInt(82_000_000 + Number.parseInt(suffix.slice(0, 6), 16));
+
+    try {
+      await db.insert(users).values([
+        {
+          id: posterId,
+          googleSub: `test-poster-lock-${suffix}`,
+          email: `poster-l-${suffix}@example.com`,
+          displayName: "Poster",
+        },
+        {
+          id: hunterId,
+          googleSub: `test-hunter-lock-${suffix}`,
+          email: `hunter-l-${suffix}@example.com`,
+          displayName: "Hunter",
+        },
+      ]);
+      const winnerLogin = `winner-lock-${suffix}`;
+      await db.insert(githubLinks).values({
+        userId: hunterId,
+        githubId: BigInt(3_000_000 + Number.parseInt(suffix.slice(0, 6), 16)),
+        githubLogin: winnerLogin,
+      });
+      const fullName = `test/locked-${suffix}`;
+      await db.insert(repos).values({
+        id: repoId,
+        githubRepoId,
+        fullName,
+        installationId: BigInt(4244),
+        connectedByUserId: posterId,
+      });
+      await db.insert(bounties).values({
+        id: bountyId,
+        repoId,
+        githubIssueNumber: 42,
+        url: `https://github.com/${fullName}/issues/42`,
+        posterUserId: posterId,
+        amountUsdc: "10.000000",
+        status: "claim_locked",
+        title: "locked but merge is truth",
+      });
+
+      const payload = structuredClone(fixture.payload);
+      if (payload.repository) payload.repository.full_name = fullName;
+      if (payload.pull_request?.base?.repo) payload.pull_request.base.repo.full_name = fullName;
+      if (payload.pull_request?.user) payload.pull_request.user.login = winnerLogin;
+      const rawBody = Buffer.from(JSON.stringify(payload), "utf8");
+      const result = await handleGitHubWebhookRequest({
+        rawBody,
+        signatureHeader: githubSignature256(rawBody, SECRET),
+        secret: SECRET,
+        deliveryId,
+        event: fixture.event,
+        deps: {
+          store: postgresDeliveryRecorder(db),
+          claims: postgresClaimWriter(db),
+          log: () => {},
+        },
+      });
+
+      assert.equal(result.status, 200);
+      assert.equal(result.body.eligible, true);
+      const rows = await db.select().from(claims).where(eq(claims.bountyId, bountyId));
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0]?.status, "eligible");
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
 });
