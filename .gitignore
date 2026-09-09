@@ -9,3 +9,12 @@ dist/
 cdp_api_key.json
 wallet_secret.txt
 .DS_Store
+
+# Terraform (never commit state or real tfvars)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+.terraform.lock.hcl

@@ -1,0 +1,10 @@
+{
+  "name": "github-bounties-hello",
+  "private": true,
+  "type": "module",
+  "description": "Minimal Cloud Run health canary for GitHub Bounties staging. Not the product API.",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node test.mjs"
+  }
+}

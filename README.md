@@ -94,3 +94,17 @@ Copy [.env.example](.env.example) locally. Do not commit `.env`.
 - Platform fee: 2% of face
 - V1 claim-lock: 72 hours, exclusive, coordination only
 - GCP: `github-bounties` / `133702056111`
+
+## GCP staging (V0-C)
+
+Eng runbook: [docs/gcp-bootstrap.md](docs/gcp-bootstrap.md).
+
+| Item | Lock |
+| --- | --- |
+| Project | `github-bounties` / `133702056111` |
+| Labels | `product=github-bounties`, `env=staging` |
+| Hello | `GET /` and `GET /api/health` → 200 (`services/hello`) |
+| Live Cloud Run URL | **blocked: missing gcloud auth / billing** in the bootstrap environment — do not invent a `*.run.app` host |
+| Billing owner | TBD |
+
+gcloud/Terraform stubs live under [`infra/`](infra/). Cloud Build stub: [`cloudbuild.yaml`](cloudbuild.yaml). Evidence: [docs/spikes/v0-c-gcp-bootstrap.md](docs/spikes/v0-c-gcp-bootstrap.md).
