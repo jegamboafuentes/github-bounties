@@ -8,7 +8,8 @@ const { auth } = NextAuth(authConfig);
 
 /**
  * Next.js 16 proxy (replaces middleware.ts).
- * Unauthenticated callers cannot hit /settings, /api/me, or /api/github/connect.
+ * Unauthenticated callers cannot hit /settings, GitHub install return pages,
+ * /api/me, or /api/github/connect. Webhooks are not matched (HMAC auth).
  */
 export default auth((req) => {
   const pathname = req.nextUrl.pathname;
@@ -20,7 +21,8 @@ export default auth((req) => {
 
   if (isProtectedPagePath(pathname) && !signedIn) {
     const signin = new URL("/signin", req.nextUrl.origin);
-    signin.searchParams.set("callbackUrl", pathname);
+    const callback = `${pathname}${req.nextUrl.search}`;
+    signin.searchParams.set("callbackUrl", callback);
     return NextResponse.redirect(signin);
   }
 
@@ -28,5 +30,11 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/settings", "/api/me", "/api/github/connect"],
+  matcher: [
+    "/settings",
+    "/api/me",
+    "/api/github/connect",
+    "/github/setup",
+    "/github/callback",
+  ],
 };

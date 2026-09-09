@@ -4,7 +4,7 @@ Next.js App Router (TypeScript) for Cloud Run, plus the V1 Postgres schema.
 
 **ORM: Drizzle** — SQL-first, versioned migrations next to the app, no Prisma generate step. Schema is the contract for V1-2…V1-6 ([docs/v1-schema.md](../../docs/v1-schema.md)).
 
-This package does **not** replace `services/hello` (Cloud Run canary) or the V0-B webhook stub at repo-root `src/`.
+This package hosts the V1-3 GitHub App install UX and `POST /webhooks/github`. The V0-B spike at repo-root `src/` stays in CI (`npm test` from the repository root). `services/hello` remains the Cloud Run canary.
 
 ## Product locks
 
@@ -13,7 +13,7 @@ This package does **not** replace `services/hello` (Cloud Run canary) or the V0-
 | Name | GitHub Bounties |
 | Fee | 2% → `fee_ledger.fee_bps` default **200** |
 | Claim-lock | exclusive **72h** (`expires_at` default `now() + 72 hours`) |
-| Winner | schema only: merged PR author closing `#N` |
+| Winner | author of the merged PR that closes funded `#N` |
 | CDP / x402 | **not wired** (ADR 0001 Accepted; live calls are V1-5) |
 
 ## Local Postgres + migrate
@@ -78,11 +78,11 @@ postgresql://gb_app:PASSWORD@/github_bounties?host=/cloudsql/experiment-jegf:us-
 
 | Script | Purpose |
 | --- | --- |
-| `npm run db:generate` | `drizzle-kit generate` after schema edits |
-| `npm run db:migrate` | apply `drizzle/` to `DATABASE_URL` |
+| `npm run db:generate` | `drizzle-kit generate` after schema edits (diff from `drizzle/meta/*_snapshot.json`) |
+| `npm run db:migrate` | apply `drizzle/` SQL to `DATABASE_URL` (`0001_webhook_deliveries.sql` + `0001_snapshot.json`) |
 | `npm run db:seed` | sample user / repo / pending_fund + funded bounty |
-| `npm run test:unit` | fee 2% + 72h helpers + auth env/cookies/paths (no Google, no database) |
-| `npm run test:db` | unique indexes + `users.google_sub` upsert (needs `DATABASE_URL`) |
+| `npm run test:unit` | fee 2% + 72h + auth + V0-B eligibility fixtures + HMAC + webhook replay (no live GitHub, no database) |
+| `npm run test:db` | unique indexes + `users.google_sub` upsert + eligible Claim from fixture (needs `DATABASE_URL`) |
 | `npm run build` | Next.js standalone |
 
 ## Google Sign-In (V1-2)
@@ -101,13 +101,34 @@ Redirect URIs to register on the GCP OAuth **Web** client (`experiment-jegf` / `
 - `http://localhost:3000/api/auth/callback/google`
 - `https://<cloud-run-host>/api/auth/callback/google` (use the real Cloud Run URL; do not invent a host)
 
-`/settings` and `GET /api/me` require a session. **Connect GitHub** is a stub until V1-3.
+`/settings` and `GET /api/me` require a session.
 
-If Google env is missing, `/signin` lists the unset variable names. Home and `/api/health` still work.
+## GitHub App install + webhooks (V1-3)
+
+Connect GitHub requires a Google session. The webhook is server-to-server (HMAC).
+
+```bash
+# apps/web/.env — never commit real values
+GITHUB_WEBHOOK_SECRET=
+GITHUB_APP_ID=
+GITHUB_APP_SLUG=
+GITHUB_APP_CLIENT_ID=
+GITHUB_APP_CLIENT_SECRET=
+GITHUB_APP_PRIVATE_KEY=
+```
+
+| URL | Auth |
+| --- | --- |
+| `POST /webhooks/github` | `X-Hub-Signature-256` (503 if secret missing) |
+| `GET /api/github/connect` | Google session → redirect to App install |
+| `/github/setup`, `/github/callback` | Google session; confirm `installation_id` via App JWT |
+
+See [docs/github-app.md](../../docs/github-app.md) and [docs/webhooks.md](../../docs/webhooks.md).
+
+If Google env is missing, `/signin` lists the unset variable names. Home and `/api/health` still work. If GitHub App env is missing, Settings shows the documented blocker; webhooks return 503.
 
 ## Out of scope (later tickets)
 
-- Real GitHub App install / `github_links` (V1-3)
-- Bounty CRUD / claim-lock UI (V1-4)
+- Claim-lock UI / 72h board (V1-4)
 - Live CDP / x402 (V1-5)
 - Participation-pool accounting beyond nullable columns

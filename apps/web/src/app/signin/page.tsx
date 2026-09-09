@@ -32,7 +32,7 @@ export default async function SignInPage({
         <h1 className="text-3xl font-semibold tracking-tight">Sign in</h1>
         <p className="text-zinc-600 dark:text-zinc-400">
           {PRODUCT_NAME} uses <strong>Google</strong> for app identity. The GitHub App is
-          repo authority later (V1-3) — not a login provider.
+          repo authority (install + webhooks) — not a login provider.
         </p>
         {blocked ? (
           <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">

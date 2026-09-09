@@ -1,12 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import {
-  githubConnectStubBody,
-  githubConnectStubResponse,
-  jsonMe,
-  toPublicUser,
-  unauthorizedJson,
-} from "./public-user";
+import { jsonMe, toPublicUser, unauthorizedJson } from "./public-user";
 
 describe("authz JSON helpers", () => {
   it("returns 401 for missing users and 200 for /api/me", async () => {
@@ -29,23 +23,5 @@ describe("authz JSON helpers", () => {
 
     const meDenied = jsonMe(null);
     assert.equal(meDenied.status, 401);
-  });
-
-  it("stubs Connect GitHub as 501 for signed-in users and 401 otherwise", async () => {
-    const denied = githubConnectStubResponse(null);
-    assert.equal(denied.status, 401);
-
-    const stub = githubConnectStubResponse({
-      id: "u",
-      google_sub: "sub",
-      email: "a@b.c",
-      display_name: "A",
-    });
-    assert.equal(stub.status, 501);
-    const body = await stub.json();
-    assert.equal(body.stub, true);
-    assert.equal(body.ticket, "V1-3");
-    assert.equal(body.wired, false);
-    assert.equal(githubConnectStubBody().error, "not_implemented");
   });
 });

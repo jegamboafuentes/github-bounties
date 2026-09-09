@@ -1,6 +1,10 @@
-/** Minimal protected surface for V1-2. Public: /, /signin, /api/health, /api/auth/*, GitHub App stubs. */
+/** Protected surface. Public: /, /signin, /api/health, /api/auth/*, POST /webhooks/github. */
 
-export const PROTECTED_PAGE_PREFIXES = ["/settings"] as const;
+export const PROTECTED_PAGE_PREFIXES = [
+  "/settings",
+  "/github/setup",
+  "/github/callback",
+] as const;
 export const PROTECTED_API_PREFIXES = ["/api/me", "/api/github/connect"] as const;
 
 export function pathMatchesPrefix(pathname: string, prefix: string): boolean {

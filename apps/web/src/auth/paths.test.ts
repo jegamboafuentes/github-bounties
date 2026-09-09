@@ -6,8 +6,11 @@ describe("protected paths", () => {
   it("protects settings and /api/me, not health or auth routes", () => {
     assert.equal(isProtectedPagePath("/settings"), true);
     assert.equal(isProtectedPagePath("/settings/wallet"), true);
+    assert.equal(isProtectedPagePath("/github/setup"), true);
+    assert.equal(isProtectedPagePath("/github/callback"), true);
     assert.equal(isProtectedPagePath("/signin"), false);
     assert.equal(isProtectedPagePath("/"), false);
+    assert.equal(isProtectedPagePath("/webhooks/github"), false);
 
     assert.equal(isProtectedApiPath("/api/me"), true);
     assert.equal(isProtectedApiPath("/api/github/connect"), true);

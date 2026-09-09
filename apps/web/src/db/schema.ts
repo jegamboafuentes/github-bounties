@@ -314,6 +314,20 @@ export const feeLedger = pgTable(
   ],
 );
 
+/**
+ * GitHub delivery-id idempotency (V1-3).
+ * Redeliveries keep the same `X-GitHub-Delivery` GUID.
+ */
+export const webhookDeliveries = pgTable("webhook_deliveries", {
+  deliveryId: text("delivery_id").primaryKey(),
+  event: text("event").notNull(),
+  action: text("action"),
+  eligible: boolean("eligible"),
+  receivedAt: timestamp("received_at", { withTimezone: true, mode: "date" })
+    .notNull()
+    .defaultNow(),
+});
+
 export const bountyStatusValues = bountyStatusEnum.enumValues;
 export const claimLockStatusValues = claimLockStatusEnum.enumValues;
 export const escrowStatusValues = escrowStatusEnum.enumValues;

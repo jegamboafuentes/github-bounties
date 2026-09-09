@@ -18,6 +18,7 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 | `escrows` | 1:1 with bounty; nullable x402 / checkout refs + tx hashes (no live CDP in V1-1) |
 | `claims` | `eligible` \| `paid` \| `rejected` \| `disputed`; PR + merge + payout fields |
 | `fee_ledger` | `face_usdc`, `fee_usdc`, `fee_bps` default **200**, `settled_at` |
+| `webhook_deliveries` | GitHub `X-GitHub-Delivery` GUID primary key (V1-3 idempotency) |
 
 `bounties.participation_pool_bps` / `participation_pool_usdc` are **nullable stubs** for V2. Do not implement the pool.
 
@@ -47,9 +48,12 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 - Unique escrow per `bounty_id` (1:1).
 - Unique `(bounty_id, pr_number)` on claims when `pr_number` is present (idempotent merge).
 - Unique `fee_ledger.bounty_id`.
+- Unique `webhook_deliveries.delivery_id` (GitHub redelivery GUID).
 
 ## Secrets
 
 `DATABASE_URL` is Secret Manager key `DATABASE_URL` on `experiment-jegf` / `42206083192`. Cloud SQL instance `github-bounties-staging` already exists. **Ops sets the password OOB. Never commit it.**
 
 Google Sign-In (V1-2) also uses Secret Manager keys `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and `AUTH_SECRET`. See [google-signin.md](google-signin.md). Never commit those values.
+
+GitHub App (V1-3) uses Secret Manager keys `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_PRIVATE_KEY`, plus App id/slug/client as needed. See [github-app.md](github-app.md). Empty placeholders only in `.env.example`.
