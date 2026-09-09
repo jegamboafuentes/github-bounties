@@ -5,7 +5,7 @@
 export const authModule = {
   name: "auth" as const,
   wired: true,
-  nextTicket: "V1-3",
+  nextTicket: "V1-4",
   notes: "Auth.js Google provider. Session cookie + users.google_sub upsert. Not GitHub user OAuth.",
 };
 

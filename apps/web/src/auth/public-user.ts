@@ -25,23 +25,3 @@ export function jsonMe(user: PublicUser | null): Response {
   if (!user) return unauthorizedJson();
   return Response.json({ ok: true, user }, { headers: { "cache-control": "no-store" } });
 }
-
-export function githubConnectStubBody() {
-  return {
-    ok: false,
-    stub: true,
-    wired: false,
-    error: "not_implemented",
-    ticket: "V1-3",
-    message:
-      "GitHub App install is not wired yet. Product login is Google; the GitHub App is repo authority in V1-3.",
-  };
-}
-
-export function githubConnectStubResponse(user: PublicUser | null): Response {
-  if (!user) return unauthorizedJson();
-  return Response.json(githubConnectStubBody(), {
-    status: 501,
-    headers: { "cache-control": "no-store" },
-  });
-}

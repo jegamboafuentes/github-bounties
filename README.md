@@ -27,9 +27,9 @@ Read the decision, sequences, failure modes, and GCP Secret Manager names in:
 - [ADR 0001 — CDP wallets + x402 USDC escrow](docs/adr/0001-cdp-x402-wallets.md)
 - [ADR index](docs/adr/README.md)
 
-## V0-B — GitHub App webhooks
+## V0-B — GitHub App webhooks (spike)
 
-Prove App install + signed webhook delivery and the merge→close eligibility predicate **before** bounty CRUD UI.
+Prove App install + signed webhook delivery and the merge→close eligibility predicate. **V1-3** hosts the product path in `apps/web`; this spike stays in CI.
 
 | Item | Where |
 | --- | --- |
@@ -38,6 +38,7 @@ Prove App install + signed webhook delivery and the merge→close eligibility pr
 | HMAC verification | [`src/verify-signature.ts`](src/verify-signature.ts) |
 | Eligibility engine | [`src/eligibility.ts`](src/eligibility.ts) |
 | Delivery-id store | [`src/delivery-store.ts`](src/delivery-store.ts) |
+| Product webhook + Claim write | [`apps/web/src/webhooks/`](apps/web/src/webhooks/) |
 
 Product users sign in with **Google**. The GitHub App is repo authority only.
 
@@ -129,10 +130,23 @@ Auth.js (NextAuth v5) Google provider in `apps/web`. Session cookie is httpOnly 
 | Sign in / out | `/signin`, header **Sign out** |
 | Profile | `/settings` (protected) |
 | Session API | `GET /api/me` (401 if anonymous) |
-| Connect GitHub | stub `POST /api/github/connect` → V1-3 |
+| Connect GitHub | stub in V1-2; **V1-3** starts App install (`/api/github/connect`) |
 | Env | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `AUTH_SECRET` (empty in `.env.example`) |
 
 Without those vars, `/signin` lists the missing names. CI does not call live Google.
+
+## V1-3 — GitHub App install + webhook worker
+
+Signed-in Google users **Connect GitHub** (App install). `POST /webhooks/github` verifies HMAC, is idempotent by delivery id, and writes `claims.status=eligible` when a merged PR closes funded `#N`.
+
+| Item | Where |
+| --- | --- |
+| Install / setup / callback | `/api/github/connect`, `/github/setup`, `/github/callback` (Google session required) |
+| Webhook | `POST /webhooks/github` (signature auth; **503** if `GITHUB_WEBHOOK_SECRET` is unset) |
+| Docs | [docs/github-app.md](docs/github-app.md), [docs/webhooks.md](docs/webhooks.md) |
+| Env | `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` (empty in `.env.example`) |
+
+V0-B `npm test` at the repo root stays green. `apps/web` reuses the same fixtures.
 
 ## GCP staging (V0-C)
 

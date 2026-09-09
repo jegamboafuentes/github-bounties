@@ -1,6 +1,6 @@
 # Google Sign-In (V1-2)
 
-Product users sign in with **Google**. App identity is `users.google_sub`. The GitHub App is repo authority only (install + webhooks in **V1-3**). Do not add GitHub user OAuth as product login.
+Product users sign in with **Google**. App identity is `users.google_sub`. The GitHub App is repo authority only (install + webhooks in **V1-3**). GitHub App user-to-server OAuth only links `github_links` after a Google session — it is not product login.
 
 Official name: **GitHub Bounties**. GCP project: `experiment-jegf` / `42206083192`.
 
@@ -25,7 +25,7 @@ On login the jwt callback creates or updates `users` keyed by `google_sub` and s
 | Protected APIs | `GET /api/me`, `GET\|POST /api/github/connect` |
 | Edge gate | [`apps/web/src/proxy.ts`](../apps/web/src/proxy.ts) (Next.js 16; not `middleware.ts`) |
 
-Public: `/`, `/signin`, `/api/health`, `/api/auth/*`, GitHub App stubs (`/github/*`, `/webhooks/github`).
+Public: `/`, `/signin`, `/api/health`, `/api/auth/*`, `POST /webhooks/github` (HMAC). `/github/setup` and `/github/callback` require a Google session (V1-3).
 
 ## Local env
 
@@ -97,7 +97,7 @@ npm run dev            # http://localhost:3000
 2. After consent, a `users` row exists for that `google_sub`.
 3. `/settings` shows the persisted profile. `GET /api/me` returns the same user.
 4. **Sign out** clears the session cookie.
-5. **Connect GitHub** is a stub (`501` + `ticket: V1-3`).
+5. **Connect GitHub** starts the GitHub App install (V1-3). Requires App env; otherwise Settings lists the missing names.
 
 Without Google env, `/signin` shows the missing-variable list. `/settings` and `/api/me` still require a session (redirect / `401`).
 
@@ -114,7 +114,6 @@ Auth.js JWT cookie:
 
 ## Out of scope
 
-- Real GitHub App install / `github_links` write (V1-3)
-- Bounty CRUD (V1-4)
+- Bounty CRUD / claim-lock UI (V1-4)
 - CDP / x402 (V1-5)
 - Pasting or requesting real OAuth client secrets

@@ -88,8 +88,8 @@ export default function Home() {
           <Link href="/settings" className="underline underline-offset-4">
             Settings
           </Link>
-          . Connect GitHub and bounty CRUD are later tickets. CDP / x402 live calls are
-          V1-5.
+          . Connect GitHub (App install) is on Settings. Bounty CRUD is V1-4. CDP /
+          x402 live calls are V1-5.
         </p>
       </main>
     </div>

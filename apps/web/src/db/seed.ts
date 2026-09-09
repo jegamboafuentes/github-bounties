@@ -54,11 +54,18 @@ async function main() {
 
     await db
       .insert(githubLinks)
-      .values({
-        userId: SEED.maintainerId,
-        githubId: BigInt(1),
-        githubLogin: "ada-maintainer",
-      })
+      .values([
+        {
+          userId: SEED.maintainerId,
+          githubId: BigInt(1),
+          githubLogin: "ada-maintainer",
+        },
+        {
+          userId: SEED.hunterId,
+          githubId: BigInt(2),
+          githubLogin: "octocat",
+        },
+      ])
       .onConflictDoNothing();
 
     await db
