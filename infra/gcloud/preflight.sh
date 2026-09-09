@@ -32,7 +32,7 @@ else
   billing="$(gcloud billing projects describe "${PROJECT_ID}" --format='value(billingAccountName)' 2>/dev/null || true)"
   enabled="$(gcloud billing projects describe "${PROJECT_ID}" --format='value(billingEnabled)' 2>/dev/null || true)"
   if [[ -z "${billing}" || "${enabled}" != "True" ]]; then
-    blockers+=("billing not attached or not readable (billing owner TBD)")
+    blockers+=("billing not attached or not readable (expect ${BILLING_ACCOUNT_NAME})")
   else
     echo "billing account: ${billing}"
   fi

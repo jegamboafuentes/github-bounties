@@ -12,7 +12,7 @@ project (not Lightning Bounties / LB1 leftovers). V0-A (money ADR) and V0-B
 | GCP project id | `github-bounties` |
 | Project number | `133702056111` |
 | Owner context | `enrique@lightningbounties.com` |
-| Billing owner | **TBD** — do not assume a billing account |
+| Billing account | `LB_MVP1_Billing_account` |
 | Labels | `product=github-bounties`, `env=staging` |
 | Region | **Hunch:** `us-central1` (ticket did not lock a region; override `GB_REGION`) |
 | Artifact Registry | `us-central1-docker.pkg.dev/github-bounties/github-bounties` |
@@ -54,7 +54,7 @@ Evidence for this Cloud Agent VM: 2026-09-09. Re-run `./infra/gcloud/preflight.s
 | Cloud Run hello code | **Done (local)** | `services/hello` — `npm test` → 200 on `/` and `/api/health` |
 | Cloud Run hello **live URL** | **Blocked** | `blocked: missing gcloud auth / billing` — no `*.run.app` URL |
 | IAM SA sketch | **Done (stub)** | Least-privilege runtime / build / CI; no JSON keys committed |
-| Billing owner | **Blocked** | **TBD** |
+| Billing account | **Done (docs)** | `LB_MVP1_Billing_account` (live link still unverified — missing gcloud) |
 | Labels applied on the project | **Blocked (live)** | Stub will set `product=github-bounties,env=staging` |
 | Vertex / Looker / prod sizing | **Out** | Note only: do not request extra quotas in V0-C |
 
@@ -247,7 +247,7 @@ Runtime should **not** have `roles/editor` or `roles/secretmanager.admin`.
 ## 7. Ops sequence (when credentials exist)
 
 1. Confirm you can `gcloud projects describe github-bounties` as someone in the owner context.
-2. Attach a billing account (**owner TBD**). Live Run/SQL/AR will fail without it.
+2. Attach billing account `LB_MVP1_Billing_account` if the project is not already linked. Live Run/SQL/AR will fail without it.
 3. `./infra/gcloud/preflight.sh` — must exit 0.
 4. `./infra/gcloud/bootstrap.sh --apply`
 5. `./infra/gcloud/sql-staging.sh --apply` (or `--apply --private` if VPC is ready).

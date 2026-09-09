@@ -8,8 +8,9 @@
 ## Result: docs + stubs DONE; live GCP BLOCKED (expected)
 
 This Cloud Agent VM has **no `gcloud` CLI**, **no Application Default Credentials**,
-**no Docker**, and **billing owner TBD**. No Cloud Run URL was invented. No secrets
-were created or committed.
+and **no Docker**. Billing account is `LB_MVP1_Billing_account` (product lock; live
+link not verified here). No Cloud Run URL was invented. No secrets were created or
+committed.
 
 ### Exact blockers (live provision / deploy)
 
@@ -42,12 +43,12 @@ Additional facts from the same VM:
 | `GOOGLE_APPLICATION_CREDENTIALS` | unset |
 | `~/.config/gcloud` | missing |
 | GCE metadata `http://metadata.google.internal/...` | not available |
-| Billing owner | **TBD** (cannot query `gcloud billing projects describe`) |
+| Billing account | `LB_MVP1_Billing_account` (cannot query `gcloud billing projects describe` to confirm it is linked) |
 
 Unblock on an Ops machine as `enrique@lightningbounties.com` (or delegate):
 
 1. Install Google Cloud SDK; `gcloud auth login` + `gcloud auth application-default login`.
-2. Attach a billing account to `github-bounties` (owner still TBD in-repo).
+2. Attach billing account `LB_MVP1_Billing_account` to `github-bounties` if not already linked.
 3. `./infra/gcloud/preflight.sh` exits 0.
 4. `./infra/gcloud/bootstrap.sh --apply` then SQL + hello deploy as in the runbook.
 5. Paste the real Cloud Run `status.url` into `docs/gcp-bootstrap.md`.

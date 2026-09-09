@@ -3,7 +3,7 @@ project_id     = "github-bounties"
 project_number = "133702056111"
 region         = "us-central1"
 
-# Flip after billing is attached and you are ready to pay for a micro instance.
+# Flip after LB_MVP1_Billing_account is attached and you are ready to pay for a micro instance.
 create_sql      = false
 sql_private_ip  = false
 # vpc_self_link = "projects/github-bounties/global/networks/default"

@@ -4,6 +4,8 @@
 # Locked project (do not invent a different id).
 PROJECT_ID="github-bounties"
 PROJECT_NUMBER="133702056111"
+# Billing account display name (product lock). Not the opaque billingAccount IDs.
+BILLING_ACCOUNT_NAME="LB_MVP1_Billing_account"
 
 # Hunch: us-central1 is the boring default. Ticket did not lock a region.
 # Override with GB_REGION if Ops prefers another.
