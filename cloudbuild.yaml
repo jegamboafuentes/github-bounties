@@ -1,6 +1,11 @@
 # GitHub Bounties — Cloud Build stub (staging hello)
 # Project: experiment-jegf / 42206083192
 # Does not inject secret values. Runtime SA reads Secret Manager at deploy time later.
+#
+# Always tags :$BUILD_ID and :latest so manual `gcloud builds submit` works.
+# $COMMIT_SHA is empty on manual submit (trigger-only) unless you pass
+# --substitutions=COMMIT_SHA=$(git rev-parse HEAD); when set, an extra SHA tag is pushed.
+# --allow-unauthenticated is canary-only; org DRS may still 403 allUsers (use authenticated curl).
 
 substitutions:
   _REGION: us-central1
@@ -18,16 +23,30 @@ steps:
     args:
       - build
       - -t
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$COMMIT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$BUILD_ID
       - -t
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:latest
       - .
 
-  - id: push-sha
+  - id: maybe-tag-commit-sha
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        IMAGE="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}"
+        if [ -n "$COMMIT_SHA" ]; then
+          docker tag "$$IMAGE:$BUILD_ID" "$$IMAGE:$COMMIT_SHA"
+          docker push "$$IMAGE:$COMMIT_SHA"
+        else
+          echo "COMMIT_SHA empty; skipping SHA tag (ok for manual submit)."
+        fi
+
+  - id: push-build-id
     name: gcr.io/cloud-builders/docker
     args:
       - push
-      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$COMMIT_SHA
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$BUILD_ID
 
   - id: push-latest
     name: gcr.io/cloud-builders/docker
@@ -42,7 +61,7 @@ steps:
       - run
       - deploy
       - ${_SERVICE}
-      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$COMMIT_SHA
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$BUILD_ID
       - --region=${_REGION}
       - --project=$PROJECT_ID
       - --platform=managed
@@ -55,5 +74,5 @@ steps:
       - --labels=product=github-bounties,env=staging
 
 images:
-  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$COMMIT_SHA
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$BUILD_ID
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:latest

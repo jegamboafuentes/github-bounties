@@ -214,11 +214,35 @@ cd services/hello && npm test && npm start
 Build + deploy stubs:
 
 - Dockerfile: `services/hello/Dockerfile` (`PORT=8080`, user `node`)
-- Cloud Build: [`cloudbuild.yaml`](../cloudbuild.yaml)
+- Cloud Build: [`cloudbuild.yaml`](../cloudbuild.yaml) — tags `:$BUILD_ID` and `:latest` (manual submit-safe). `$COMMIT_SHA` is empty unless a trigger set it or you pass it (see below).
 - gcloud: `./infra/gcloud/deploy-hello.sh`
 
+Manual Cloud Build (no trigger). Defaults are enough:
+
+```bash
+gcloud builds submit --project=experiment-jegf --config=cloudbuild.yaml .
+```
+
+Optional git SHA tag (built-in `COMMIT_SHA` is trigger-only; empty on a bare submit):
+
+```bash
+gcloud builds submit --project=experiment-jegf --config=cloudbuild.yaml \
+  --substitutions=COMMIT_SHA=$(git rev-parse HEAD) .
+```
+
 `--allow-unauthenticated` is **only** for this health canary. V1 product API must not
-stay fully public.
+stay fully public. Even with that flag, **unauthenticated GET may 403** when org
+**Domain Restricted Sharing (DRS)** blocks `allUsers` as Cloud Run invoker. Do **not**
+invent a public-access workaround if org policy forbids it. Probe with an identity
+that has `roles/run.invoker` (or grant that role to testers):
+
+```bash
+URL="$(gcloud run services describe github-bounties-hello \
+  --project=experiment-jegf --region=us-central1 --format='value(status.url)')"
+# Unauth curl "$URL/" → 403 under DRS is expected.
+curl -sS -H "Authorization: Bearer $(gcloud auth print-identity-token)" "$URL/"
+curl -sS -H "Authorization: Bearer $(gcloud auth print-identity-token)" "$URL/api/health"
+```
 
 When V0-B’s webhook service lands, either point a second Cloud Run service at it or
 replace this canary. Do not invent webhook URLs here.
@@ -256,7 +280,7 @@ Runtime should **not** have `roles/editor` or `roles/secretmanager.admin`.
 4. `./infra/gcloud/bootstrap.sh --apply` — project labels use `gcloud alpha projects update --update-labels` (current SDK; not GA `gcloud projects update`). A labels failure warns and continues.
 5. `./infra/gcloud/sql-staging.sh --apply` (or `--apply --private` if VPC is ready).
 6. Put real secret versions in Secret Manager (still not in git).
-7. `./infra/gcloud/deploy-hello.sh --apply` **or** `gcloud builds submit --config cloudbuild.yaml`.
+7. `./infra/gcloud/deploy-hello.sh --apply` **or** `gcloud builds submit --project=experiment-jegf --config=cloudbuild.yaml .` (optional `--substitutions=COMMIT_SHA=$(git rev-parse HEAD)`). Unauth 403 under DRS: use authenticated curl / `roles/run.invoker`, not a public IAM binding if org policy blocks `allUsers`.
 8. Record the real `status.url` in this doc (replace the blocked line). Point GitHub App webhook at that host when V0-B is deployed.
 
 Terraform equivalent: `infra/terraform` with `create_sql = false` until billing is on.
