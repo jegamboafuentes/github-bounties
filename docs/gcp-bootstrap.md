@@ -20,7 +20,7 @@ change their product decisions.
 | Region | **Hunch:** `us-central1` (ticket did not lock a region; override `GB_REGION`) |
 | Artifact Registry | `us-central1-docker.pkg.dev/experiment-jegf/github-bounties` |
 | Cloud Run hello | service `github-bounties-hello` — `GET /` and `GET /api/health` → 200 |
-| Cloud SQL | instance `github-bounties-staging`, Postgres 16, `db-f1-micro`, DB `github_bounties` |
+| Cloud SQL | instance `github-bounties-staging`, Postgres 16, **Enterprise** edition + `db-f1-micro` (not Enterprise Plus), DB `github_bounties` |
 | Runtime SA | `github-bounties-runtime@experiment-jegf.iam.gserviceaccount.com` (SA id unchanged) |
 | Build SA | `github-bounties-build@experiment-jegf.iam.gserviceaccount.com` |
 | CI SA | `github-bounties-ci@experiment-jegf.iam.gserviceaccount.com` (Workload Identity later — **no user keys in git**) |
@@ -127,7 +127,8 @@ gcloud artifacts repositories create github-bounties \
 | --- | --- | --- |
 | Instance | `github-bounties-staging` | New; not an LB1 clone |
 | Version | Postgres **16** | **Hunch** (current GA) |
-| Tier | `db-f1-micro` | Staging shared-core. If the API rejects it, try `db-g1-small`. |
+| Edition | **Enterprise** (`--edition=ENTERPRISE`) | Required for `db-f1-micro`. Do **not** use Enterprise Plus — SDK 584+ defaults create to Plus, which only accepts perf-optimized tiers. |
+| Tier | `db-f1-micro` | Staging shared-core on Enterprise. If the API rejects it, try `db-g1-small` (still Enterprise, not Plus). |
 | Disk | 10 GB SSD, zonal | No HA |
 | DB / user | `github_bounties` / `gb_app` | Create user out-of-band; password is a secret |
 | Network | **Private IP preferred** | Needs VPC + allocated range + `servicenetworking` peering |
@@ -274,7 +275,7 @@ Terraform equivalent: `infra/terraform` with `create_sql = false` until billing 
 ## Hunches (labeled)
 
 - Region `us-central1` — not specified in the ticket.
-- Postgres 16 + `db-f1-micro` — typical cheap staging; API may require `db-g1-small`.
+- Postgres 16 + Enterprise edition + `db-f1-micro` — typical cheap staging; not Enterprise Plus. API may require `db-g1-small` on the same edition.
 - Default VPC for private IP — may not have PSA peering; that is why public+SSL is the documented interim.
 - WIF pool id `github` — not created yet.
 - Hello service stays a separate Cloud Run canary from V0-B webhooks until someone merges the deployables.
