@@ -1,26 +1,28 @@
 # GitHub Bounties — GCP staging bootstrap
 
-One-pager so V1 can deploy without archaeology. **GitHub Bounties** is a new GCP
-project (not Lightning Bounties / LB1 leftovers). V0-A (money ADR) and V0-B
-(webhooks) are separate; this file does not change them.
+One-pager so V1 can deploy without archaeology. **GitHub Bounties** runs in GCP
+project `experiment-jegf` (not Lightning Bounties / LB1 leftovers). Do **not** use
+project id `github-bounties` / number `133702056111` (quota — cannot use that
+project). V0-A (money ADR) and V0-B (webhooks) are separate; this file does not
+change their product decisions.
 
 ## One-pager
 
 | Field | Value |
 | --- | --- |
 | Product | **GitHub Bounties** |
-| GCP project id | `github-bounties` |
-| Project number | `133702056111` |
+| GCP project id | `experiment-jegf` |
+| Project number | `42206083192` |
 | Owner context | `enrique@lightningbounties.com` |
 | Billing account | `LB_MVP1_Billing_account` |
 | Labels | `product=github-bounties`, `env=staging` |
 | Region | **Hunch:** `us-central1` (ticket did not lock a region; override `GB_REGION`) |
-| Artifact Registry | `us-central1-docker.pkg.dev/github-bounties/github-bounties` |
+| Artifact Registry | `us-central1-docker.pkg.dev/experiment-jegf/github-bounties` |
 | Cloud Run hello | service `github-bounties-hello` — `GET /` and `GET /api/health` → 200 |
 | Cloud SQL | instance `github-bounties-staging`, Postgres 16, `db-f1-micro`, DB `github_bounties` |
-| Runtime SA | `github-bounties-runtime@github-bounties.iam.gserviceaccount.com` (same id as ADR 0001) |
-| Build SA | `github-bounties-build@github-bounties.iam.gserviceaccount.com` |
-| CI SA | `github-bounties-ci@github-bounties.iam.gserviceaccount.com` (Workload Identity later — **no user keys in git**) |
+| Runtime SA | `github-bounties-runtime@experiment-jegf.iam.gserviceaccount.com` (SA id unchanged) |
+| Build SA | `github-bounties-build@experiment-jegf.iam.gserviceaccount.com` |
+| CI SA | `github-bounties-ci@experiment-jegf.iam.gserviceaccount.com` (Workload Identity later — **no user keys in git**) |
 
 **Live Cloud Run URL:** not deployed from this environment. Do not invent a
 `*.run.app` hostname. Blockers: [`docs/spikes/v0-c-gcp-bootstrap.md`](spikes/v0-c-gcp-bootstrap.md).
@@ -46,7 +48,7 @@ Evidence for this Cloud Agent VM: 2026-09-09. Re-run `./infra/gcloud/preflight.s
 
 | Item | Status | Evidence |
 | --- | --- | --- |
-| Staging project id recorded | **Done (docs)** | This file + README: `github-bounties` / `133702056111` |
+| Staging project id recorded | **Done (docs)** | This file + README: `experiment-jegf` / `42206083192` |
 | APIs listed + enable stub | **Done (stub)** | `infra/gcloud/bootstrap.sh`, `infra/terraform/main.tf` |
 | Artifact Registry repo | **Blocked (live)** | `blocked: missing gcloud CLI / auth / billing` |
 | Cloud SQL staging plan | **Done (docs)** | Plan below; instance **not** created |
@@ -88,7 +90,7 @@ sts.googleapis.com
 Not enabled here: Vertex AI, Looker, GKE, extra GPU quotas.
 
 ```bash
-gcloud config set project github-bounties
+gcloud config set project experiment-jegf
 gcloud services enable run.googleapis.com sqladmin.googleapis.com \
   secretmanager.googleapis.com cloudbuild.googleapis.com \
   artifactregistry.googleapis.com iam.googleapis.com \
@@ -105,7 +107,7 @@ gcloud services enable run.googleapis.com sqladmin.googleapis.com \
 Docker repo `github-bounties` in `us-central1`:
 
 ```text
-us-central1-docker.pkg.dev/github-bounties/github-bounties/github-bounties-hello
+us-central1-docker.pkg.dev/experiment-jegf/github-bounties/github-bounties-hello
 ```
 
 ```bash
@@ -133,13 +135,13 @@ gcloud artifacts repositories create github-bounties \
 **Reachability from Cloud Run**
 
 - **Private IP (preferred):** Serverless VPC Access connector *or* Direct VPC egress on the same VPC. Next step if VPC/PSA is missing: create a VPC, allocate a `/16` (or `/20`) for Private Service Access, peer `servicenetworking.googleapis.com`, then re-run `sql-staging.sh --private`.
-- **Interim public + SSL:** Cloud Run `--set-cloudsql-instances=github-bounties:us-central1:github-bounties-staging` and a unix-socket `DATABASE_URL`. Still `sslmode=require` for any public-IP clients (proxy).
+- **Interim public + SSL:** Cloud Run `--set-cloudsql-instances=experiment-jegf:us-central1:github-bounties-staging` and a unix-socket `DATABASE_URL`. Still `sslmode=require` for any public-IP clients (proxy).
 
 `DATABASE_URL` shapes (password never in git):
 
 ```text
 # Cloud Run unix socket
-postgresql://gb_app:PASSWORD@/github_bounties?host=/cloudsql/github-bounties:us-central1:github-bounties-staging
+postgresql://gb_app:PASSWORD@/github_bounties?host=/cloudsql/experiment-jegf:us-central1:github-bounties-staging
 
 # Auth Proxy on localhost (laptop / sidecar)
 postgresql://gb_app:PASSWORD@127.0.0.1:5432/github_bounties?sslmode=require
@@ -232,7 +234,7 @@ replace this canary. Do not invent webhook URLs here.
 Do **not** download JSON keys for humans or CI. Bind GitHub as:
 
 ```text
-principalSet://iam.googleapis.com/projects/133702056111/locations/global/workloadIdentityPools/github/attribute.repository/jegamboafuentes/github-bounties
+principalSet://iam.googleapis.com/projects/42206083192/locations/global/workloadIdentityPools/github/attribute.repository/jegamboafuentes/github-bounties
 ```
 
 (WIF pool name `github` is a **hunch** — create the pool/provider in console when CI is wired.)
@@ -246,7 +248,7 @@ Runtime should **not** have `roles/editor` or `roles/secretmanager.admin`.
 
 ## 7. Ops sequence (when credentials exist)
 
-1. Confirm you can `gcloud projects describe github-bounties` as someone in the owner context.
+1. Confirm you can `gcloud projects describe experiment-jegf` as someone in the owner context.
 2. Attach billing account `LB_MVP1_Billing_account` if the project is not already linked. Live Run/SQL/AR will fail without it.
 3. `./infra/gcloud/preflight.sh` — must exit 0.
 4. `./infra/gcloud/bootstrap.sh --apply`

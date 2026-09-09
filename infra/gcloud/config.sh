@@ -2,8 +2,9 @@
 # Sourced by the other scripts in this directory. Not executable on its own.
 
 # Locked project (do not invent a different id).
-PROJECT_ID="github-bounties"
-PROJECT_NUMBER="133702056111"
+# Do not use github-bounties / 133702056111 (quota).
+PROJECT_ID="experiment-jegf"
+PROJECT_NUMBER="42206083192"
 # Billing account display name (product lock). Not the opaque billingAccount IDs.
 BILLING_ACCOUNT_NAME="LB_MVP1_Billing_account"
 

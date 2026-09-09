@@ -4,7 +4,7 @@
 - **Date:** 2026-09-09
 - **Product:** GitHub Bounties (not Lightning Bounties / LB1 / “Lightning Bounties 2”)
 - **Ticket:** V0-A
-- **GCP project:** `github-bounties` / `133702056111`
+- **GCP project:** `experiment-jegf` / `42206083192`
 
 > **Accepted** — still no prod-wire of escrow into product UI until V1 tickets;
 > Secret Manager + Sepolia dry-run OK when credentials exist. No real USDC mainnet
@@ -376,7 +376,7 @@ cdp_transfer | checkout_refund` on the row.
 
 ## Secrets, IAM, GCP Secret Manager
 
-GCP project **`github-bounties`**, number **`133702056111`**.
+GCP project **`experiment-jegf`**, number **`42206083192`**.
 
 Store secrets in Secret Manager. Runtime loads them into the env names the CDP SDK
 already reads. **Never commit values. Never put `CDP_WALLET_SECRET` or API secrets in
@@ -399,7 +399,7 @@ Suggested prod prefix later: `prod-CDP_*`. V0-A uses the unprefixed sandbox name
 
 | Principal | Role | Bound to |
 | --- | --- | --- |
-| Runtime SA `github-bounties-runtime@github-bounties.iam.gserviceaccount.com` | `roles/secretmanager.secretAccessor` | the secrets above |
+| Runtime SA `github-bounties-runtime@experiment-jegf.iam.gserviceaccount.com` | `roles/secretmanager.secretAccessor` | the secrets above |
 | CI (read-only dry-run) | `secretAccessor` on sandbox secrets only | never prod wallet secret |
 | Humans | `roles/secretmanager.viewer` or admin via break-glass | no copy into git |
 
@@ -443,7 +443,7 @@ Wallet secret: CDP Portal → Wallets → Security.
 
 Secret Manager + Sepolia dry-run OK when credentials exist.
 
-1. Create sandbox secrets in GCP `github-bounties`.
+1. Create sandbox secrets in GCP `experiment-jegf`.
 2. Re-run `node scripts/money-path-dry-run.mjs` with `CDP_DRY_RUN_LIVE=1` on Base Sepolia only.
 3. V1 tickets may then wire product UI; this follow-up does not.
 

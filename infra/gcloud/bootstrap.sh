@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Staging baseline: APIs, labels, Artifact Registry, empty secrets, least-privilege SAs.
 # Default is dry-run (prints commands). Pass --apply to execute.
-# Requires: authenticated gcloud + billing on github-bounties. See preflight.sh.
+# Requires: authenticated gcloud + billing on experiment-jegf. See preflight.sh.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

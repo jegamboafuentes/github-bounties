@@ -1,5 +1,5 @@
 # GitHub Bounties — Cloud Build stub (staging hello)
-# Project: github-bounties / 133702056111
+# Project: experiment-jegf / 42206083192
 # Does not inject secret values. Runtime SA reads Secret Manager at deploy time later.
 
 substitutions:

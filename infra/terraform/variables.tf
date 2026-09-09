@@ -1,13 +1,13 @@
 variable "project_id" {
   type        = string
   description = "Locked GCP project id."
-  default     = "github-bounties"
+  default     = "experiment-jegf"
 }
 
 variable "project_number" {
   type        = string
   description = "Locked GCP project number (asserted via a terraform check)."
-  default     = "133702056111"
+  default     = "42206083192"
 }
 
 variable "region" {

@@ -3,7 +3,8 @@
 **Date:** 2026-09-09  
 **Runbook:** [gcp-bootstrap.md](../gcp-bootstrap.md)  
 **Product:** GitHub Bounties  
-**Project:** `github-bounties` / `133702056111`
+**Project:** `experiment-jegf` / `42206083192`  
+**Do not use:** `github-bounties` / `133702056111` (quota)
 
 ## Result: docs + stubs DONE; live GCP BLOCKED (expected)
 
@@ -21,8 +22,9 @@ committed.
 
 ```
 GitHub Bounties — V0-C GCP preflight
-Project id:     github-bounties
-Project number: 133702056111
+Project id:     experiment-jegf
+Project number: 42206083192
+Billing:        LB_MVP1_Billing_account
 Region:         us-central1
 
 BLOCKED: live GCP bootstrap cannot run from this environment.
@@ -48,7 +50,7 @@ Additional facts from the same VM:
 Unblock on an Ops machine as `enrique@lightningbounties.com` (or delegate):
 
 1. Install Google Cloud SDK; `gcloud auth login` + `gcloud auth application-default login`.
-2. Attach billing account `LB_MVP1_Billing_account` to `github-bounties` if not already linked.
+2. Attach billing account `LB_MVP1_Billing_account` to `experiment-jegf` if not already linked.
 3. `./infra/gcloud/preflight.sh` exits 0.
 4. `./infra/gcloud/bootstrap.sh --apply` then SQL + hello deploy as in the runbook.
 5. Paste the real Cloud Run `status.url` into `docs/gcp-bootstrap.md`.
@@ -65,7 +67,7 @@ cd services/hello && npm test
 Local process (`PORT=8080`):
 
 ```
-GET /            → 200 {"ok":true,"service":"github-bounties-hello","product":"GitHub Bounties","project":"github-bounties"}
+GET /            → 200 {"ok":true,"service":"github-bounties-hello","product":"GitHub Bounties","project":"experiment-jegf"}
 GET /api/health  → 200 (same)
 GET /nope        → 404
 ```

@@ -24,6 +24,7 @@ try {
     assert.equal(body.ok, true);
     assert.equal(body.service, "github-bounties-hello");
     assert.equal(body.product, "GitHub Bounties");
+    assert.equal(body.project, "experiment-jegf");
   }
   const missing = await get(port, "/nope");
   assert.equal(missing.status, 404);

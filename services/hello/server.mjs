@@ -21,7 +21,7 @@ export const server = http.createServer((req, res) => {
       ok: true,
       service: "github-bounties-hello",
       product: "GitHub Bounties",
-      project: "github-bounties",
+      project: "experiment-jegf",
     });
     return;
   }

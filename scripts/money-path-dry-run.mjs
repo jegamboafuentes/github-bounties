@@ -197,7 +197,7 @@ async function main() {
     }
     console.error("");
     console.error("Expected location:");
-    console.error("  GCP project github-bounties (133702056111)");
+    console.error("  GCP project experiment-jegf (42206083192)");
     console.error("  Secret IDs: CDP_API_KEY_ID, CDP_API_KEY_SECRET, CDP_WALLET_SECRET");
     console.error("  Create in CDP Portal → Secret API Key + Wallet Secret, then store in Secret Manager.");
     console.error("  Docs: https://docs.cdp.coinbase.com/get-started/docs/cdp-api-keys");
