@@ -178,11 +178,12 @@ describe("V1-4 bounty post + claim-lock", () => {
       assert.equal(
         board.activeLock?.caption,
         claimedByUntilLabel({
-          hunterLabel: `octo-${fullName.slice("test/board-".length)}`,
+          hunterLabel: board.activeLock.hunterLabel,
           expiresAt: first.expiresAt,
         }),
       );
-      assert.match(board.activeLock?.caption ?? "", /Claimed by /);
+      assert.match(board.activeLock.caption, /^Claimed by octo-/);
+      assert.match(board.activeLock.caption, /until 2026-09-12 12:00 UTC$/);
 
       const listed = await listBoardBounties(
         db,

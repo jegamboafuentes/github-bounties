@@ -60,8 +60,10 @@ export function createAppJwt(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 /** Confirm an installation exists. Do not trust `installation_id` from the query string alone. */
+export type InstallationId = number | string | bigint;
+
 export async function confirmInstallation(
-  installationId: number | string,
+  installationId: InstallationId,
   opts: { http?: GitHubHttp; jwt?: string } = {},
 ): Promise<InstallationInfo> {
   const http = opts.http ?? defaultHttp;
@@ -90,7 +92,7 @@ export async function confirmInstallation(
 }
 
 export async function createInstallationToken(
-  installationId: number | string,
+  installationId: InstallationId,
   opts: { http?: GitHubHttp; jwt?: string } = {},
 ): Promise<string> {
   const http = opts.http ?? defaultHttp;
@@ -108,7 +110,7 @@ export async function createInstallationToken(
 }
 
 export async function listInstallationRepos(
-  installationId: number | string,
+  installationId: InstallationId,
   opts: { http?: GitHubHttp; jwt?: string } = {},
 ): Promise<InstallationRepo[]> {
   const token = await createInstallationToken(installationId, opts);
@@ -199,7 +201,7 @@ export async function fetchMergeSurfaces(args: {
   repo: string;
   pullNumber: number;
   mergeCommitSha?: string | null;
-  installationId?: number | string | null;
+  installationId?: InstallationId | null;
   http?: GitHubHttp;
   jwt?: string;
 }): Promise<{
@@ -288,7 +290,7 @@ export async function fetchIssue(
   owner: string,
   repo: string,
   issueNumber: number,
-  opts: { installationId: number | string; http?: GitHubHttp; jwt?: string },
+  opts: { installationId: InstallationId; http?: GitHubHttp; jwt?: string },
 ): Promise<GitHubIssueSnapshot> {
   const token = await createInstallationToken(opts.installationId, {
     http: opts.http,
@@ -326,7 +328,7 @@ export async function createIssueComment(args: {
   repo: string;
   issueNumber: number;
   body: string;
-  installationId: number | string;
+  installationId: InstallationId;
   http?: GitHubHttp;
   jwt?: string;
 }): Promise<{ ok: boolean; status: number }> {
@@ -351,7 +353,7 @@ export async function addIssueLabels(args: {
   repo: string;
   issueNumber: number;
   labels: string[];
-  installationId: number | string;
+  installationId: InstallationId;
   http?: GitHubHttp;
   jwt?: string;
 }): Promise<{ ok: boolean; status: number }> {

@@ -98,7 +98,7 @@ async function main() {
       })
       .onConflictDoNothing();
 
-    const fundedAt = new Date("2026-09-09T00:00:00.000Z");
+    const fundedAt = new Date();
     await db
       .insert(bounties)
       .values({
@@ -115,7 +115,15 @@ async function main() {
         descriptionSnapshot: "Fixes welcome. Winner = merged PR author that closes #42.",
         fundedAt,
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: bounties.id,
+        set: {
+          status: "claim_locked",
+          title: "Seed: claim-locked bounty on #42",
+          fundedAt,
+          updatedAt: fundedAt,
+        },
+      });
 
     await db
       .insert(bounties)
@@ -151,7 +159,8 @@ async function main() {
       })
       .onConflictDoNothing();
 
-    const lockedAt = new Date("2026-09-09T12:00:00.000Z");
+    const lockedAt = new Date();
+    const lockExpires = claimLockExpiresAt(lockedAt, CLAIM_LOCK_HOURS);
     await db
       .insert(claimLocks)
       .values({
@@ -159,10 +168,19 @@ async function main() {
         bountyId: SEED.fundedBountyId,
         hunterUserId: SEED.hunterId,
         lockedAt,
-        expiresAt: claimLockExpiresAt(lockedAt, CLAIM_LOCK_HOURS),
+        expiresAt: lockExpires,
         status: "active",
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: claimLocks.id,
+        set: {
+          hunterUserId: SEED.hunterId,
+          lockedAt,
+          expiresAt: lockExpires,
+          status: "active",
+          updatedAt: lockedAt,
+        },
+      });
 
     await db
       .insert(claims)

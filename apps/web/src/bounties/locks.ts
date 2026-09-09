@@ -59,12 +59,13 @@ export async function acquireClaimLock(
   if (!bounty) {
     throw new BountyError("bounty_not_found", "Bounty not found.");
   }
+  if (bounty.status === "claim_locked") {
+    throw new BountyError("already_locked", "This bounty already has an active claim-lock.");
+  }
   if (bounty.status !== "funded") {
     throw new BountyError(
       "not_claimable",
-      bounty.status === "claim_locked"
-        ? "This bounty already has an active claim-lock."
-        : `Bounty is ${bounty.status}, not open funded.`,
+      `Bounty is ${bounty.status}, not open funded.`,
     );
   }
 
