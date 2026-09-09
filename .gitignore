@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+node_modules/
+*.pem
+*.key
+cdp_api_key.json
+wallet_secret.txt
