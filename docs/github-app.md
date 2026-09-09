@@ -36,11 +36,9 @@ Placeholder origin used in `.env.example`:
 
 Examples once you have a real host:
 
-```
-https://<staging-host>/webhooks/github
-https://<staging-host>/github/setup
-https://<staging-host>/github/callback
-```
+- `https://<host>/webhooks/github`
+- `https://<host>/github/setup`
+- `https://<host>/github/callback`
 
 Local development: run `npm start` and expose `/webhooks/github` with a tunnel ([smee.io](https://smee.io), Cloudflare Tunnel, ngrok). Point the App webhook URL at the tunnel. SSL verification should stay **on** for any real staging host.
 
