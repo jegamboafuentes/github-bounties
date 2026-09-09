@@ -31,14 +31,17 @@ run() {
 }
 
 echo "GitHub Bounties — Cloud SQL staging (${SQL_INSTANCE})"
-echo "Tier: ${SQL_TIER}  Version: ${SQL_VERSION}  Mode: ${NETWORK_MODE}"
+echo "Tier: ${SQL_TIER}  Edition: ENTERPRISE  Version: ${SQL_VERSION}  Mode: ${NETWORK_MODE}"
 echo "DATABASE_URL is not generated here. Create a password locally and add a secret version."
 echo
 
+# Pin Enterprise (not Plus). SDK 584+ defaults create to ENTERPRISE_PLUS,
+# which rejects shared-core db-f1-micro. gcloud accepts ENTERPRISE / enterprise.
 COMMON=(
   --project="${PROJECT_ID}"
   --database-version="${SQL_VERSION}"
   --tier="${SQL_TIER}"
+  --edition=ENTERPRISE
   --region="${REGION}"
   --storage-size="${SQL_STORAGE_GB}"
   --storage-type=SSD
