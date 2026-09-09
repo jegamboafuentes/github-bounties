@@ -1,0 +1,10 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.example
+*.md
+drizzle
+src/db/*.test.ts
+src/lib/*.test.ts
