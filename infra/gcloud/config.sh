@@ -5,8 +5,9 @@
 # Do not use github-bounties / 133702056111 (quota).
 PROJECT_ID="experiment-jegf"
 PROJECT_NUMBER="42206083192"
-# Billing account display name (product lock). Not the opaque billingAccount IDs.
+# Display name is the human/product lock. Opaque id is what `gcloud billing` uses.
 BILLING_ACCOUNT_NAME="LB_MVP1_Billing_account"
+BILLING_ACCOUNT_ID="011B0B-3BA3C5-CCE451"
 
 # Hunch: us-central1 is the boring default. Ticket did not lock a region.
 # Override with GB_REGION if Ops prefers another.

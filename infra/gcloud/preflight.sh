@@ -9,7 +9,8 @@ source "${ROOT}/config.sh"
 echo "GitHub Bounties — V0-C GCP preflight"
 echo "Project id:     ${PROJECT_ID}"
 echo "Project number: ${PROJECT_NUMBER}"
-echo "Billing:        ${BILLING_ACCOUNT_NAME}"
+echo "Billing name:   ${BILLING_ACCOUNT_NAME} (human lock)"
+echo "Billing id:     ${BILLING_ACCOUNT_ID} (gcloud billing)"
 echo "Region:         ${REGION}"
 echo
 
@@ -33,7 +34,7 @@ else
   billing="$(gcloud billing projects describe "${PROJECT_ID}" --format='value(billingAccountName)' 2>/dev/null || true)"
   enabled="$(gcloud billing projects describe "${PROJECT_ID}" --format='value(billingEnabled)' 2>/dev/null || true)"
   if [[ -z "${billing}" || "${enabled}" != "True" ]]; then
-    blockers+=("billing not attached or not readable (expect ${BILLING_ACCOUNT_NAME})")
+    blockers+=("billing not attached or not readable (expect ${BILLING_ACCOUNT_NAME} / ${BILLING_ACCOUNT_ID})")
   else
     echo "billing account: ${billing}"
   fi

@@ -14,7 +14,8 @@ change their product decisions.
 | GCP project id | `experiment-jegf` |
 | Project number | `42206083192` |
 | Owner context | `enrique@lightningbounties.com` |
-| Billing account | `LB_MVP1_Billing_account` |
+| Billing account name | `LB_MVP1_Billing_account` (human lock) |
+| Billing account id | `011B0B-3BA3C5-CCE451` (what `gcloud billing` uses) |
 | Labels | `product=github-bounties`, `env=staging` |
 | Region | **Hunch:** `us-central1` (ticket did not lock a region; override `GB_REGION`) |
 | Artifact Registry | `us-central1-docker.pkg.dev/experiment-jegf/github-bounties` |
@@ -56,7 +57,7 @@ Evidence for this Cloud Agent VM: 2026-09-09. Re-run `./infra/gcloud/preflight.s
 | Cloud Run hello code | **Done (local)** | `services/hello` — `npm test` → 200 on `/` and `/api/health` |
 | Cloud Run hello **live URL** | **Blocked** | `blocked: missing gcloud auth / billing` — no `*.run.app` URL |
 | IAM SA sketch | **Done (stub)** | Least-privilege runtime / build / CI; no JSON keys committed |
-| Billing account | **Done (docs)** | `LB_MVP1_Billing_account` (live link still unverified — missing gcloud) |
+| Billing account | **Done (docs)** | name `LB_MVP1_Billing_account` (human lock) / id `011B0B-3BA3C5-CCE451` (`gcloud billing`) — live link still unverified |
 | Labels applied on the project | **Blocked (live)** | Stub will set `product=github-bounties,env=staging` |
 | Vertex / Looker / prod sizing | **Out** | Note only: do not request extra quotas in V0-C |
 
@@ -249,7 +250,7 @@ Runtime should **not** have `roles/editor` or `roles/secretmanager.admin`.
 ## 7. Ops sequence (when credentials exist)
 
 1. Confirm you can `gcloud projects describe experiment-jegf` as someone in the owner context.
-2. Attach billing account `LB_MVP1_Billing_account` if the project is not already linked. Live Run/SQL/AR will fail without it.
+2. Attach billing account `LB_MVP1_Billing_account` (`011B0B-3BA3C5-CCE451`) if the project is not already linked. Use the opaque id with `gcloud billing`; the display name is the human lock. Live Run/SQL/AR will fail without it.
 3. `./infra/gcloud/preflight.sh` — must exit 0.
 4. `./infra/gcloud/bootstrap.sh --apply`
 5. `./infra/gcloud/sql-staging.sh --apply` (or `--apply --private` if VPC is ready).

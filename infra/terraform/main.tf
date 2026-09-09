@@ -179,6 +179,7 @@ resource "google_service_account_iam_member" "ci_uses_runtime" {
 
 # Staging Cloud SQL. Off by default so terraform apply can succeed before billing/VPC.
 # Set create_sql = true in terraform.tfvars after billing is attached.
+# Human lock: LB_MVP1_Billing_account. gcloud billing id: 011B0B-3BA3C5-CCE451.
 resource "google_sql_database_instance" "staging" {
   count            = var.create_sql ? 1 : 0
   name             = var.sql_instance
