@@ -23,7 +23,7 @@ variable "ar_repo" {
 
 variable "create_sql" {
   type        = bool
-  description = "Create staging Cloud SQL. Leave false until billing is attached."
+  description = "Create staging Cloud SQL. Leave false until billing is attached (LB_MVP1_Billing_account / 011B0B-3BA3C5-CCE451)."
   default     = false
 }
 

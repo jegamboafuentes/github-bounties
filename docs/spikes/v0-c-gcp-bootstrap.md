@@ -9,8 +9,9 @@
 ## Result: docs + stubs DONE; live GCP BLOCKED (expected)
 
 This Cloud Agent VM has **no `gcloud` CLI**, **no Application Default Credentials**,
-and **no Docker**. Billing account is `LB_MVP1_Billing_account` (product lock; live
-link not verified here). No Cloud Run URL was invented. No secrets were created or
+and **no Docker**. Billing account name is `LB_MVP1_Billing_account` (human lock);
+opaque id `011B0B-3BA3C5-CCE451` is what `gcloud billing` uses (live link not
+verified here). No Cloud Run URL was invented. No secrets were created or
 committed.
 
 ### Exact blockers (live provision / deploy)
@@ -24,7 +25,8 @@ committed.
 GitHub Bounties — V0-C GCP preflight
 Project id:     experiment-jegf
 Project number: 42206083192
-Billing:        LB_MVP1_Billing_account
+Billing name:   LB_MVP1_Billing_account (human lock)
+Billing id:     011B0B-3BA3C5-CCE451 (gcloud billing)
 Region:         us-central1
 
 BLOCKED: live GCP bootstrap cannot run from this environment.
@@ -45,12 +47,12 @@ Additional facts from the same VM:
 | `GOOGLE_APPLICATION_CREDENTIALS` | unset |
 | `~/.config/gcloud` | missing |
 | GCE metadata `http://metadata.google.internal/...` | not available |
-| Billing account | `LB_MVP1_Billing_account` (cannot query `gcloud billing projects describe` to confirm it is linked) |
+| Billing account | name `LB_MVP1_Billing_account` / id `011B0B-3BA3C5-CCE451` (cannot query `gcloud billing projects describe` to confirm it is linked) |
 
 Unblock on an Ops machine as `enrique@lightningbounties.com` (or delegate):
 
 1. Install Google Cloud SDK; `gcloud auth login` + `gcloud auth application-default login`.
-2. Attach billing account `LB_MVP1_Billing_account` to `experiment-jegf` if not already linked.
+2. Attach billing account `LB_MVP1_Billing_account` (`011B0B-3BA3C5-CCE451`) to `experiment-jegf` if not already linked. Use the id with `gcloud billing`; the display name is the human lock.
 3. `./infra/gcloud/preflight.sh` exits 0.
 4. `./infra/gcloud/bootstrap.sh --apply` then SQL + hello deploy as in the runbook.
 5. Paste the real Cloud Run `status.url` into `docs/gcp-bootstrap.md`.

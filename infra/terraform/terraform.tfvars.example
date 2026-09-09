@@ -3,7 +3,9 @@ project_id     = "experiment-jegf"
 project_number = "42206083192"
 region         = "us-central1"
 
-# Flip after LB_MVP1_Billing_account is attached and you are ready to pay for a micro instance.
+# Flip after billing is attached and you are ready to pay for a micro instance.
+# Display name (human lock): LB_MVP1_Billing_account
+# Opaque id (`gcloud billing`): 011B0B-3BA3C5-CCE451
 create_sql      = false
 sql_private_ip  = false
 # vpc_self_link = "projects/experiment-jegf/global/networks/default"

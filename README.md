@@ -105,6 +105,6 @@ Eng runbook: [docs/gcp-bootstrap.md](docs/gcp-bootstrap.md).
 | Labels | `product=github-bounties`, `env=staging` |
 | Hello | `GET /` and `GET /api/health` → 200 (`services/hello`) |
 | Live Cloud Run URL | **blocked: missing gcloud auth / billing** in the bootstrap environment — do not invent a `*.run.app` host |
-| Billing account | `LB_MVP1_Billing_account` |
+| Billing account | name `LB_MVP1_Billing_account` (human lock) / id `011B0B-3BA3C5-CCE451` (`gcloud billing`) |
 
 gcloud/Terraform stubs live under [`infra/`](infra/). Cloud Build stub: [`cloudbuild.yaml`](cloudbuild.yaml). Evidence: [docs/spikes/v0-c-gcp-bootstrap.md](docs/spikes/v0-c-gcp-bootstrap.md).
