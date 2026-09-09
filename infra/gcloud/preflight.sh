@@ -9,6 +9,7 @@ source "${ROOT}/config.sh"
 echo "GitHub Bounties — V0-C GCP preflight"
 echo "Project id:     ${PROJECT_ID}"
 echo "Project number: ${PROJECT_NUMBER}"
+echo "Billing:        ${BILLING_ACCOUNT_NAME}"
 echo "Region:         ${REGION}"
 echo
 
