@@ -51,3 +51,5 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 ## Secrets
 
 `DATABASE_URL` is Secret Manager key `DATABASE_URL` on `experiment-jegf` / `42206083192`. Cloud SQL instance `github-bounties-staging` already exists. **Ops sets the password OOB. Never commit it.**
+
+Google Sign-In (V1-2) also uses Secret Manager keys `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, and `AUTH_SECRET`. See [google-signin.md](google-signin.md). Never commit those values.

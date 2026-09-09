@@ -13,6 +13,7 @@ import {
   escrowModule,
   webhooksModule,
 } from "@/modules";
+import { AppHeader } from "@/components/header";
 
 const modules = [
   authModule,
@@ -22,20 +23,12 @@ const modules = [
   claimsModule,
 ];
 
+export const dynamic = "force-dynamic";
+
 export default function Home() {
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
-      <header className="border-b border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-6 py-4">
-          <span className="text-sm font-semibold tracking-tight">{PRODUCT_NAME}</span>
-          <Link
-            href="/api/health"
-            className="text-sm text-zinc-600 underline-offset-4 hover:underline dark:text-zinc-400"
-          >
-            Health
-          </Link>
-        </div>
-      </header>
+      <AppHeader />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 py-14">
         <div className="flex flex-col gap-4">
           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
@@ -86,8 +79,17 @@ export default function Home() {
           </ul>
         </section>
         <p className="text-sm text-zinc-500">
-          This is not Lightning Bounties, LB1, or “Lightning Bounties 2”. CDP / x402
-          live calls are V1-5. Google Sign-In is V1-2.
+          This is not Lightning Bounties, LB1, or “Lightning Bounties 2”. Sign in with
+          Google.{" "}
+          <Link href="/signin" className="underline underline-offset-4">
+            Sign in
+          </Link>
+          {" · "}
+          <Link href="/settings" className="underline underline-offset-4">
+            Settings
+          </Link>
+          . Connect GitHub and bounty CRUD are later tickets. CDP / x402 live calls are
+          V1-5.
         </p>
       </main>
     </div>

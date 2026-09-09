@@ -3,6 +3,9 @@ import { randomUUID } from "node:crypto";
 import { describe, it } from "node:test";
 import { CLAIM_LOCK_HOURS, FEE_BPS } from "../lib/constants";
 import { createDb } from "./client";
+import { loadDotenvFiles } from "./load-dotenv";
+
+loadDotenvFiles();
 import { CLAIM_LOCK_EXPIRES_TRIGGER } from "./meta";
 import {
   bounties,

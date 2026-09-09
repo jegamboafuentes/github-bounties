@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { CLAIM_LOCK_HOURS, FEE_BPS } from "../lib/constants";
 import { claimLockExpiresAt, feeFromFaceUsdc } from "../lib/money";
 import { createDb } from "./client";
+import { loadDotenvFiles } from "./load-dotenv";
 import {
   bounties,
   claimLocks,
@@ -12,6 +13,8 @@ import {
   repos,
   users,
 } from "./schema";
+
+loadDotenvFiles();
 
 /** Stable ids so the seed is idempotent. */
 export const SEED = {

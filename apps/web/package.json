@@ -14,13 +14,14 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
     "test": "npm run test:unit && npm run test:db",
-    "test:unit": "tsx --test src/lib/constants.test.ts",
-    "test:db": "tsx --test src/db/schema.integration.test.ts"
+    "test:unit": "tsx --test src/lib/constants.test.ts src/auth/env.test.ts src/auth/cookies.test.ts src/auth/paths.test.ts src/auth/public-user.test.ts src/auth/users.unit.test.ts",
+    "test:db": "tsx --test src/db/schema.integration.test.ts src/auth/users.integration.test.ts"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "next": "16.3.4",
+    "next-auth": "^5.0.0-beta.32",
     "postgres": "^3.4.9",
     "react": "19.2.8",
     "react-dom": "19.2.8"
