@@ -95,6 +95,31 @@ Copy [.env.example](.env.example) locally. Do not commit `.env`.
 - V1 claim-lock: 72 hours, exclusive, coordination only
 - GCP: `experiment-jegf` / `42206083192`
 
+## V1-1 — App scaffold + schema
+
+Next.js App Router lives in [`apps/web`](apps/web) (Cloud Run `standalone`). **Drizzle** owns versioned Postgres migrations. V0 `src/` (webhooks), `services/hello`, and `infra/` are unchanged.
+
+| Item | Where |
+| --- | --- |
+| Domain schema (V1-2…V1-6 contract) | [docs/v1-schema.md](docs/v1-schema.md), [`apps/web/src/db/schema.ts`](apps/web/src/db/schema.ts) |
+| Migrations | [`apps/web/drizzle/`](apps/web/drizzle/) |
+| Local Postgres | `docker compose up -d postgres` then `cd apps/web && npm run db:migrate && npm run db:seed` |
+| Secret Manager | key `DATABASE_URL` — Ops sets the value OOB (instance `github-bounties-staging`) |
+| Why Drizzle | SQL-first migrations, no Prisma generate/runtime engine; documented in [`apps/web/README.md`](apps/web/README.md) |
+
+```bash
+docker compose up -d postgres
+cd apps/web
+cp .env.example .env   # set DATABASE_URL for local Postgres only
+npm install
+npm run db:migrate
+npm run db:seed
+npm run test:unit
+npm run test:db
+```
+
+Cloud SQL: export `DATABASE_URL` from Secret Manager (never commit it) and run the same `db:migrate` from `apps/web`. Details: [apps/web/README.md](apps/web/README.md#cloud-sql-staging).
+
 ## GCP staging (V0-C)
 
 Eng runbook: [docs/gcp-bootstrap.md](docs/gcp-bootstrap.md).
