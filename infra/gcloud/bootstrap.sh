@@ -57,7 +57,12 @@ run gcloud services enable "${APIS[@]}" --project="${PROJECT_ID}"
 
 echo
 echo "# Project labels"
-run gcloud projects update "${PROJECT_ID}" --update-labels="${LABELS}"
+# GA `gcloud projects update` has no --update-labels on current SDK (e.g. 584);
+# that flag is on `gcloud alpha projects update`. Do not hard-stop bootstrap if
+# labels fail — APIs/AR/secrets/SAs still need to run.
+if ! run gcloud alpha projects update "${PROJECT_ID}" --update-labels="${LABELS}"; then
+  echo "warning: project labels failed (gcloud alpha projects update --update-labels); continuing" >&2
+fi
 
 echo
 echo "# Artifact Registry (${AR_FORMAT} / ${REGION} / ${AR_REPO})"
