@@ -78,8 +78,8 @@ postgresql://gb_app:PASSWORD@/github_bounties?host=/cloudsql/experiment-jegf:us-
 
 | Script | Purpose |
 | --- | --- |
-| `npm run db:generate` | `drizzle-kit generate` after schema edits |
-| `npm run db:migrate` | apply `drizzle/` to `DATABASE_URL` |
+| `npm run db:generate` | `drizzle-kit generate` after schema edits (diff from `drizzle/meta/*_snapshot.json`) |
+| `npm run db:migrate` | apply `drizzle/` SQL to `DATABASE_URL` (`0001_webhook_deliveries.sql` + `0001_snapshot.json`) |
 | `npm run db:seed` | sample user / repo / pending_fund + funded bounty |
 | `npm run test:unit` | fee 2% + 72h + auth + V0-B eligibility fixtures + HMAC + webhook replay (no live GitHub, no database) |
 | `npm run test:db` | unique indexes + `users.google_sub` upsert + eligible Claim from fixture (needs `DATABASE_URL`) |

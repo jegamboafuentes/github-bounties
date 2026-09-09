@@ -26,6 +26,9 @@ export type ProcessDeliveryDeps = {
  * First sight of a delivery: evaluate merge→close `#N`, and when the repo has
  * a funded bounty, create/update `claims` as `eligible`. Replay of the same
  * `X-GitHub-Delivery` is a no-op.
+ *
+ * Claim upsert runs **before** the delivery-id insert. If markEligible throws,
+ * the delivery is not recorded and GitHub redelivery can retry the Claim write.
  */
 export async function processDelivery(args: {
   deliveryId: string;
@@ -96,24 +99,6 @@ export async function processDelivery(args: {
 
   const decision = evaluateEligibility(input);
 
-  const inserted = await deps.store.recordIfNew({
-    deliveryId,
-    event,
-    action: payload.action,
-    decision,
-  });
-
-  if (!inserted) {
-    emit(`[idempotency] skip duplicate delivery ${deliveryId}`);
-    return {
-      duplicate: true,
-      deliveryId,
-      event,
-      decision,
-      logs,
-    };
-  }
-
   let claimResults: ClaimWriteResult[] = [];
   if (decision.eligible && deps.claims) {
     claimResults = await deps.claims.markEligible(decision, payload);
@@ -138,6 +123,25 @@ export async function processDelivery(args: {
     emit(
       `[eligibility] skip repo=${decision.repositoryFullName || "(unknown)"} pr=#${decision.pullRequestNumber ?? "?"} delivery=${deliveryId} reason=${decision.reason}`,
     );
+  }
+
+  const inserted = await deps.store.recordIfNew({
+    deliveryId,
+    event,
+    action: payload.action,
+    decision,
+  });
+
+  if (!inserted) {
+    emit(`[idempotency] skip duplicate delivery ${deliveryId}`);
+    return {
+      duplicate: true,
+      deliveryId,
+      event,
+      decision,
+      logs,
+      claims: claimResults,
+    };
   }
 
   return {

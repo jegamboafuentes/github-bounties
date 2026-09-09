@@ -78,6 +78,56 @@ describe("processDelivery", () => {
     assert.equal(logs.filter((line) => line.includes("marked claim eligible")).length, 1);
   });
 
+  it("retries Claim write when markEligible fails before the delivery is recorded", async () => {
+    const store = memoryDeliveryRecorder();
+    let attempts = 0;
+    const deps = {
+      store,
+      log: () => {},
+      claims: {
+        async markEligible() {
+          attempts += 1;
+          if (attempts === 1) {
+            throw new Error("simulated claim write failure");
+          }
+          return [{ issueNumber: 42, claimId: "claim-retry", status: "eligible" }];
+        },
+      },
+    };
+
+    await assert.rejects(
+      () =>
+        processDelivery({
+          deliveryId: fixture.deliveryId,
+          event: fixture.event,
+          payload: fixture.payload,
+          deps,
+        }),
+      /simulated claim write failure/,
+    );
+    assert.equal(await store.get(fixture.deliveryId), undefined);
+
+    const retry = await processDelivery({
+      deliveryId: fixture.deliveryId,
+      event: fixture.event,
+      payload: fixture.payload,
+      deps,
+    });
+    assert.equal(retry.duplicate, false);
+    assert.equal(retry.claims?.[0]?.claimId, "claim-retry");
+    assert.equal(attempts, 2);
+    assert.ok(await store.get(fixture.deliveryId));
+
+    const replay = await processDelivery({
+      deliveryId: fixture.deliveryId,
+      event: fixture.event,
+      payload: fixture.payload,
+      deps,
+    });
+    assert.equal(replay.duplicate, true);
+    assert.equal(attempts, 2);
+  });
+
   it("does not mark eligibility for a closed-but-unmerged PR", async () => {
     const logs: string[] = [];
     const payload: GitHubWebhookPayload = structuredClone(fixture.payload);
