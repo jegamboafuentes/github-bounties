@@ -3,10 +3,9 @@
 # Separate from cloudbuild.yaml (hello canary). Do not point that file here.
 #
 # Does not inject secret values. Cloud Run --set-secrets pulls from Secret Manager.
-# Required secret *names* must already have an enabled version or deploy fails.
-# CDP_* / CRON_SECRET are optional (mock rail / open expire-locks). Pass
-# _ATTACH_OPTIONAL_SECRETS=1 only when those versions exist (CDP_WEBHOOK_SECRET
-# may stay empty).
+# First-deploy secret *names* already have enabled versions (Ops preflight 2026-09-10).
+# Do not bind CDP_WEBHOOK_SECRET (enabled_versions=0), CRON_SECRET (not in SM),
+# or AUTH_URL (create after the live origin). AUTH_TRUST_HOST=true is plain env.
 #
 # Always tags :$BUILD_ID and :latest so manual `gcloud builds submit` works.
 # $COMMIT_SHA is empty on manual submit unless you pass
@@ -20,8 +19,6 @@ substitutions:
   _AR_REPO: github-bounties
   _SERVICE: github-bounties-web
   _IMAGE: github-bounties-web
-  _GITHUB_APP_ID: ""
-  _GITHUB_APP_SLUG: ""
   _PUBLIC_BASE_URL: ""
   _ATTACH_OPTIONAL_SECRETS: "0"
 
@@ -71,8 +68,6 @@ steps:
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash
     env:
-      - GITHUB_APP_ID=${_GITHUB_APP_ID}
-      - GITHUB_APP_SLUG=${_GITHUB_APP_SLUG}
       - PUBLIC_BASE_URL=${_PUBLIC_BASE_URL}
       - GB_ATTACH_OPTIONAL_SECRETS=${_ATTACH_OPTIONAL_SECRETS}
       - GB_REGION=${_REGION}

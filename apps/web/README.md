@@ -93,6 +93,11 @@ postgresql://gb_app:PASSWORD@/github_bounties?host=/cloudsql/experiment-jegf:us-
 gcloud builds submit --project=experiment-jegf --config=cloudbuild.web.yaml .
 ```
 
+First deploy sets `AUTH_TRUST_HOST=true` (plain env) and binds SM names that
+already have versions (including `GITHUB_APP_ID` / `GITHUB_APP_SLUG` / CDP keys).
+It does **not** bind `CDP_WEBHOOK_SECRET` (0 versions), `CRON_SECRET` (not in SM),
+or `AUTH_URL` (add after the live origin). See [docs/staging-deploy.md](../../docs/staging-deploy.md).
+
 Do not point `cloudbuild.yaml` at this app. Closed-beta checklist: [docs/staging-e2e.md](../../docs/staging-e2e.md).
 
 ## Scripts

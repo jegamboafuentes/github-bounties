@@ -223,6 +223,9 @@ gcloud builds submit --project=experiment-jegf --config=cloudbuild.web.yaml .
 gcloud run services describe github-bounties-web \
   --project=experiment-jegf --region=us-central1 \
   --format='value(status.url)'
+# Then create SM AUTH_URL from that origin and --update-secrets=AUTH_URL=AUTH_URL:latest
+# First revision already has AUTH_TRUST_HOST=true (plain env).
 ```
 
+Exact `--set-secrets` / `--set-cloudsql-instances` lists: [docs/staging-deploy.md](docs/staging-deploy.md).
 Do not invent a `*.run.app` host until that describe succeeds.

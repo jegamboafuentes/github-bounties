@@ -45,6 +45,16 @@ infra/gcloud/deploy-web.sh >/tmp/gb-deploy-web-dry.txt
 grep -q "github-bounties-web" /tmp/gb-deploy-web-dry.txt || fail "deploy-web dry-run must mention web service"
 grep -q "github-bounties-hello" /tmp/gb-deploy-web-dry.txt || fail "deploy-web dry-run must remind hello is separate"
 grep -q "DATABASE_URL" /tmp/gb-deploy-web-dry.txt || fail "deploy-web dry-run must list DATABASE_URL name"
+grep -q "AUTH_TRUST_HOST=true" /tmp/gb-deploy-web-dry.txt || fail "first deploy must set AUTH_TRUST_HOST=true as plain env"
+grep -q "set-cloudsql-instances" /tmp/gb-deploy-web-dry.txt || fail "deploy-web must use --set-cloudsql-instances"
+SET_LINE="$(tr ' ' '\n' </tmp/gb-deploy-web-dry.txt | grep '^--set-secrets=' || true)"
+[[ -n "${SET_LINE}" ]] || fail "deploy-web dry-run must print --set-secrets"
+echo "${SET_LINE}" | grep -q "GITHUB_APP_ID=GITHUB_APP_ID:latest" || fail "first-deploy secrets must include GITHUB_APP_ID"
+echo "${SET_LINE}" | grep -q "GITHUB_APP_SLUG=GITHUB_APP_SLUG:latest" || fail "first-deploy secrets must include GITHUB_APP_SLUG"
+echo "${SET_LINE}" | grep -q "CDP_API_KEY_ID=CDP_API_KEY_ID:latest" || fail "first-deploy secrets must include CDP_API_KEY_ID"
+echo "${SET_LINE}" | grep -q "CDP_WEBHOOK_SECRET" && fail "first-deploy --set-secrets must not bind CDP_WEBHOOK_SECRET"
+echo "${SET_LINE}" | grep -q "CRON_SECRET" && fail "first-deploy --set-secrets must not bind CRON_SECRET"
+echo "${SET_LINE}" | grep -q "AUTH_URL" && fail "first-deploy --set-secrets must not bind AUTH_URL"
 
 infra/gcloud/migrate-staging.sh >/tmp/gb-migrate-dry.txt
 grep -q "DATABASE_URL" /tmp/gb-migrate-dry.txt || fail "migrate dry-run must mention DATABASE_URL name"

@@ -49,11 +49,15 @@ BUILD_SA="${BUILD_SA_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
 CI_SA="${CI_SA_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
 
 # Secret Manager ids — names only. Values stay out of git.
-# Aligns with ADR 0001 for CDP_* and the V0-C ticket list.
-# V1-7 adds AUTH_SECRET + GitHub App OAuth client (GITHUB_APP_CLIENT_ID has a version).
+# Ops preflight 2026-09-10: enabled versions exist for the first-deploy lists
+# below. CDP_WEBHOOK_SECRET exists but enabled_versions=0. CRON_SECRET, AUTH_URL,
+# AUTH_TRUST_HOST are not in SM (AUTH_TRUST_HOST is plain env; AUTH_URL after URL).
 SECRETS=(
   DATABASE_URL
   AUTH_SECRET
+  AUTH_URL
+  GITHUB_APP_ID
+  GITHUB_APP_SLUG
   GITHUB_APP_PRIVATE_KEY
   GITHUB_WEBHOOK_SECRET
   GITHUB_APP_CLIENT_ID
@@ -69,27 +73,35 @@ SECRETS=(
   CRON_SECRET
 )
 
-# Cloud Run --set-secrets: required for closed-beta auth + GitHub + DB.
-# Deploy fails on --apply if these have no enabled version.
+# First-deploy --set-secrets (Ops: enabled versions present).
 WEB_REQUIRED_SECRETS=(
   DATABASE_URL
   AUTH_SECRET
   GOOGLE_OAUTH_CLIENT_ID
   GOOGLE_OAUTH_CLIENT_SECRET
+  GITHUB_APP_ID
+  GITHUB_APP_SLUG
   GITHUB_WEBHOOK_SECRET
   GITHUB_APP_PRIVATE_KEY
   GITHUB_APP_CLIENT_ID
   GITHUB_APP_CLIENT_SECRET
 )
 
-# Attached when an enabled version exists. Missing CDP_* → mock rail (OK for staging).
-# CDP_WEBHOOK_SECRET may stay empty. CRON_SECRET is optional (expire-locks open if unset).
-WEB_OPTIONAL_SECRETS=(
+# First-deploy CDP (Ops: enabled versions present). Sepolia live rail.
+WEB_CDP_SECRETS=(
   CDP_API_KEY_ID
   CDP_API_KEY_SECRET
   CDP_WALLET_SECRET
   CDP_PROJECT_ID
   CDP_CLIENT_API_KEY
+)
+
+# Do not attach on first deploy.
+# CDP_WEBHOOK_SECRET: resource exists, enabled_versions=0 (deploy fails if bound).
+# CRON_SECRET: not in SM — expire-locks stays open for smoke.
+# AUTH_URL: create after the live Cloud Run origin is known.
+WEB_SKIP_SECRETS=(
   CDP_WEBHOOK_SECRET
   CRON_SECRET
+  AUTH_URL
 )

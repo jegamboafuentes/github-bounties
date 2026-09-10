@@ -58,6 +58,9 @@ locals {
   secret_ids = [
     "DATABASE_URL",
     "AUTH_SECRET",
+    "AUTH_URL",
+    "GITHUB_APP_ID",
+    "GITHUB_APP_SLUG",
     "GITHUB_APP_PRIVATE_KEY",
     "GITHUB_WEBHOOK_SECRET",
     "GITHUB_APP_CLIENT_ID",

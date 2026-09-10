@@ -49,8 +49,10 @@ GITHUB_WEBHOOK={WEB_ORIGIN}/webhooks/github
 | Hunter | Google account **linked** via Connect GitHub (`github_links`), BYO Base address (`0x` + 40 hex) |
 | Ops | `gcloud` on `experiment-jegf`, Secret Manager admin/break-glass, Cloud Run logs |
 
-Use a **private test repo**. Prefer Base Sepolia test USDC. Mock rail is acceptable
-when CDP secrets are unset (`GET /api/health` → `escrow.rail=mock` + `missing` names).
+Use a **private test repo**. First-deploy binds CDP keys that already have SM
+versions — expect `escrow.rail=cdp` on `base-sepolia`. Mock is only if those
+secrets are later detached. **Do not** set `CDP_ALLOW_MAINNET=1`.
+`CRON_SECRET` is not in SM; expire-locks smoke does not need a bearer.
 
 ---
 
@@ -68,7 +70,8 @@ Pass when:
 - [ ] HTTP 200
 - [ ] `ok: true`, `service: github-bounties-web`, `fee_bps: 200`, `claim_lock_hours: 72`
 - [ ] `escrow.network` is `base-sepolia` (or documented override — not `base` unless gated)
-- [ ] `escrow.rail` is `mock` or `cdp` (if mock, `escrow.missing` lists exact CDP names)
+- [ ] `escrow.rail` is `cdp` and `escrow.missing` is empty (first-deploy CDP secrets are bound)
+- [ ] If someone detached CDP secrets: `rail=mock` and `missing` lists exact names only
 - [ ] `escrow.hosted_checkout.enabled` is `false`
 - [ ] Response does **not** contain secret values or connection strings
 

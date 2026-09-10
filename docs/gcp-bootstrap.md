@@ -21,7 +21,7 @@ change their product decisions.
 | Artifact Registry | `us-central1-docker.pkg.dev/experiment-jegf/github-bounties` |
 | Cloud Run hello | service `github-bounties-hello` — `GET /` and `GET /api/health` → 200 |
 | Cloud Run web | service `github-bounties-web` — V1 product (`apps/web`); see [staging-deploy.md](staging-deploy.md) |
-| Cloud SQL | instance `github-bounties-staging`, Postgres 16, **Enterprise** edition + `db-f1-micro` (not Enterprise Plus), DB `github_bounties` |
+| Cloud SQL | instance `github-bounties-staging` — **RUNNABLE** (Ops 2026-09-10), `connectionName` `experiment-jegf:us-central1:github-bounties-staging`, `requireSsl=true`, Postgres 16, DB `github_bounties` |
 | Runtime SA | `github-bounties-runtime@experiment-jegf.iam.gserviceaccount.com` (SA id unchanged) |
 | Build SA | `github-bounties-build@experiment-jegf.iam.gserviceaccount.com` |
 | CI SA | `github-bounties-ci@experiment-jegf.iam.gserviceaccount.com` (Workload Identity later — **no user keys in git**) |
@@ -183,7 +183,8 @@ ADR also mentions `CDP_PAYMASTER_URL` (optional, not a V0-C placeholder).
 V0-A uses these **unprefixed sandbox** names. Future prod: `prod-CDP_*` in a separate env — not this project’s job today.
 
 ```bash
-for s in DATABASE_URL AUTH_SECRET GITHUB_APP_PRIVATE_KEY GITHUB_WEBHOOK_SECRET \
+for s in DATABASE_URL AUTH_SECRET AUTH_URL GITHUB_APP_ID GITHUB_APP_SLUG \
+  GITHUB_APP_PRIVATE_KEY GITHUB_WEBHOOK_SECRET \
   GITHUB_APP_CLIENT_ID GITHUB_APP_CLIENT_SECRET \
   CDP_API_KEY_ID CDP_API_KEY_SECRET CDP_WALLET_SECRET CDP_PROJECT_ID \
   CDP_CLIENT_API_KEY CDP_WEBHOOK_SECRET \

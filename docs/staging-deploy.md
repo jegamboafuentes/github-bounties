@@ -14,14 +14,47 @@ checklist: [`staging-e2e.md`](staging-e2e.md).
 | Product service | `github-bounties-web` (new; do not reuse hello) |
 | Hello canary | `github-bounties-hello` — [`cloudbuild.yaml`](../cloudbuild.yaml) unchanged |
 | Image repo | `us-central1-docker.pkg.dev/experiment-jegf/github-bounties` |
-| Cloud SQL | `github-bounties-staging` / db `github_bounties` / user `gb_app` |
-| Runtime SA | `github-bounties-runtime@experiment-jegf.iam.gserviceaccount.com` |
+| Cloud SQL | `github-bounties-staging` — **RUNNABLE** (Ops 2026-09-10) |
+| connectionName | `experiment-jegf:us-central1:github-bounties-staging` |
+| requireSsl | `true` (unix socket / Auth Proxy; `sslmode=require` for TCP) |
+| Runtime SA | `github-bounties-runtime@experiment-jegf.iam.gserviceaccount.com` — already has `cloudsql.client` + `secretmanager.secretAccessor` + `logging.logWriter` |
 | Labels | `product=github-bounties,env=staging` |
 | Port | `8080` |
 | Health | `GET /api/health` → 200 JSON `service=github-bounties-web` |
 
 Live `*.run.app` URL: **do not invent one**. Read it after a successful deploy
 (see [Find the live URL](#4-find-the-live-url)).
+
+---
+
+## Ops preflight (2026-09-10, names only)
+
+Confirmed on `experiment-jegf`. **No secret values** are recorded here.
+
+| Check | Status |
+| --- | --- |
+| Cloud SQL `github-bounties-staging` | `RUNNABLE` |
+| `connectionName` | `experiment-jegf:us-central1:github-bounties-staging` |
+| `requireSsl` | `true` |
+| Runtime SA IAM | `cloudsql.client`, `secretmanager.secretAccessor`, `logging.logWriter` already bound |
+
+**Secret Manager — enabled versions present** (bind on first deploy):
+
+`DATABASE_URL`, `AUTH_SECRET`, `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
+`GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`,
+`GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET`, `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`,
+`CDP_WALLET_SECRET`, `CDP_PROJECT_ID`, `CDP_CLIENT_API_KEY`.
+
+**Do not bind on first deploy:**
+
+| Name | Why |
+| --- | --- |
+| `CDP_WEBHOOK_SECRET` | Resource exists, `enabled_versions=0` (`--set-secrets` would fail) |
+| `CRON_SECRET` | Not in SM. Expire-locks stays open for smoke (optional later) |
+| `AUTH_URL` | Not in SM. Create **after** the live Cloud Run origin exists |
+| `AUTH_TRUST_HOST` | Not a secret. First deploy uses plain env `AUTH_TRUST_HOST=true` |
+
+Re-check names only: `./infra/gcloud/list-secret-versions.sh`
 
 ---
 
@@ -32,24 +65,15 @@ Live `*.run.app` URL: **do not invent one**. Read it after a successful deploy
 ./infra/gcloud/list-secret-versions.sh   # names + has-version only
 ```
 
-Required Secret Manager **names** need an **enabled version** before web deploy
-(see [Secret map](#secret-map-web-runtime)). `GITHUB_APP_CLIENT_ID` already has
-a version. `CDP_WEBHOOK_SECRET` may stay empty (do not attach it until it has a
-version). Missing `CDP_API_KEY_*` / `CDP_WALLET_SECRET` → mock rail (OK).
-
-Create empty secrets if bootstrap never ran the new names (`AUTH_SECRET`,
-`GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `CRON_SECRET`):
-
-```bash
-./infra/gcloud/bootstrap.sh          # dry-run
-./infra/gcloud/bootstrap.sh --apply  # live, idempotent creates
-```
+Runtime SA IAM and SQL are already in place (preflight above). Skip bootstrap
+unless you need a new empty secret resource (`AUTH_URL` after first URL, or
+`CRON_SECRET` later).
 
 Add a version from stdin (never git, never echo):
 
 ```bash
-gcloud secrets versions add AUTH_SECRET --data-file=- --project=experiment-jegf
-# paste value, newline, Ctrl-D
+gcloud secrets versions add AUTH_URL --data-file=- --project=experiment-jegf
+# paste the https origin only, newline, Ctrl-D
 ```
 
 ---
@@ -57,89 +81,114 @@ gcloud secrets versions add AUTH_SECRET --data-file=- --project=experiment-jegf
 ## 1. Migrate against Cloud SQL
 
 Uses Secret Manager `DATABASE_URL`. **Never** print or paste the value.
+`requireSsl=true` is satisfied by Auth Proxy or the Cloud Run unix socket.
 
-### A. Laptop + Cloud SQL Auth Proxy (default)
+### A. Helper (preferred)
 
 ```bash
 ./infra/gcloud/migrate-staging.sh                 # dry-run
-./infra/gcloud/migrate-staging.sh --apply         # starts proxy, loads SM, drizzle migrate
+./infra/gcloud/migrate-staging.sh --apply         # Auth Proxy + drizzle
+./infra/gcloud/migrate-staging.sh --apply --job   # Cloud Run Job one-shot
 ```
 
-The script:
-
-1. Starts `cloud-sql-proxy experiment-jegf:us-central1:github-bounties-staging`.
-2. Captures `gcloud secrets versions access latest --secret=DATABASE_URL` (not printed).
-3. If the secret is the Cloud Run unix-socket shape, rewrites host to
-   `127.0.0.1:5432` **in-process** ([`infra/gcloud/proxy-database-url.mjs`](../infra/gcloud/proxy-database-url.mjs)).
-4. Runs `cd apps/web && npm run db:migrate`.
-5. Unsets `DATABASE_URL` and stops the proxy.
-
-Install the proxy if needed: [Cloud SQL Auth Proxy](https://cloud.google.com/sql/docs/postgres/sql-proxy)
-or `gcloud components install cloud-sql-proxy`.
-
-### B. Cloud Run Job one-shot (no laptop proxy)
-
-Use this when `DATABASE_URL` is the unix-socket form and you do not want a local
-proxy. Builds [`apps/web/Dockerfile.migrate`](../apps/web/Dockerfile.migrate).
+### B. Exact laptop + Auth Proxy commands
 
 ```bash
-./infra/gcloud/migrate-staging.sh --job            # dry-run
-./infra/gcloud/migrate-staging.sh --apply --job    # build, create/update job, execute --wait
+cloud-sql-proxy experiment-jegf:us-central1:github-bounties-staging --port=5432
 ```
 
-Equivalent after the migrate image is in Artifact Registry:
+In another shell (capture only — do not `echo`, do not `set -x`):
 
 ```bash
+cd apps/web
+npm ci   # if node_modules is missing
+export DATABASE_URL="$(gcloud secrets versions access latest --secret=DATABASE_URL --project=experiment-jegf)"
+node ../../infra/gcloud/proxy-database-url.mjs --exec npm run db:migrate
+unset DATABASE_URL
+```
+
+The helper rewrites a unix-socket `DATABASE_URL` to `127.0.0.1:5432` in-process
+and never prints it. Do **not** run `db:seed` on staging unless Ops explicitly
+wants fixture rows.
+
+### C. Exact Cloud Run Job commands
+
+After `apps/web/Dockerfile.migrate` is in Artifact Registry as
+`us-central1-docker.pkg.dev/experiment-jegf/github-bounties/github-bounties-migrate:staging`:
+
+```bash
+gcloud run jobs create github-bounties-migrate \
+  --project=experiment-jegf \
+  --region=us-central1 \
+  --image=us-central1-docker.pkg.dev/experiment-jegf/github-bounties/github-bounties-migrate:staging \
+  --service-account=github-bounties-runtime@experiment-jegf.iam.gserviceaccount.com \
+  --set-cloudsql-instances=experiment-jegf:us-central1:github-bounties-staging \
+  --set-secrets=DATABASE_URL=DATABASE_URL:latest \
+  --memory=512Mi --cpu=1 --task-timeout=10m --max-retries=1 \
+  --labels=product=github-bounties,env=staging
+# if the job already exists: gcloud run jobs update … (same flags)
+
 gcloud run jobs execute github-bounties-migrate \
   --project=experiment-jegf --region=us-central1 --wait
 ```
 
-Do **not** run `db:seed` on staging unless Ops explicitly wants fixture rows.
-
 ---
 
-## 2. Build + deploy web (`gcloud builds submit`)
+## 2. Build + deploy web
 
 Hello stays on [`cloudbuild.yaml`](../cloudbuild.yaml). Web uses
 [`cloudbuild.web.yaml`](../cloudbuild.web.yaml).
 
+### A. `gcloud builds submit` (preferred)
+
 ```bash
-# From repo root, after migrate succeeds:
 gcloud builds submit --project=experiment-jegf --config=cloudbuild.web.yaml .
 ```
 
-Optional substitutions (plain env, not secrets):
+Optional SHA tag only:
 
 ```bash
 gcloud builds submit --project=experiment-jegf --config=cloudbuild.web.yaml \
-  --substitutions=COMMIT_SHA=$(git rev-parse HEAD),_GITHUB_APP_ID=<numeric-app-id>,_GITHUB_APP_SLUG=<app-slug>,_PUBLIC_BASE_URL=<https-origin-after-first-url>
+  --substitutions=COMMIT_SHA=$(git rev-parse HEAD)
 ```
 
-`_PUBLIC_BASE_URL` is empty on the first submit (chicken/egg). After you have
-the live origin, re-submit or `gcloud run services update` (below).
-
-Attach optional CDP / `CRON_SECRET` **only** when those names have versions:
-
-```bash
-gcloud builds submit --project=experiment-jegf --config=cloudbuild.web.yaml \
-  --substitutions=_ATTACH_OPTIONAL_SECRETS=1
-```
-
-Laptop equivalent (dry-run by default):
-
-```bash
-./infra/gcloud/deploy-web.sh
-./infra/gcloud/deploy-web.sh --apply
-# Cloud Build already pushed an image:
-./infra/gcloud/deploy-web.sh --apply --image=us-central1-docker.pkg.dev/experiment-jegf/github-bounties/github-bounties-web:BUILD_ID
-```
+That build deploys `github-bounties-web` with
+`--set-cloudsql-instances=experiment-jegf:us-central1:github-bounties-staging`,
+`AUTH_TRUST_HOST=true` as **plain env**, and the first-deploy `--set-secrets`
+list below. It does **not** bind `CDP_WEBHOOK_SECRET`, `CRON_SECRET`, or
+`AUTH_URL`.
 
 Hello (unchanged):
 
 ```bash
 gcloud builds submit --project=experiment-jegf --config=cloudbuild.yaml .
-./infra/gcloud/deploy-hello.sh --apply
 ```
+
+Laptop helper: `./infra/gcloud/deploy-web.sh` (dry-run) or `--apply`.
+
+### B. Exact `gcloud run deploy` (after the image exists)
+
+Replace `BUILD_ID` with the tag Cloud Build pushed (or `:staging` / `:latest`).
+
+```bash
+gcloud run deploy github-bounties-web \
+  --project=experiment-jegf \
+  --region=us-central1 \
+  --image=us-central1-docker.pkg.dev/experiment-jegf/github-bounties/github-bounties-web:BUILD_ID \
+  --service-account=github-bounties-runtime@experiment-jegf.iam.gserviceaccount.com \
+  --port=8080 \
+  --memory=1Gi \
+  --cpu=1 \
+  --max-instances=2 \
+  --set-cloudsql-instances=experiment-jegf:us-central1:github-bounties-staging \
+  --set-env-vars=NODE_ENV=production,AUTH_TRUST_HOST=true,CDP_NETWORK=base-sepolia \
+  --set-secrets=DATABASE_URL=DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,GOOGLE_OAUTH_CLIENT_ID=GOOGLE_OAUTH_CLIENT_ID:latest,GOOGLE_OAUTH_CLIENT_SECRET=GOOGLE_OAUTH_CLIENT_SECRET:latest,GITHUB_APP_ID=GITHUB_APP_ID:latest,GITHUB_APP_SLUG=GITHUB_APP_SLUG:latest,GITHUB_WEBHOOK_SECRET=GITHUB_WEBHOOK_SECRET:latest,GITHUB_APP_PRIVATE_KEY=GITHUB_APP_PRIVATE_KEY:latest,GITHUB_APP_CLIENT_ID=GITHUB_APP_CLIENT_ID:latest,GITHUB_APP_CLIENT_SECRET=GITHUB_APP_CLIENT_SECRET:latest,CDP_API_KEY_ID=CDP_API_KEY_ID:latest,CDP_API_KEY_SECRET=CDP_API_KEY_SECRET:latest,CDP_WALLET_SECRET=CDP_WALLET_SECRET:latest,CDP_PROJECT_ID=CDP_PROJECT_ID:latest,CDP_CLIENT_API_KEY=CDP_CLIENT_API_KEY:latest \
+  --allow-unauthenticated \
+  --labels=product=github-bounties,env=staging
+```
+
+`--set-secrets` is `ENV=SECRET_NAME:latest` (names only). Do **not** add
+`CDP_WEBHOOK_SECRET`, `CRON_SECRET`, or `AUTH_URL` on this first revision.
 
 ---
 
@@ -147,39 +196,38 @@ gcloud builds submit --project=experiment-jegf --config=cloudbuild.yaml .
 
 Cloud Run `--set-secrets=ENV=NAME:latest`. Names only.
 
-| Env var | Secret Manager id | Required | Notes |
+| Env var | Secret Manager id | First deploy | Notes |
 | --- | --- | --- | --- |
-| `DATABASE_URL` | `DATABASE_URL` | yes | Unix-socket form for Cloud Run; see bootstrap |
+| `DATABASE_URL` | `DATABASE_URL` | yes | Unix-socket form for Cloud Run |
 | `AUTH_SECRET` | `AUTH_SECRET` | yes | Auth.js cookie encryption |
 | `GOOGLE_OAUTH_CLIENT_ID` | `GOOGLE_OAUTH_CLIENT_ID` | yes | Product login |
 | `GOOGLE_OAUTH_CLIENT_SECRET` | `GOOGLE_OAUTH_CLIENT_SECRET` | yes | Product login |
+| `GITHUB_APP_ID` | `GITHUB_APP_ID` | yes | Enabled version present |
+| `GITHUB_APP_SLUG` | `GITHUB_APP_SLUG` | yes | Enabled version present |
 | `GITHUB_WEBHOOK_SECRET` | `GITHUB_WEBHOOK_SECRET` | yes | HMAC; webhook **503** if missing |
-| `GITHUB_APP_PRIVATE_KEY` | `GITHUB_APP_PRIVATE_KEY` | yes | PEM; never commit |
-| `GITHUB_APP_CLIENT_ID` | `GITHUB_APP_CLIENT_ID` | yes | Version already exists |
+| `GITHUB_APP_PRIVATE_KEY` | `GITHUB_APP_PRIVATE_KEY` | yes | PEM |
+| `GITHUB_APP_CLIENT_ID` | `GITHUB_APP_CLIENT_ID` | yes | Enabled version present |
 | `GITHUB_APP_CLIENT_SECRET` | `GITHUB_APP_CLIENT_SECRET` | yes | User-to-server OAuth |
-| `CDP_API_KEY_ID` | `CDP_API_KEY_ID` | no | Mock rail if any of the three required CDP keys missing |
-| `CDP_API_KEY_SECRET` | `CDP_API_KEY_SECRET` | no | |
-| `CDP_WALLET_SECRET` | `CDP_WALLET_SECRET` | no | |
-| `CDP_PROJECT_ID` | `CDP_PROJECT_ID` | no | |
-| `CDP_CLIENT_API_KEY` | `CDP_CLIENT_API_KEY` | no | |
-| `CDP_WEBHOOK_SECRET` | `CDP_WEBHOOK_SECRET` | no | May stay empty — do not `--set-secrets` until a version exists |
-| `CRON_SECRET` | `CRON_SECRET` | no | Bearer for `/api/jobs/expire-claim-locks` |
+| `CDP_API_KEY_ID` | `CDP_API_KEY_ID` | yes | Sepolia / live rail |
+| `CDP_API_KEY_SECRET` | `CDP_API_KEY_SECRET` | yes | |
+| `CDP_WALLET_SECRET` | `CDP_WALLET_SECRET` | yes | |
+| `CDP_PROJECT_ID` | `CDP_PROJECT_ID` | yes | |
+| `CDP_CLIENT_API_KEY` | `CDP_CLIENT_API_KEY` | yes | |
+| `CDP_WEBHOOK_SECRET` | `CDP_WEBHOOK_SECRET` | **no** | `enabled_versions=0` |
+| `CRON_SECRET` | `CRON_SECRET` | **no** | Not in SM; optional after smoke |
+| `AUTH_URL` | `AUTH_URL` | **no** | Create after live origin |
 
 Plain env (not Secret Manager):
 
-| Env | Source | Notes |
+| Env | First deploy | Notes |
 | --- | --- | --- |
-| `GITHUB_APP_ID` | `_GITHUB_APP_ID` / shell | Numeric App id |
-| `GITHUB_APP_SLUG` | `_GITHUB_APP_SLUG` / shell | Install URL slug |
-| `PUBLIC_BASE_URL` / `AUTH_URL` | live Cloud Run origin | Set after first URL |
-| `CDP_NETWORK` | default `base-sepolia` | Mainnet refused without `CDP_ALLOW_MAINNET=1` |
-| `NODE_ENV` | `production` | Set by deploy |
+| `AUTH_TRUST_HOST` | `true` | Not in SM. Auth.js already `trustHost: true`; set the env anyway |
+| `CDP_NETWORK` | `base-sepolia` | Mainnet refused without `CDP_ALLOW_MAINNET=1` |
+| `NODE_ENV` | `production` | |
 | `PORT` | `8080` | Cloud Run |
+| `PUBLIC_BASE_URL` | omit | Optional env after live origin (GitHub URL helpers) |
 
-`--set-secrets` fails if the named secret has **no enabled version**. Discover
-mode (`deploy-web.sh` default on a laptop) binds only names that have versions
-and refuses `--apply` when a required name is empty. Cloud Build uses
-`--secrets=static` (required list).
+`--set-secrets` fails if the named secret has **no enabled version**.
 
 Rotate: add a new SM version, then deploy a no-op revision (or re-submit this
 build) so instances restart. See [gcp-bootstrap.md](gcp-bootstrap.md#rotate-secrets).
@@ -194,17 +242,29 @@ gcloud run services describe github-bounties-web \
   --format='value(status.url)'
 ```
 
-Record that origin. Then:
+Record that origin. Then create **`AUTH_URL`** in Secret Manager (stdin, never
+echo) and attach it. Keep `AUTH_TRUST_HOST=true`.
 
 ```bash
 URL="$(gcloud run services describe github-bounties-web \
   --project=experiment-jegf --region=us-central1 \
   --format='value(status.url)')"
 
+gcloud secrets create AUTH_URL \
+  --replication-policy=automatic \
+  --labels=product=github-bounties,env=staging \
+  --project=experiment-jegf || true
+printf '%s' "${URL}" | gcloud secrets versions add AUTH_URL \
+  --data-file=- --project=experiment-jegf
+
 gcloud run services update github-bounties-web \
   --project=experiment-jegf --region=us-central1 \
-  --update-env-vars="PUBLIC_BASE_URL=${URL},AUTH_URL=${URL}"
+  --update-secrets=AUTH_URL=AUTH_URL:latest \
+  --update-env-vars="PUBLIC_BASE_URL=${URL}"
 ```
+
+`printf` writes only to `gcloud` stdin. Do not `echo "$URL"` into chat or git.
+The origin is also available from `gcloud run services describe` later.
 
 Register the same origin on:
 
@@ -223,11 +283,15 @@ curl -sS -H "Authorization: Bearer $(gcloud auth print-identity-token)" "$URL/ap
 GitHub webhook deliveries are unauthenticated POSTs. If DRS blocks `allUsers`,
 webhooks will 403 until Ops adds an org-approved ingress path (not invented here).
 
+`CRON_SECRET` is **not** required for smoke. `/api/jobs/expire-claim-locks`
+stays callable without a bearer until Ops creates that secret and binds it.
+
 ---
 
 ## 5. Health smoke
 
-Expect `200` and JSON (names only; `escrow.missing` lists unset CDP keys, never values):
+Expect `200` and JSON (names only; never connection strings). With first-deploy
+CDP secrets attached, `escrow.rail` should be `cdp` and `missing` empty:
 
 ```json
 {
@@ -238,16 +302,16 @@ Expect `200` and JSON (names only; `escrow.missing` lists unset CDP keys, never 
   "claim_lock_hours": 72,
   "escrow": {
     "wired": true,
-    "rail": "mock",
+    "rail": "cdp",
     "network": "base-sepolia",
-    "missing": ["CDP_API_KEY_ID", "CDP_API_KEY_SECRET", "CDP_WALLET_SECRET"]
+    "missing": [],
+    "hosted_checkout": { "enabled": false }
   }
 }
 ```
 
-`rail` is `cdp` when the three required CDP secrets are present and the network
-is safe. `escrow.hosted_checkout.enabled` stays `false`. Home (`GET /`) is the
-product UI (HTML), not the hello JSON canary.
+`escrow.hosted_checkout.enabled` stays `false`. Home (`GET /`) is the product
+UI (HTML), not the hello JSON canary.
 
 Hello canary (separate service): `GET /` and `GET /api/health` →
 `service=github-bounties-hello`.

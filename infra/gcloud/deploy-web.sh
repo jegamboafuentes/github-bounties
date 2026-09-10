@@ -28,9 +28,10 @@ Usage: $0 [--apply] [--image IMAGE] [--skip-build] [--secrets discover|static]
                 static (Cloud Build): attach WEB_REQUIRED_SECRETS without listing
 
 Env (plain, not secrets):
-  GITHUB_APP_ID, GITHUB_APP_SLUG, PUBLIC_BASE_URL
+  AUTH_TRUST_HOST is always set to true on first deploy (not in SM).
+  PUBLIC_BASE_URL (optional, after live origin). AUTH_URL is an SM key later.
   GB_REGION, GB_WEB_MEMORY, GB_WEB_CPU, GB_WEB_MAX_INSTANCES, CDP_NETWORK
-  GB_ATTACH_OPTIONAL_SECRETS=1  (static mode: also bind WEB_OPTIONAL_SECRETS)
+  GB_ATTACH_OPTIONAL_SECRETS=1  (also bind CDP_WEBHOOK_SECRET / CRON_SECRET / AUTH_URL)
 EOF
 }
 
@@ -104,9 +105,8 @@ elif [[ "${APPLY}" -eq 1 ]]; then
   SET_SECRETS="$(web_set_secrets_csv)"
   echo "Attaching Secret Manager refs that have enabled versions (names only)."
 else
-  echo "Would attach --set-secrets for required names that have versions,"
-  echo "plus optional CDP_*/CRON_SECRET when a version exists."
-  echo "Cloud Build uses --secrets=static (no versions.list)."
+  echo "Would attach first-deploy --set-secrets (auth/GitHub/DB + CDP; skip"
+  echo "CDP_WEBHOOK_SECRET / CRON_SECRET / AUTH_URL). Cloud Build uses --secrets=static."
 fi
 echo
 
@@ -129,7 +129,7 @@ DEPLOY_ARGS=(
   --memory="${WEB_MEMORY}"
   --cpu="${WEB_CPU}"
   --max-instances="${WEB_MAX_INSTANCES}"
-  --add-cloudsql-instances="${SQL_CONNECTION}"
+  --set-cloudsql-instances="${SQL_CONNECTION}"
   --set-env-vars="${ENV_PAIRS}"
   --allow-unauthenticated
   --labels="${LABELS}"
@@ -148,9 +148,10 @@ echo
 echo "Live URL (only after a successful deploy — do not invent a *.run.app host):"
 echo "  gcloud run services describe ${WEB_SERVICE} --project=${PROJECT_ID} --region=${REGION} --format='value(status.url)'"
 echo
-echo "Then set PUBLIC_BASE_URL/AUTH_URL to that origin and redeploy or:"
+echo "After the live origin exists, add SM AUTH_URL (stdin, never echo) and:"
 echo "  gcloud run services update ${WEB_SERVICE} --project=${PROJECT_ID} --region=${REGION} \\"
-echo "    --update-env-vars=PUBLIC_BASE_URL=\$URL,AUTH_URL=\$URL"
+echo "    --update-secrets=AUTH_URL=AUTH_URL:latest --update-env-vars=PUBLIC_BASE_URL=\$URL"
+echo "First deploy already sets AUTH_TRUST_HOST=true (plain env, not a secret)."
 echo
 echo "Health smoke (DRS may 403 unauthenticated GET):"
 echo "  curl -sS -H \"Authorization: Bearer \$(gcloud auth print-identity-token)\" \"\$URL/api/health\""

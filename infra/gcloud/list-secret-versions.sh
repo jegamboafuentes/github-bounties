@@ -18,19 +18,19 @@ if ! command -v gcloud >/dev/null 2>&1; then
   exit 2
 fi
 
-printf "%-32s %-10s %s\n" "NAME" "REQUIRED" "ENABLED_VERSION"
-printf "%-32s %-10s %s\n" "----" "--------" "---------------"
+printf "%-32s %-14s %s\n" "NAME" "FIRST_DEPLOY" "ENABLED_VERSION"
+printf "%-32s %-14s %s\n" "----" "------------" "---------------"
 
-required_set=" ${WEB_REQUIRED_SECRETS[*]} "
+first_set=" ${WEB_REQUIRED_SECRETS[*]} ${WEB_CDP_SECRETS[*]} "
 for name in "${SECRETS[@]}"; do
-  req="no"
-  if [[ "${required_set}" == *" ${name} "* ]]; then
-    req="yes"
+  slot="skip"
+  if [[ "${first_set}" == *" ${name} "* ]]; then
+    slot="yes"
   fi
   if secret_has_enabled_version "${name}"; then
-    printf "%-32s %-10s %s\n" "${name}" "${req}" "yes"
+    printf "%-32s %-14s %s\n" "${name}" "${slot}" "yes"
   else
-    printf "%-32s %-10s %s\n" "${name}" "${req}" "no"
+    printf "%-32s %-14s %s\n" "${name}" "${slot}" "no"
   fi
 done
 
