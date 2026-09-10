@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { bountyStatusLabel, LOCK_NOT_MONEY_COPY } from "@/bounties";
+import { bountyStatusLabel } from "@/bounties";
 import type { BoardBounty } from "@/bounties/list";
 
 export function BountyCard({ bounty }: { bounty: BoardBounty }) {
@@ -28,7 +28,6 @@ export function BountyCard({ bounty }: { bounty: BoardBounty }) {
           {bounty.activeLock.caption}
         </p>
       ) : null}
-      <p className="text-xs text-zinc-500">{LOCK_NOT_MONEY_COPY}</p>
       <p className="text-xs text-zinc-500">
         Posted by {bounty.posterDisplayName}
         {" · "}
