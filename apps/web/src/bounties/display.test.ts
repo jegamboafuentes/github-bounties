@@ -3,10 +3,14 @@ import { describe, it } from "node:test";
 import {
   bountyStatusLabel,
   claimedByUntilLabel,
+  CLAIM_PAYOUT_COPY,
   formatLockDeadlineUtc,
+  formatUsdc,
   hunterLabel,
   isActiveClaimLock,
   LOCK_NOT_MONEY_COPY,
+  payoutBreakdown,
+  payoutCaption,
 } from "./display";
 
 describe("board display helpers", () => {
@@ -55,5 +59,20 @@ describe("board display helpers", () => {
     assert.match(LOCK_NOT_MONEY_COPY, /merge is still truth/i);
     assert.equal(bountyStatusLabel("claim_locked"), "Claim-locked");
     assert.equal(bountyStatusLabel("funded"), "Funded (open)");
+    assert.equal(bountyStatusLabel("settled"), "Completed (paid)");
+    assert.match(CLAIM_PAYOUT_COPY, /eligible hunter/i);
+  });
+
+  it("shows face / 2% fee / net and paid captions", () => {
+    const split = payoutBreakdown("100.000000");
+    assert.equal(formatUsdc(split.faceUsdc), "100");
+    assert.equal(formatUsdc(split.feeUsdc), "2");
+    assert.equal(formatUsdc(split.hunterUsdc), "98");
+    assert.equal(split.feeBps, 200);
+    assert.equal(payoutCaption({ status: "paid", hunterLabel: "octocat" }), "Paid to octocat");
+    assert.equal(
+      payoutCaption({ status: "eligible", hunterLabel: "octocat" }),
+      "Payout eligible — octocat can claim",
+    );
   });
 });

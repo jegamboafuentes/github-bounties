@@ -58,6 +58,23 @@ export async function findUserById(
   return row ?? null;
 }
 
+/** Persist a BYO Base payout address on the signed-in user. */
+export async function setUserWalletAddress(
+  userId: string,
+  walletAddress: string,
+  db: Database = getRuntimeDb(),
+): Promise<UserRow> {
+  const [row] = await db
+    .update(users)
+    .set({ walletAddress, updatedAt: new Date() })
+    .where(eq(users.id, userId))
+    .returning();
+  if (!row) {
+    throw new Error("user not found");
+  }
+  return row;
+}
+
 export function identityFromGoogleProfile(profile: {
   sub?: string | null;
   email?: string | null;

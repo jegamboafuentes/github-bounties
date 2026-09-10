@@ -10,8 +10,11 @@ import {
   releaseClaimLock,
   fundBounty,
 } from "@/bounties";
+import { claimPayout, isClaimError } from "@/claims";
 import { getRuntimeDb } from "@/db/runtime";
 import { isEscrowError, refundEscrow } from "@/escrow";
+import { INVALID_BASE_ADDRESS_MESSAGE, normalizeBaseAddress } from "@/lib/address";
+import { setUserWalletAddress } from "@/auth/users";
 
 export type BountyActionState = {
   ok: boolean;
@@ -20,7 +23,7 @@ export type BountyActionState = {
 };
 
 function fail(err: unknown): BountyActionState {
-  if (isBountyError(err)) {
+  if (isBountyError(err) || isClaimError(err)) {
     return { ok: false, error: err.code, message: err.message };
   }
   return {
@@ -111,6 +114,59 @@ export async function acquireClaimLockAction(formData: FormData): Promise<void> 
   }
 }
 
+export async function claimPayoutAction(formData: FormData): Promise<void> {
+  const bountyId = String(formData.get("bountyId") ?? "");
+  const user = await getCurrentPublicUser();
+  if (!user) {
+    redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
+  }
+  try {
+    const result = await claimPayout(
+      bountyId,
+      user.id,
+      {
+        payoutAddress: String(formData.get("payoutAddress") ?? ""),
+        claimId: String(formData.get("claimId") ?? "") || undefined,
+        persistWallet: true,
+      },
+      { db: getRuntimeDb() },
+    );
+    refreshBounty(bountyId);
+    if (result.rail === "mock" && result.missingEnv.length) {
+      redirect(
+        `/bounties/${bountyId}?notice=${encodeURIComponent(
+          `Payout recorded on the mock rail (not on-chain). Missing CDP env: ${result.missingEnv.join(", ")}. See docs/escrow.md.`,
+        )}`,
+      );
+    }
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
+    redirectBountyError(bountyId, err);
+  }
+}
+
+export async function saveWalletAddressAction(
+  _prev: BountyActionState | undefined,
+  formData: FormData,
+): Promise<BountyActionState> {
+  const user = await getCurrentPublicUser();
+  if (!user) {
+    redirect(`/signin?callbackUrl=${encodeURIComponent("/settings")}`);
+  }
+  try {
+    const address = normalizeBaseAddress(String(formData.get("walletAddress") ?? ""));
+    await setUserWalletAddress(user.id, address, getRuntimeDb());
+    revalidatePath("/settings");
+    return { ok: true, message: "Base payout address saved." };
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
+    if (err instanceof Error && err.message === INVALID_BASE_ADDRESS_MESSAGE) {
+      return { ok: false, error: "invalid_payout_address", message: err.message };
+    }
+    return fail(err);
+  }
+}
+
 export async function releaseClaimLockAction(formData: FormData): Promise<void> {
   const bountyId = String(formData.get("bountyId") ?? "");
   const user = await getCurrentPublicUser();
@@ -128,11 +184,13 @@ export async function releaseClaimLockAction(formData: FormData): Promise<void> 
 function redirectBountyError(bountyId: string, err: unknown): never {
   const message = isBountyError(err)
     ? err.message
-    : isEscrowError(err)
+    : isClaimError(err)
       ? err.message
-      : err instanceof Error
+      : isEscrowError(err)
         ? err.message
-        : "Something went wrong.";
+        : err instanceof Error
+          ? err.message
+          : "Something went wrong.";
   redirect(`/bounties/${bountyId}?error=${encodeURIComponent(message)}`);
 }
 

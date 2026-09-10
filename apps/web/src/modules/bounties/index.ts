@@ -5,9 +5,9 @@
 export const bountiesModule = {
   name: "bounties" as const,
   wired: true,
-  nextTicket: "V1-6",
+  nextTicket: "V2",
   notes:
-    "Create from GitHub issue URL, board + filters, escrow fund-lock, exclusive 72h claim-lock. Lock ≠ money.",
+    "Create from GitHub issue URL, board + filters, escrow fund-lock, exclusive 72h claim-lock, hunter claim payout. Lock ≠ money.",
 };
 
 export type BountiesModule = typeof bountiesModule;

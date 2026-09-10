@@ -8,6 +8,7 @@ import {
   repos,
   users,
 } from "../db/schema";
+import { listPayoutClaimsForBounties, type PayoutClaimView } from "../claims/read";
 import { claimedByUntilLabel, hunterLabel, isActiveClaimLock } from "./display";
 import { expireClaimLocks } from "./expire";
 
@@ -35,6 +36,7 @@ export type BoardBounty = {
     hunterUserId: string;
     caption: string;
   } | null;
+  payout: PayoutClaimView | null;
 };
 
 const STATUS_SET = new Set<string>(bountyStatusValues);
@@ -118,7 +120,12 @@ export async function listBoardBounties(
     }
   }
 
-  return rows.map((row) => toBoardBounty(row, hunterById, now));
+  const payoutByBounty = await listPayoutClaimsForBounties(
+    db,
+    rows.map((row) => row.id),
+  );
+
+  return rows.map((row) => toBoardBounty(row, hunterById, now, payoutByBounty.get(row.id) ?? null));
 }
 
 export async function getBoardBounty(
@@ -178,7 +185,8 @@ export async function getBoardBounty(
     }
   }
 
-  return toBoardBounty(row, hunterById, now);
+  const payoutByBounty = await listPayoutClaimsForBounties(db, [row.id]);
+  return toBoardBounty(row, hunterById, now, payoutByBounty.get(row.id) ?? null);
 }
 
 type ListRow = {
@@ -203,6 +211,7 @@ function toBoardBounty(
   row: ListRow,
   hunterById: Map<string, { displayName: string; githubLogin: string | null }>,
   now: Date,
+  payout: PayoutClaimView | null,
 ): BoardBounty {
   const lock =
     row.lockStatus && row.lockExpiresAt
@@ -239,6 +248,7 @@ function toBoardBounty(
             }),
           }
         : null,
+    payout,
   };
 }
 
