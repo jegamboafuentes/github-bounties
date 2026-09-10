@@ -7,10 +7,12 @@
  *
  * Cloud Run unix-socket URLs with an empty host (`@/dbname?host=/cloudsql/...`)
  * throw `Invalid URL` in Node / postgres.js. Rewrite that host to `localhost`
- * so URL parsing succeeds; postgres.js still uses the `host` query param.
+ * so URL parsing succeeds. postgres.js does **not** treat query `host=` as the
+ * connect host — `createDb` passes it as `options.host`.
  */
 
-function unixSocketHostParam(url: string): string | null {
+/** Cloud SQL (`/cloudsql/...`) or any unix socket absolute path from `?host=`. */
+export function unixSocketHostParam(url: string): string | null {
   const queryStart = url.indexOf("?");
   if (queryStart === -1) return null;
   const host = new URLSearchParams(url.slice(queryStart + 1)).get("host");
