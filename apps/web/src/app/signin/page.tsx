@@ -4,6 +4,7 @@ import { getOptionalSession } from "@/auth";
 import { missingLoginEnv } from "@/auth/env";
 import { signInWithGoogle } from "@/app/actions/auth";
 import { AppHeader } from "@/components/header";
+import { BrandWordmark } from "@/components/brand-wordmark";
 import { PRODUCT_NAME } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ export default async function SignInPage({
     <div className="flex flex-1 flex-col bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
       <AppHeader />
       <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-6 py-14">
+        <BrandWordmark size="splash" priority />
         <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">V1-2</p>
         <h1 className="text-3xl font-semibold tracking-tight">Sign in</h1>
         <p className="text-zinc-600 dark:text-zinc-400">
