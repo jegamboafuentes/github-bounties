@@ -14,6 +14,7 @@ import {
   webhooksModule,
 } from "@/modules";
 import { AppHeader } from "@/components/header";
+import { BrandWordmark } from "@/components/brand-wordmark";
 
 const modules = [
   authModule,
@@ -34,7 +35,10 @@ export default function Home() {
           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
             V1-6 claim payout
           </p>
-          <h1 className="text-4xl font-semibold tracking-tight">{PRODUCT_NAME}</h1>
+          <h1>
+            <BrandWordmark size="hero" priority />
+            <span className="sr-only">{PRODUCT_NAME}</span>
+          </h1>
           <p className="max-w-xl text-lg leading-8 text-zinc-600 dark:text-zinc-400">
             USDC bounties on GitHub issues. Winner is the author of the merged pull
             request that closes funded issue #N. Claim-lock coordinates work; merge

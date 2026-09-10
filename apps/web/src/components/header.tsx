@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getOptionalSession } from "@/auth";
 import { signOutToHome } from "@/app/actions/auth";
+import { BrandWordmark } from "@/components/brand-wordmark";
 import { PRODUCT_NAME } from "@/lib/constants";
 
 export async function AppHeader() {
@@ -10,8 +11,8 @@ export async function AppHeader() {
   return (
     <header className="border-b border-zinc-200 dark:border-zinc-800">
       <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-6 py-4">
-        <Link href="/" className="text-sm font-semibold tracking-tight">
-          {PRODUCT_NAME}
+        <Link href="/" className="inline-flex items-center" aria-label={PRODUCT_NAME}>
+          <BrandWordmark size="nav" priority />
         </Link>
         <nav className="flex items-center gap-4 text-sm text-zinc-600 dark:text-zinc-400">
           <Link href="/board" className="underline-offset-4 hover:underline">
