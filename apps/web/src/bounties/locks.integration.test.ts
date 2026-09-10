@@ -9,7 +9,7 @@ import { claimedByUntilLabel } from "./display";
 import { BountyError } from "./errors";
 import { expireClaimLocks } from "./expire";
 import { createBountyFromIssueUrl } from "./create";
-import { stubFundBounty } from "./fund";
+import { fundBounty } from "./fund";
 import { getBoardBounty, listBoardBounties } from "./list";
 import { acquireClaimLock, releaseClaimLock } from "./locks";
 
@@ -136,7 +136,7 @@ describe("V1-4 bounty post + claim-lock", () => {
         },
       );
       const lockedAt = new Date("2026-09-09T12:00:00.000Z");
-      await stubFundBounty(created.id, posterId, db, lockedAt);
+      await fundBounty(created.id, posterId, db, lockedAt);
 
       const first = await acquireClaimLock(created.id, hunterId, {
         db,
@@ -252,7 +252,7 @@ describe("V1-4 bounty post + claim-lock", () => {
         },
         { db, fetchIssueSnapshot: async () => null },
       );
-      await stubFundBounty(created.id, posterId, db);
+      await fundBounty(created.id, posterId, db);
       await acquireClaimLock(created.id, hunterId, {
         db,
         notify: async () => ({ attempted: false, commentOk: false, labelOk: false }),

@@ -8,6 +8,8 @@ export type BountyErrorCode =
   | "not_poster"
   | "not_claimant_or_poster"
   | "not_fundable"
+  | "not_settleable"
+  | "not_refundable"
   | "not_claimable"
   | "already_locked"
   | "lock_not_active";

@@ -32,7 +32,7 @@ export default function Home() {
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 py-14">
         <div className="flex flex-col gap-4">
           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-            V1-4 bounty board
+            V1-5 escrow + 2% fee
           </p>
           <h1 className="text-4xl font-semibold tracking-tight">{PRODUCT_NAME}</h1>
           <p className="max-w-xl text-lg leading-8 text-zinc-600 dark:text-zinc-400">
@@ -57,7 +57,9 @@ export default function Home() {
           <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
             <dt className="text-xs uppercase tracking-wide text-zinc-500">Rail</dt>
             <dd className="mt-1 text-2xl font-semibold">{DEFAULT_CURRENCY}</dd>
-            <dd className="text-sm text-zinc-500">chain {DEFAULT_CHAIN} (schema)</dd>
+            <dd className="text-sm text-zinc-500">
+              chain {DEFAULT_CHAIN} · rail Base Sepolia (CDP)
+            </dd>
           </div>
         </dl>
         <section className="flex flex-col gap-3">
@@ -96,8 +98,9 @@ export default function Home() {
           <Link href="/settings" className="underline underline-offset-4">
             Settings
           </Link>
-          . Claim-lock is coordination only; merge is still truth. CDP / x402 live
-          calls are V1-5.
+          . Claim-lock is coordination only; merge is still truth. Escrow holds face
+          in <code>gb-escrow</code>; 2% to <code>gb-fee</code> at settlement. Hosted
+          checkout is disabled.
         </p>
       </main>
     </div>

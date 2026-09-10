@@ -4,7 +4,7 @@ Official name: **GitHub Bounties**. Poster creates a bounty from a GitHub issue 
 
 **Claim-lock is coordination only. It does not move money.** Merge is still truth: the winner is the author of the merged pull request that closes funded issue `#N` (V1-3 `claims.status=eligible`).
 
-This is not Lightning Bounties / LB1. No CDP and no real USDC in this ticket (stub fund only; live rail is V1-5).
+This is not Lightning Bounties / LB1. Escrow lock / 2% settlement is V1-5 ([docs/escrow.md](escrow.md)). Claim-lock still does not move USDC.
 
 ## Product locks
 
@@ -12,17 +12,17 @@ This is not Lightning Bounties / LB1. No CDP and no real USDC in this ticket (st
 | --- | --- |
 | Claim-lock | exclusive **72h** (`CLAIM_LOCK_HOURS`) |
 | Active locks | one per bounty (unique index on `claim_locks` where `status=active`) |
-| Fund | stub `pending_fund` → `funded` (no USDC movement) |
-| Auth | Google session for post / stub-fund / claim / release |
+| Fund | escrow lock `pending_fund` → `funded` (CDP or documented mock) |
+| Auth | Google session for post / fund-lock / claim / release / cancel |
 | Repo | must be App-connected (`repos.is_active`) |
 
 ## Status flow
 
 The create form is the **draft**. Schema has no `draft` status. Submit writes `pending_fund`, then:
 
-`pending_fund` → **stub fund** → `funded` → **claim-lock** → `claim_locked` → release or expiry → `funded`
+`pending_fund` → **escrow lock** → `funded` → **claim-lock** → `claim_locked` → release or lock-expiry → `funded`
 
-Later money states (`settling`, `settled`, …) stay reserved for V1-5 / V1-6.
+Money: `funded` → settle → `settled` / `settled_partial`, or cancel / `expires_at` → `refunded` (bounty `cancelled` / `expired`). See [escrow.md](escrow.md).
 
 ## Surfaces
 
@@ -30,7 +30,7 @@ Later money states (`settling`, `settled`, …) stay reserved for V1-5 / V1-6.
 | --- | --- | --- |
 | `/board` | public | List + filter by repo / status. Shows **Claimed by X until …** when a lock is active |
 | `/bounties/new` | Google session | Create from issue URL |
-| `/bounties/[id]` | public read; Google for actions | Stub fund, claim, early release, poster force-release |
+| `/bounties/[id]` | public read; Google for actions | Escrow lock, claim, early release, poster force-release, cancel/refund |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` | Cron-friendly expiry |
 
 CLI (same function): `cd apps/web && npm run expire-locks`
@@ -43,9 +43,9 @@ After a successful lock, the app **best-effort** comments on the issue and adds 
 
 ## Out of scope
 
-- Real CDP fund / settle (V1-5)
 - Participation pool (V2)
-- Payout claim UI (V1-6)
+- Payout claim UI polish (V1-6)
+- Hosted checkout (blocked — ADR 0001 fee-skim open Q)
 
 ## Secrets
 

@@ -43,16 +43,50 @@ export function atomicToUsdc(atomic: bigint): string {
   return `${negative ? "-" : ""}${whole}.${frac}`;
 }
 
-export function feeFromFaceUsdc(faceUsdc: string, feeBps: number = FEE_BPS): string {
+export type FaceSplit = {
+  faceAtomic: bigint;
+  feeAtomic: bigint;
+  hunterAtomic: bigint;
+  faceUsdc: string;
+  feeUsdc: string;
+  hunterUsdc: string;
+  feeBps: number;
+};
+
+/**
+ * ADR 0001 settlement split. Fee is taken at settlement, never at fund.
+ * `fee_atomic = floor(face * fee_bps / 10_000)` (200 bps = 2%); hunter gets remainder.
+ * Same as `floor(face * 2 / 100)` when fee_bps=200.
+ */
+export function splitFaceAtomic(faceAtomic: bigint, feeBps: number = FEE_BPS): FaceSplit {
+  if (typeof faceAtomic !== "bigint") {
+    throw new TypeError("faceAtomic must be bigint");
+  }
+  if (faceAtomic <= ZERO) {
+    throw new RangeError("faceAtomic must be > 0");
+  }
   if (!Number.isInteger(feeBps) || feeBps < 0) {
     throw new RangeError("feeBps must be a non-negative integer");
   }
-  const face = usdcToAtomic(faceUsdc);
-  if (face <= ZERO) {
-    throw new RangeError("face USDC must be > 0");
-  }
-  const fee = (face * BigInt(feeBps)) / BPS_DENOMINATOR;
-  return atomicToUsdc(fee);
+  const feeAtomic = (faceAtomic * BigInt(feeBps)) / BPS_DENOMINATOR;
+  const hunterAtomic = faceAtomic - feeAtomic;
+  return {
+    faceAtomic,
+    feeAtomic,
+    hunterAtomic,
+    faceUsdc: atomicToUsdc(faceAtomic),
+    feeUsdc: atomicToUsdc(feeAtomic),
+    hunterUsdc: atomicToUsdc(hunterAtomic),
+    feeBps,
+  };
+}
+
+export function splitFaceUsdc(faceUsdc: string, feeBps: number = FEE_BPS): FaceSplit {
+  return splitFaceAtomic(usdcToAtomic(faceUsdc), feeBps);
+}
+
+export function feeFromFaceUsdc(faceUsdc: string, feeBps: number = FEE_BPS): string {
+  return splitFaceUsdc(faceUsdc, feeBps).feeUsdc;
 }
 
 export function claimLockExpiresAt(lockedAt: Date, hours = 72): Date {
