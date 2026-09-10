@@ -60,8 +60,10 @@ export function createAppJwt(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 /** Confirm an installation exists. Do not trust `installation_id` from the query string alone. */
+export type InstallationId = number | string | bigint;
+
 export async function confirmInstallation(
-  installationId: number | string,
+  installationId: InstallationId,
   opts: { http?: GitHubHttp; jwt?: string } = {},
 ): Promise<InstallationInfo> {
   const http = opts.http ?? defaultHttp;
@@ -90,7 +92,7 @@ export async function confirmInstallation(
 }
 
 export async function createInstallationToken(
-  installationId: number | string,
+  installationId: InstallationId,
   opts: { http?: GitHubHttp; jwt?: string } = {},
 ): Promise<string> {
   const http = opts.http ?? defaultHttp;
@@ -108,7 +110,7 @@ export async function createInstallationToken(
 }
 
 export async function listInstallationRepos(
-  installationId: number | string,
+  installationId: InstallationId,
   opts: { http?: GitHubHttp; jwt?: string } = {},
 ): Promise<InstallationRepo[]> {
   const token = await createInstallationToken(installationId, opts);
@@ -199,7 +201,7 @@ export async function fetchMergeSurfaces(args: {
   repo: string;
   pullNumber: number;
   mergeCommitSha?: string | null;
-  installationId?: number | string | null;
+  installationId?: InstallationId | null;
   http?: GitHubHttp;
   jwt?: string;
 }): Promise<{
@@ -275,4 +277,98 @@ export async function fetchMergeSurfaces(args: {
   }
 
   return extras;
+}
+
+export type GitHubIssueSnapshot = {
+  title: string;
+  body: string | null;
+  htmlUrl: string;
+  state: string;
+};
+
+export async function fetchIssue(
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  opts: { installationId: InstallationId; http?: GitHubHttp; jwt?: string },
+): Promise<GitHubIssueSnapshot> {
+  const token = await createInstallationToken(opts.installationId, {
+    http: opts.http,
+    jwt: opts.jwt,
+  });
+  const http = opts.http ?? defaultHttp;
+  const res = await http(
+    `${GITHUB_API}/repos/${owner}/${repo}/issues/${issueNumber}`,
+    { headers: apiHeaders(token) },
+  );
+  if (!res.ok) {
+    throw new Error(`GitHub issue ${owner}/${repo}#${issueNumber} failed (HTTP ${res.status})`);
+  }
+  const body = (await res.json()) as {
+    title?: string;
+    body?: string | null;
+    html_url?: string;
+    state?: string;
+    pull_request?: unknown;
+  };
+  if (body.pull_request) {
+    throw new Error(`${owner}/${repo}#${issueNumber} is a pull request, not an issue`);
+  }
+  if (!body.title) throw new Error("GitHub issue missing title");
+  return {
+    title: body.title,
+    body: body.body ?? null,
+    htmlUrl: body.html_url ?? `https://github.com/${owner}/${repo}/issues/${issueNumber}`,
+    state: body.state ?? "open",
+  };
+}
+
+export async function createIssueComment(args: {
+  owner: string;
+  repo: string;
+  issueNumber: number;
+  body: string;
+  installationId: InstallationId;
+  http?: GitHubHttp;
+  jwt?: string;
+}): Promise<{ ok: boolean; status: number }> {
+  const token = await createInstallationToken(args.installationId, {
+    http: args.http,
+    jwt: args.jwt,
+  });
+  const http = args.http ?? defaultHttp;
+  const res = await http(
+    `${GITHUB_API}/repos/${args.owner}/${args.repo}/issues/${args.issueNumber}/comments`,
+    {
+      method: "POST",
+      headers: { ...apiHeaders(token), "content-type": "application/json" },
+      body: JSON.stringify({ body: args.body }),
+    },
+  );
+  return { ok: res.ok, status: res.status };
+}
+
+export async function addIssueLabels(args: {
+  owner: string;
+  repo: string;
+  issueNumber: number;
+  labels: string[];
+  installationId: InstallationId;
+  http?: GitHubHttp;
+  jwt?: string;
+}): Promise<{ ok: boolean; status: number }> {
+  const token = await createInstallationToken(args.installationId, {
+    http: args.http,
+    jwt: args.jwt,
+  });
+  const http = args.http ?? defaultHttp;
+  const res = await http(
+    `${GITHUB_API}/repos/${args.owner}/${args.repo}/issues/${args.issueNumber}/labels`,
+    {
+      method: "POST",
+      headers: { ...apiHeaders(token), "content-type": "application/json" },
+      body: JSON.stringify({ labels: args.labels }),
+    },
+  );
+  return { ok: res.ok, status: res.status };
 }

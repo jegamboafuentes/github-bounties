@@ -1,6 +1,6 @@
 # Webhooks and claim eligibility
 
-GitHub Bounties pays the **author of the merged pull request that closes funded issue `#N`**. Claim-lock (V1-4: exclusive **72 hours**) coordinates work; **merge is truth**. This path does not move money and does not implement the lock.
+GitHub Bounties pays the **author of the merged pull request that closes funded issue `#N`**. Claim-lock (V1-4: exclusive **72 hours**) coordinates work; **merge is truth**. This webhook path does not move money and does not require an active lock — `funded` and `claim_locked` bounties both accept an eligible Claim. See [bounties.md](bounties.md).
 
 Product login is Google Sign-In. This GitHub App is **repo authority + webhooks**.
 
@@ -167,23 +167,24 @@ Point `scripts/replay-delivery.ts` at `http://127.0.0.1:3000/webhooks/github` af
 
 `POST /app/hook/deliveries/{delivery_id}/attempts` (authenticate as the App JWT). Same GUID semantics as the UI.
 
-## Claim-lock (72h) — hooks only, not implemented
+## Claim-lock (72h) — shipped in V1-4; webhooks stay eligibility-only
 
-Do not build the lock state machine here (V1-4). Events that will matter later:
+V1-4 shipped the board, exclusive **72h** claim-lock, and expiry job. See [bounties.md](bounties.md).
 
-| Event | Hint for a future expiry job |
+This webhook path still **only** writes `claims.status=eligible` on merge+close of a `funded` or `claim_locked` issue. It does not acquire, release, or expire locks. **Lock ≠ money**; merge is still truth.
+
+| Event | V1-4 / later |
 | --- | --- |
-| `issue_comment` created | Hunter `/claim` timestamp; 72h window starts |
+| `issue_comment` created | Optional later `/claim` wakeup; lock is taken in the product UI today |
 | `pull_request` opened / synchronize | Work underway during the lock |
-| `issues` assigned | Alternate lock representation |
+| `issues` assigned | Alternate lock representation (not used) |
 | `installation` deleted / `suspend` | Pause jobs; repo no longer authorized (`repos.is_active=false`) |
-| `pull_request` closed + merged | Lock becomes irrelevant; eligibility (this ticket) fires |
+| `pull_request` closed + merged | Eligibility fires here even if the lock expired |
 
 Merge still pays the merged PR’s author even if the lock expired — product lock is coordination, not a second truth source.
 
 ## Out of scope
 
 - Changing Google Sign-In (V1-2)
-- Claim-lock UI / 72h board (V1-4)
 - CDP / x402 / USDC / 2% fee ledger (V1-5)
 - Agent / MCP

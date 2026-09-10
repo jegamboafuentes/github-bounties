@@ -130,7 +130,7 @@ Auth.js (NextAuth v5) Google provider in `apps/web`. Session cookie is httpOnly 
 | Sign in / out | `/signin`, header **Sign out** |
 | Profile | `/settings` (protected) |
 | Session API | `GET /api/me` (401 if anonymous) |
-| Connect GitHub | stub in V1-2; **V1-3** starts App install (`/api/github/connect`) |
+| Connect GitHub | App install via `/api/github/connect` (V1-3) |
 | Env | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `AUTH_SECRET` (empty in `.env.example`) |
 
 Without those vars, `/signin` lists the missing names. CI does not call live Google.
@@ -147,6 +147,20 @@ Signed-in Google users **Connect GitHub** (App install). `POST /webhooks/github`
 | Env | `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET` (empty in `.env.example`) |
 
 V0-B `npm test` at the repo root stays green. `apps/web` reuses the same fixtures.
+
+## V1-4 — Bounty post + board + 72h claim-lock
+
+Poster creates a bounty from a GitHub issue URL (repo must be App-connected). Board lists and filters. Hunters take an exclusive **72h** claim-lock. **Lock ≠ money**; merge is still truth.
+
+| Item | Where |
+| --- | --- |
+| Board | `/board` (filter by repo / status; **Claimed by X until …**) |
+| Post | `/bounties/new` (Google session) |
+| Detail | `/bounties/[id]` — stub fund, claim, early/force release |
+| Expiry | `GET\|POST /api/jobs/expire-claim-locks` or `npm run expire-locks` |
+| Docs | [docs/bounties.md](docs/bounties.md) |
+
+Stub fund marks `pending_fund` → `funded` without CDP. Live USDC is V1-5.
 
 ## GCP staging (V0-C)
 

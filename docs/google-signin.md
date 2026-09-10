@@ -25,7 +25,7 @@ On login the jwt callback creates or updates `users` keyed by `google_sub` and s
 | Protected APIs | `GET /api/me`, `GET\|POST /api/github/connect` |
 | Edge gate | [`apps/web/src/proxy.ts`](../apps/web/src/proxy.ts) (Next.js 16; not `middleware.ts`) |
 
-Public: `/`, `/signin`, `/api/health`, `/api/auth/*`, `POST /webhooks/github` (HMAC). `/github/setup` and `/github/callback` require a Google session (V1-3).
+Public: `/`, `/signin`, `/board`, `/bounties/[id]`, `/api/health`, `/api/auth/*`, `POST /webhooks/github` (HMAC), claim-lock expiry job. `/github/setup`, `/github/callback`, and `/bounties/new` require a Google session.
 
 ## Local env
 
@@ -114,6 +114,6 @@ Auth.js JWT cookie:
 
 ## Out of scope
 
-- Bounty CRUD / claim-lock UI (V1-4)
 - CDP / x402 (V1-5)
+- Payout claim UI (V1-6)
 - Pasting or requesting real OAuth client secrets

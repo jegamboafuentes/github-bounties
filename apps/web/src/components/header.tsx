@@ -14,6 +14,12 @@ export async function AppHeader() {
           {PRODUCT_NAME}
         </Link>
         <nav className="flex items-center gap-4 text-sm text-zinc-600 dark:text-zinc-400">
+          <Link href="/board" className="underline-offset-4 hover:underline">
+            Board
+          </Link>
+          <Link href="/bounties/new" className="underline-offset-4 hover:underline">
+            Post
+          </Link>
           <Link href="/api/health" className="underline-offset-4 hover:underline">
             Health
           </Link>

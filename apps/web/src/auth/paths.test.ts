@@ -8,6 +8,8 @@ describe("protected paths", () => {
     assert.equal(isProtectedPagePath("/settings/wallet"), true);
     assert.equal(isProtectedPagePath("/github/setup"), true);
     assert.equal(isProtectedPagePath("/github/callback"), true);
+    assert.equal(isProtectedPagePath("/bounties/new"), true);
+    assert.equal(isProtectedPagePath("/board"), false);
     assert.equal(isProtectedPagePath("/signin"), false);
     assert.equal(isProtectedPagePath("/"), false);
     assert.equal(isProtectedPagePath("/webhooks/github"), false);

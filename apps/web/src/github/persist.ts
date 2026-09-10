@@ -28,6 +28,23 @@ export async function listReposForUser(
     .where(and(eq(repos.connectedByUserId, userId), eq(repos.isActive, true)));
 }
 
+export async function findActiveRepoByFullName(
+  fullName: string,
+  db: Database,
+): Promise<RepoRow | null> {
+  const [row] = await db
+    .select()
+    .from(repos)
+    .where(
+      and(
+        sql`lower(${repos.fullName}) = ${fullName.toLowerCase()}`,
+        eq(repos.isActive, true),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
 export async function upsertGithubLink(
   userId: string,
   identity: GitHubIdentity,
