@@ -75,8 +75,8 @@ Shapes (password never in git):
 # Auth Proxy
 postgresql://gb_app:PASSWORD@127.0.0.1:5432/github_bounties?sslmode=require
 
-# Cloud Run unix socket
-postgresql://gb_app:PASSWORD@/github_bounties?host=/cloudsql/experiment-jegf:us-central1:github-bounties-staging
+# Cloud Run unix socket (`localhost` so Node can parse; runtime sets postgres.js options.host from host=)
+postgresql://gb_app:PASSWORD@localhost/github_bounties?host=/cloudsql/experiment-jegf:us-central1:github-bounties-staging
 ```
 
 ## Cloud Run
