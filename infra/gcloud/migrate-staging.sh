@@ -127,7 +127,7 @@ fi
 echo "Auth Proxy path:"
 echo "  1. Start cloud-sql-proxy ${SQL_CONNECTION} --port=${PROXY_PORT}"
 echo "  2. gcloud secrets versions access latest --secret=DATABASE_URL (captured, not printed)"
-echo "  3. Rewrite unix-socket URLs to 127.0.0.1:${PROXY_PORT} in-process (never echoed)"
+echo "  3. Rewrite unix-socket URLs to 127.0.0.1:${PROXY_PORT} with sslmode=disable (never echoed)"
 echo "  4. cd apps/web && npm run db:migrate"
 echo "  5. unset DATABASE_URL"
 echo

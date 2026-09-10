@@ -64,6 +64,8 @@ steps:
       - push
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:latest
 
+  # Space-separated flags only (--secrets MODE, not the equals form). `_SERVICE`
+  # is passed through so the Cloud Run service stays github-bounties-web.
   - id: deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk
     entrypoint: bash
@@ -74,7 +76,7 @@ steps:
     args:
       - -c
       - |
-        bash infra/gcloud/deploy-web.sh --apply --secrets=static --image="${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$BUILD_ID"
+        bash infra/gcloud/deploy-web.sh --apply --secrets static --service "${_SERVICE}" --image "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$BUILD_ID"
 
 images:
   - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPO}/${_IMAGE}:$BUILD_ID

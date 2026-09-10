@@ -19,6 +19,9 @@ echo "Checking web Cloud Build..."
 grep -q "dir: apps/web" cloudbuild.web.yaml || fail "cloudbuild.web.yaml must build apps/web"
 grep -q "_SERVICE: github-bounties-web" cloudbuild.web.yaml || fail "cloudbuild.web.yaml service must be github-bounties-web"
 grep -q "infra/gcloud/deploy-web.sh" cloudbuild.web.yaml || fail "cloudbuild.web.yaml must call deploy-web.sh"
+grep -q -- '--secrets static' cloudbuild.web.yaml || fail "cloudbuild.web.yaml must use space form --secrets static"
+grep -q -- '--secrets=static' cloudbuild.web.yaml && fail "cloudbuild.web.yaml must not use --secrets=static (gcloud/helper flag parsing)"
+grep -q -- '${_SERVICE}' cloudbuild.web.yaml || fail "cloudbuild.web.yaml must wire _SERVICE into the deploy step"
 grep -q "services/hello" cloudbuild.web.yaml && fail "cloudbuild.web.yaml must not build services/hello"
 
 echo "Checking Dockerfiles..."
@@ -56,6 +59,20 @@ echo "${SET_LINE}" | grep -q "CDP_WEBHOOK_SECRET" && fail "first-deploy --set-se
 echo "${SET_LINE}" | grep -q "CRON_SECRET" && fail "first-deploy --set-secrets must not bind CRON_SECRET"
 echo "${SET_LINE}" | grep -q "AUTH_URL" && fail "first-deploy --set-secrets must not bind AUTH_URL"
 
+echo "Checking deploy-web.sh equals-form flags (Ops recovery)..."
+infra/gcloud/deploy-web.sh --secrets=static --image=us-central1-docker.pkg.dev/experiment-jegf/github-bounties/github-bounties-web:testbuild --service=github-bounties-web >/tmp/gb-deploy-web-eq.txt
+grep -q "Skipping local docker build" /tmp/gb-deploy-web-eq.txt || fail "deploy-web --image= must skip local docker build"
+grep -q "github-bounties-web:testbuild" /tmp/gb-deploy-web-eq.txt || fail "deploy-web --image= must use the given tag"
+grep -q "Secret mode: static" /tmp/gb-deploy-web-eq.txt || fail "deploy-web --secrets=static must select static mode"
+grep -q "Service: github-bounties-web" /tmp/gb-deploy-web-eq.txt || fail "deploy-web --service= must keep github-bounties-web"
+infra/gcloud/deploy-web.sh --secrets=static --image=us-central1-docker.pkg.dev/experiment-jegf/github-bounties/github-bounties-web:testbuild >/tmp/gb-deploy-web-eq-nosvc.txt
+grep -q "Service: github-bounties-web" /tmp/gb-deploy-web-eq-nosvc.txt || fail "deploy-web without --service must default to github-bounties-web"
+
+if infra/gcloud/deploy-web.sh --secrets=not-a-mode >/tmp/gb-deploy-bad-secrets.txt 2>/tmp/gb-deploy-bad-secrets.err; then
+  fail "deploy-web --secrets=not-a-mode must fail"
+fi
+grep -q "unknown --secrets mode" /tmp/gb-deploy-bad-secrets.err || fail "deploy-web must reject unknown --secrets= mode"
+
 infra/gcloud/migrate-staging.sh >/tmp/gb-migrate-dry.txt
 grep -q "DATABASE_URL" /tmp/gb-migrate-dry.txt || fail "migrate dry-run must mention DATABASE_URL name"
 grep -qE "password|postgresql://gb_app:" /tmp/gb-migrate-dry.txt && fail "migrate dry-run leaked a URL/password"
@@ -70,5 +87,7 @@ grep -q "github-bounties-web" /tmp/gb-deploy-hello-dry.txt && fail "hello dry-ru
 echo "Checking docs..."
 [[ -f docs/staging-deploy.md ]] || fail "missing docs/staging-deploy.md"
 [[ -f docs/staging-e2e.md ]] || fail "missing docs/staging-e2e.md"
+grep -q "sslmode=disable" docs/staging-deploy.md || fail "staging-deploy.md must document Auth Proxy sslmode=disable"
+grep -q -- '--secrets static' docs/staging-deploy.md || fail "staging-deploy.md must document space-form --secrets static"
 
 echo "OK: V1-7 staging wiring"

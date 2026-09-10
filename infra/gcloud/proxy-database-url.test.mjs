@@ -9,21 +9,22 @@ describe("rewriteDatabaseUrlForProxy", () => {
     const out = rewriteDatabaseUrlForProxy(input);
     assert.equal(
       out,
-      "postgresql://gb_app:not-a-real-password@127.0.0.1:5432/github_bounties?sslmode=require",
+      "postgresql://gb_app:not-a-real-password@127.0.0.1:5432/github_bounties?sslmode=disable",
     );
   });
 
   it("leaves a proxy-shaped URL unchanged", () => {
-    const input = "postgresql://gb_app:not-a-real-password@127.0.0.1:5432/github_bounties?sslmode=require";
+    const input = "postgresql://gb_app:not-a-real-password@127.0.0.1:5432/github_bounties?sslmode=disable";
     assert.equal(rewriteDatabaseUrlForProxy(input), input);
   });
 
-  it("keeps an existing sslmode on socket URLs", () => {
+  it("forces sslmode=disable even when the socket URL had another sslmode", () => {
     const input =
-      "postgresql://gb_app:not-a-real-password@/github_bounties?host=/cloudsql/experiment-jegf:us-central1:github-bounties-staging&sslmode=verify-ca";
+      "postgresql://gb_app:not-a-real-password@/github_bounties?host=/cloudsql/experiment-jegf:us-central1:github-bounties-staging&sslmode=require";
     const out = rewriteDatabaseUrlForProxy(input);
     assert.match(out, /127\.0\.0\.1:5432/);
-    assert.match(out, /sslmode=verify-ca/);
+    assert.match(out, /sslmode=disable/);
+    assert.doesNotMatch(out, /sslmode=require/);
     assert.doesNotMatch(out, /cloudsql/);
   });
 

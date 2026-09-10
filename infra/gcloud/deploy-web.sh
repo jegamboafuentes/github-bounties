@@ -19,13 +19,17 @@ SECRETS_MODE="discover"
 
 usage() {
   cat <<EOF
-Usage: $0 [--apply] [--image IMAGE] [--skip-build] [--secrets discover|static]
+Usage: $0 [--apply] [--image IMAGE] [--skip-build] [--secrets discover|static] [--service NAME]
 
   --apply       Execute gcloud/docker (default is dry-run)
   --image       Deploy this image (skip local docker build/push)
+                Accepts --image IMAGE or --image=IMAGE
   --skip-build  Same as --image using the :staging tag already in AR
   --secrets     discover (default, laptop): attach SM names that have versions
                 static (Cloud Build): attach WEB_REQUIRED_SECRETS without listing
+                Accepts --secrets MODE or --secrets=MODE
+  --service     Cloud Run service name (default: github-bounties-web).
+                Cloud Build passes --service "\${_SERVICE}".
 
 Env (plain, not secrets):
   AUTH_TRUST_HOST is always set to true on first deploy (not in SM).
@@ -35,18 +39,59 @@ Env (plain, not secrets):
 EOF
 }
 
+# Space and equals forms (--secrets=static, --image=tag). Cloud Build now uses
+# `--secrets static` (space) because `--secrets=static` was parsed as one token
+# and rejected. Ops recovery still passes --secrets=* / --image=*.
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --apply) APPLY=1 ;;
     --image)
       IMAGE_OVERRIDE="${2:-}"
+      if [[ -z "${IMAGE_OVERRIDE}" || "${IMAGE_OVERRIDE}" == --* ]]; then
+        echo "missing --image value" >&2
+        exit 2
+      fi
       SKIP_BUILD=1
       shift
+      ;;
+    --image=*)
+      IMAGE_OVERRIDE="${1#--image=}"
+      if [[ -z "${IMAGE_OVERRIDE}" ]]; then
+        echo "missing --image value" >&2
+        exit 2
+      fi
+      SKIP_BUILD=1
       ;;
     --skip-build) SKIP_BUILD=1 ;;
     --secrets)
       SECRETS_MODE="${2:-}"
+      if [[ -z "${SECRETS_MODE}" || "${SECRETS_MODE}" == --* ]]; then
+        echo "missing --secrets value" >&2
+        exit 2
+      fi
       shift
+      ;;
+    --secrets=*)
+      SECRETS_MODE="${1#--secrets=}"
+      if [[ -z "${SECRETS_MODE}" ]]; then
+        echo "missing --secrets value" >&2
+        exit 2
+      fi
+      ;;
+    --service)
+      WEB_SERVICE="${2:-}"
+      if [[ -z "${WEB_SERVICE}" || "${WEB_SERVICE}" == --* ]]; then
+        echo "missing --service value" >&2
+        exit 2
+      fi
+      shift
+      ;;
+    --service=*)
+      WEB_SERVICE="${1#--service=}"
+      if [[ -z "${WEB_SERVICE}" ]]; then
+        echo "missing --service value" >&2
+        exit 2
+      fi
       ;;
     -h|--help)
       usage
@@ -106,7 +151,7 @@ elif [[ "${APPLY}" -eq 1 ]]; then
   echo "Attaching Secret Manager refs that have enabled versions (names only)."
 else
   echo "Would attach first-deploy --set-secrets (auth/GitHub/DB + CDP; skip"
-  echo "CDP_WEBHOOK_SECRET / CRON_SECRET / AUTH_URL). Cloud Build uses --secrets=static."
+  echo "CDP_WEBHOOK_SECRET / CRON_SECRET / AUTH_URL). Cloud Build uses --secrets static."
 fi
 echo
 

@@ -16,7 +16,7 @@ checklist: [`staging-e2e.md`](staging-e2e.md).
 | Image repo | `us-central1-docker.pkg.dev/experiment-jegf/github-bounties` |
 | Cloud SQL | `github-bounties-staging` — **RUNNABLE** (Ops 2026-09-10) |
 | connectionName | `experiment-jegf:us-central1:github-bounties-staging` |
-| requireSsl | `true` (unix socket / Auth Proxy; `sslmode=require` for TCP) |
+| requireSsl | `true` on the instance. Cloud Run unix socket is fine. Auth Proxy on localhost needs `sslmode=disable` (proxy already encrypts to Cloud SQL; `sslmode=require` → ECONNRESET). Public-IP TCP clients still use `sslmode=require`. |
 | Runtime SA | `github-bounties-runtime@experiment-jegf.iam.gserviceaccount.com` — already has `cloudsql.client` + `secretmanager.secretAccessor` + `logging.logWriter` |
 | Labels | `product=github-bounties,env=staging` |
 | Port | `8080` |
@@ -108,8 +108,10 @@ unset DATABASE_URL
 ```
 
 The helper rewrites a unix-socket `DATABASE_URL` to `127.0.0.1:5432` in-process
-and never prints it. Do **not** run `db:seed` on staging unless Ops explicitly
-wants fixture rows.
+and never prints it. It **forces `sslmode=disable`**: Cloud SQL Auth Proxy
+already encrypts the hop to the instance, and `sslmode=require` against the
+local proxy port caused `ECONNRESET` on the first live migrate. Do **not** run
+`db:seed` on staging unless Ops explicitly wants fixture rows.
 
 ### C. Exact Cloud Run Job commands
 
@@ -152,11 +154,22 @@ gcloud builds submit --project=experiment-jegf --config=cloudbuild.web.yaml \
   --substitutions=COMMIT_SHA=$(git rev-parse HEAD)
 ```
 
-That build deploys `github-bounties-web` with
+That build deploys `${_SERVICE}` (`github-bounties-web`) with
 `--set-cloudsql-instances=experiment-jegf:us-central1:github-bounties-staging`,
 `AUTH_TRUST_HOST=true` as **plain env**, and the first-deploy `--set-secrets`
 list below. It does **not** bind `CDP_WEBHOOK_SECRET`, `CRON_SECRET`, or
 `AUTH_URL`.
+
+**First-deploy gotchas (fixed in-repo):**
+
+- `cloudbuild.web.yaml` must call `deploy-web.sh` with **space** flags
+  (`--secrets static --service "${_SERVICE}" --image "…"`). The first submit
+  used `--secrets=static`, which the helper treated as one unknown token
+  (gcloud-style `=` parsing). Do not put `--secrets=static` back in the YAML.
+- `deploy-web.sh` still accepts Ops recovery flags `--secrets=static` and
+  `--image=IMAGE` (equals form) as well as the space form.
+- Auth Proxy migrate rewrite must use `sslmode=disable` (see above). Cloud Run
+  unix-socket `DATABASE_URL` in Secret Manager is unchanged.
 
 Hello (unchanged):
 
