@@ -4,7 +4,7 @@ Next.js App Router (TypeScript) for Cloud Run, plus the V1 Postgres schema.
 
 **ORM: Drizzle** — SQL-first, versioned migrations next to the app, no Prisma generate step. Schema is the contract for V1-2…V1-6 ([docs/v1-schema.md](../../docs/v1-schema.md)).
 
-This package hosts GitHub App install, `POST /webhooks/github`, and the V1-4 bounty board / 72h claim-lock. The V0-B spike at repo-root `src/` stays in CI (`npm test` from the repository root). `services/hello` remains the Cloud Run canary.
+This package hosts GitHub App install, `POST /webhooks/github`, the bounty board / 72h claim-lock, and V1-5 CDP escrow (2% at settlement). The V0-B spike at repo-root `src/` stays in CI (`npm test` from the repository root). `services/hello` remains the Cloud Run canary.
 
 ## Product locks
 
@@ -14,7 +14,7 @@ This package hosts GitHub App install, `POST /webhooks/github`, and the V1-4 bou
 | Fee | 2% → `fee_ledger.fee_bps` default **200** |
 | Claim-lock | exclusive **72h** (`expires_at` default `now() + 72 hours`) |
 | Winner | author of the merged PR that closes funded `#N` |
-| CDP / x402 | **not wired** (ADR 0001 Accepted; live calls are V1-5) |
+| CDP / x402 | V1-5 escrow lock / settle / refund (mock if `CDP_*` missing; hosted checkout disabled) |
 
 ## Local Postgres + migrate
 
@@ -82,8 +82,8 @@ postgresql://gb_app:PASSWORD@/github_bounties?host=/cloudsql/experiment-jegf:us-
 | `npm run db:migrate` | apply `drizzle/` SQL to `DATABASE_URL` (`0001_webhook_deliveries.sql` + `0001_snapshot.json`) |
 | `npm run db:seed` | sample user / repo / pending_fund + claim-locked + open funded bounty |
 | `npm run expire-locks` | expire overdue 72h claim-locks (same function as the cron route) |
-| `npm run test:unit` | fee 2% + 72h + auth + V0-B eligibility fixtures + HMAC + webhook replay + board helpers (no live GitHub, no database) |
-| `npm run test:db` | unique indexes + `users.google_sub` upsert + eligible Claim + claim-lock exclusivity/expiry (needs `DATABASE_URL`) |
+| `npm run test:unit` | fee 2% + escrow state machine + CDP env/mainnet guard + 72h + auth + V0-B eligibility fixtures + HMAC + webhook replay + board helpers (no live GitHub, no database) |
+| `npm run test:db` | unique indexes + `users.google_sub` upsert + eligible Claim + claim-lock exclusivity/expiry + escrow fund/settle/refund mocks (needs `DATABASE_URL`) |
 | `npm run build` | Next.js standalone |
 
 ## Google Sign-In (V1-2)
@@ -134,13 +134,25 @@ If Google env is missing, `/signin` lists the unset variable names. Home and `/a
 | --- | --- |
 | `/board` | public list + repo/status filters |
 | `/bounties/new` | Google session; issue URL must match an App-connected repo |
-| `/bounties/[id]` | stub fund (poster), claim-lock (hunter), early/force release |
+| `/bounties/[id]` | escrow lock (poster), claim-lock (hunter), early/force release, cancel/refund |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` bearer |
 
 Claim-lock is exclusive **72h** coordination. **It does not move money.** Merge is still truth (V1-3 eligible Claim). See [docs/bounties.md](../../docs/bounties.md).
 
+## Escrow + 2% fee (V1-5)
+
+| Item | Where |
+| --- | --- |
+| Lock / settle / refund | [`src/escrow/`](./src/escrow/) |
+| Settle API | `POST /api/bounties/:id/settle` |
+| Refund API | `POST /api/bounties/:id/refund` |
+| Env | `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET` (empty placeholders; same SM names as repo-root `.env.example`) |
+| Docs | [docs/escrow.md](../../docs/escrow.md) |
+
+Missing `CDP_*` → mock rail that records `mock:` hashes and lists the exact missing names. Mainnet (`CDP_NETWORK=base`) is refused unless `CDP_ALLOW_MAINNET=1`. Hosted checkout is disabled (ADR 0001 `settlement.feeAmount` open Q).
+
 ## Out of scope (later tickets)
 
-- Live CDP / x402 (V1-5)
 - Payout claim UI (V1-6)
 - Participation-pool accounting beyond nullable columns
+- Enabling hosted checkout before net proceeds == face is confirmed

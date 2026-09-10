@@ -11,6 +11,7 @@ import {
   stubFundBounty,
 } from "@/bounties";
 import { getRuntimeDb } from "@/db/runtime";
+import { isEscrowError, refundEscrow } from "@/escrow";
 
 export type BountyActionState = {
   ok: boolean;
@@ -67,7 +68,29 @@ export async function stubFundBountyAction(formData: FormData): Promise<void> {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
   }
   try {
-    await stubFundBounty(bountyId, user.id, getRuntimeDb());
+    const funded = await stubFundBounty(bountyId, user.id, getRuntimeDb());
+    refreshBounty(bountyId);
+    if (funded.rail === "mock" && funded.missingEnv?.length) {
+      redirect(
+        `/bounties/${bountyId}?notice=${encodeURIComponent(
+          `Mock escrow lock (not on-chain). Missing CDP env: ${funded.missingEnv.join(", ")}. See docs/escrow.md.`,
+        )}`,
+      );
+    }
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
+    redirectBountyError(bountyId, err);
+  }
+}
+
+export async function cancelBountyAction(formData: FormData): Promise<void> {
+  const bountyId = String(formData.get("bountyId") ?? "");
+  const user = await getCurrentPublicUser();
+  if (!user) {
+    redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
+  }
+  try {
+    await refundEscrow(bountyId, { actorUserId: user.id, reason: "cancel" }, { db: getRuntimeDb() });
     refreshBounty(bountyId);
   } catch (err) {
     redirectBountyError(bountyId, err);
@@ -105,9 +128,11 @@ export async function releaseClaimLockAction(formData: FormData): Promise<void> 
 function redirectBountyError(bountyId: string, err: unknown): never {
   const message = isBountyError(err)
     ? err.message
-    : err instanceof Error
+    : isEscrowError(err)
       ? err.message
-      : "Something went wrong.";
+      : err instanceof Error
+        ? err.message
+        : "Something went wrong.";
   redirect(`/bounties/${bountyId}?error=${encodeURIComponent(message)}`);
 }
 

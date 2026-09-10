@@ -1,5 +1,6 @@
 import { expireClaimLocks } from "@/bounties";
 import { getRuntimeDb } from "@/db/runtime";
+import { expireUnmergedBounties } from "@/escrow";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,9 @@ async function run(req: Request) {
     }
   }
 
-  const result = await expireClaimLocks(getRuntimeDb());
+  const db = getRuntimeDb();
+  const result = await expireClaimLocks(db);
+  const money = await expireUnmergedBounties({ db });
   return Response.json(
     {
       ok: true,
@@ -25,6 +28,9 @@ async function run(req: Request) {
       restored_funded: result.restoredBountyIds.length,
       expired_lock_ids: result.expiredLockIds,
       restored_bounty_ids: result.restoredBountyIds,
+      refunded_expired_bounties: money.refundedBountyIds.length,
+      voided_expired_bounties: money.voidedBountyIds.length,
+      refund_errors: money.errors,
     },
     { headers: { "cache-control": "no-store" } },
   );

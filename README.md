@@ -156,11 +156,23 @@ Poster creates a bounty from a GitHub issue URL (repo must be App-connected). Bo
 | --- | --- |
 | Board | `/board` (filter by repo / status; **Claimed by X until …**) |
 | Post | `/bounties/new` (Google session) |
-| Detail | `/bounties/[id]` — stub fund, claim, early/force release |
-| Expiry | `GET\|POST /api/jobs/expire-claim-locks` or `npm run expire-locks` |
-| Docs | [docs/bounties.md](docs/bounties.md) |
+| Detail | `/bounties/[id]` — escrow lock, claim, early/force release, poster cancel/refund |
+| Expiry | `GET\|POST /api/jobs/expire-claim-locks` or `npm run expire-locks` (locks + `expires_at` refunds) |
+| Docs | [docs/bounties.md](docs/bounties.md), [docs/escrow.md](docs/escrow.md) |
 
-Stub fund marks `pending_fund` → `funded` without CDP. Live USDC is V1-5.
+Escrow lock records `escrows.status=funded` (real CDP when secrets exist; otherwise a mock hash plus the exact missing `CDP_*` names). Settle: `POST /api/bounties/:id/settle`. Hosted checkout stays disabled.
+
+## V1-5 — Escrow + 2% fee (CDP / x402)
+
+`gb-escrow` holds face F. Settlement takes `floor(F × 2%)` to `gb-fee` and the remainder to the hunter. Refunds return full F. Base Sepolia by default; mainnet refused unless `CDP_NETWORK=base` **and** `CDP_ALLOW_MAINNET=1`.
+
+| Item | Where |
+| --- | --- |
+| Service | [`apps/web/src/escrow/`](apps/web/src/escrow/) |
+| Docs / Sepolia dry-run | [docs/escrow.md](docs/escrow.md) |
+| Env names | `.env.example` `CDP_*` (values never in git) |
+
+Optional live faucet+release still: `CDP_DRY_RUN_LIVE=1 node scripts/money-path-dry-run.mjs` after Ops stashes secrets in Secret Manager.
 
 ## GCP staging (V0-C)
 

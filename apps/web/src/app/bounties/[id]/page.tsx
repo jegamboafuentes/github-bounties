@@ -2,12 +2,20 @@ import Link from "next/link";
 import { getCurrentPublicUser } from "@/auth/protect";
 import {
   acquireClaimLockAction,
+  cancelBountyAction,
   releaseClaimLockAction,
   stubFundBountyAction,
 } from "@/app/actions/bounties";
-import { bountyStatusLabel, getBoardBounty, LOCK_NOT_MONEY_COPY, STUB_FUND_COPY } from "@/bounties";
+import {
+  bountyStatusLabel,
+  getBoardBounty,
+  HOSTED_CHECKOUT_DISABLED_COPY,
+  LOCK_NOT_MONEY_COPY,
+  STUB_FUND_COPY,
+} from "@/bounties";
 import { AppHeader } from "@/components/header";
 import { getRuntimeDb } from "@/db/runtime";
+import { getEscrowSnapshot } from "@/escrow";
 import { CLAIM_LOCK_HOURS } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
@@ -17,13 +25,15 @@ export default async function BountyDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; notice?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const [user, bounty] = await Promise.all([
+  const db = getRuntimeDb();
+  const [user, bounty, escrow] = await Promise.all([
     getCurrentPublicUser(),
-    getBoardBounty(id, getRuntimeDb()).catch(() => null),
+    getBoardBounty(id, db).catch(() => null),
+    getEscrowSnapshot(id, db).catch(() => null),
   ]);
 
   if (!bounty) {
@@ -47,6 +57,12 @@ export default async function BountyDetailPage({
   const canFund = Boolean(isPoster && bounty.status === "pending_fund");
   const canClaim = Boolean(user && bounty.status === "funded" && !bounty.activeLock);
   const canRelease = Boolean(bounty.activeLock && (isClaimant || isPoster));
+  const canCancel = Boolean(
+    isPoster &&
+      (bounty.status === "pending_fund" ||
+        bounty.status === "funded" ||
+        bounty.status === "claim_locked"),
+  );
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
@@ -72,8 +88,49 @@ export default async function BountyDetailPage({
           </p>
         ) : null}
 
+        {query.notice ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+            {query.notice}
+          </p>
+        ) : null}
+
         {query.error ? (
           <p className="text-sm text-red-600 dark:text-red-400">{query.error}</p>
+        ) : null}
+
+        {escrow ? (
+          <dl className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white text-sm dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
+              <dt className="text-xs uppercase tracking-wide text-zinc-500">Escrow</dt>
+              <dd className="sm:col-span-2">
+                {escrow.status} · rail {escrow.rail}
+              </dd>
+            </div>
+            {escrow.fundTxHash ? (
+              <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
+                <dt className="text-xs uppercase tracking-wide text-zinc-500">Fund tx</dt>
+                <dd className="break-all sm:col-span-2">{escrow.fundTxHash}</dd>
+              </div>
+            ) : null}
+            {escrow.payoutTxHash ? (
+              <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
+                <dt className="text-xs uppercase tracking-wide text-zinc-500">Hunter tx</dt>
+                <dd className="break-all sm:col-span-2">{escrow.payoutTxHash}</dd>
+              </div>
+            ) : null}
+            {escrow.feeTxHash ? (
+              <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
+                <dt className="text-xs uppercase tracking-wide text-zinc-500">Fee tx</dt>
+                <dd className="break-all sm:col-span-2">{escrow.feeTxHash}</dd>
+              </div>
+            ) : null}
+            {escrow.refundTxHash ? (
+              <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
+                <dt className="text-xs uppercase tracking-wide text-zinc-500">Refund tx</dt>
+                <dd className="break-all sm:col-span-2">{escrow.refundTxHash}</dd>
+              </div>
+            ) : null}
+          </dl>
         ) : null}
 
         <dl className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white text-sm dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
@@ -99,9 +156,10 @@ export default async function BountyDetailPage({
                 type="submit"
                 className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
               >
-                Stub fund
+                Lock in escrow
               </button>
               <p className="mt-2 text-xs text-zinc-500">{STUB_FUND_COPY}</p>
+              <p className="mt-1 text-xs text-zinc-500">{HOSTED_CHECKOUT_DISABLED_COPY}</p>
             </form>
           ) : null}
 
@@ -129,6 +187,22 @@ export default async function BountyDetailPage({
               >
                 {isPoster && !isClaimant ? "Force-release lock" : "Release lock early"}
               </button>
+            </form>
+          ) : null}
+
+          {canCancel ? (
+            <form action={cancelBountyAction}>
+              <input type="hidden" name="bountyId" value={bounty.id} />
+              <button
+                type="submit"
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
+              >
+                {bounty.status === "pending_fund" ? "Cancel bounty" : "Cancel and refund"}
+              </button>
+              <p className="mt-2 text-xs text-zinc-500">
+                Unmerged cancel returns full face to the funder. No 2% fee. Claim-lock expiry does
+                not refund.
+              </p>
             </form>
           ) : null}
 

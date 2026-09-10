@@ -7,6 +7,7 @@ export {
   formatLockDeadlineUtc,
   hunterLabel,
   isActiveClaimLock,
+  HOSTED_CHECKOUT_DISABLED_COPY,
   LOCK_NOT_MONEY_COPY,
   STUB_FUND_COPY,
 } from "./display";

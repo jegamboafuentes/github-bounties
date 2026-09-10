@@ -5,7 +5,10 @@ export const LOCK_NOT_MONEY_COPY =
   "Claim-lock is coordination only. It does not move money. Merge is still truth: the winner is the author of the merged pull request that closes the funded issue.";
 
 export const STUB_FUND_COPY =
-  "Stub fund (V1-5 will use CDP). This marks the bounty funded without moving USDC.";
+  "Locks face USDC in gb-escrow (CDP server wallet on Base Sepolia when CDP_* is set; otherwise a documented mock rail that lists the exact missing env). Hosted checkout is disabled. Claim-lock still does not move money.";
+
+export const HOSTED_CHECKOUT_DISABLED_COPY =
+  "Hosted Coinbase checkout is disabled until ADR 0001 confirms settlement.feeAmount / net proceeds equal face. Do not treat a checkout as escrow.";
 
 export type BoardLockView = {
   hunterLabel: string;
