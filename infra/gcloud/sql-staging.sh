@@ -80,7 +80,7 @@ echo
 echo "Create the app user and DATABASE_URL yourself (do not put the password in git or shell history if you can avoid it):"
 echo "  gcloud sql users create ${SQL_USER} --instance=${SQL_INSTANCE} --project=${PROJECT_ID}"
 echo "  # unix-socket (Cloud Run --set-cloudsql-instances):"
-echo "  # postgresql://${SQL_USER}:PASSWORD@/${SQL_DB}?host=/cloudsql/${PROJECT_ID}:${REGION}:${SQL_INSTANCE}"
+echo "  # postgresql://${SQL_USER}:PASSWORD@localhost/${SQL_DB}?host=/cloudsql/${PROJECT_ID}:${REGION}:${SQL_INSTANCE}"
 echo "  echo -n 'postgresql://...' | gcloud secrets versions add DATABASE_URL --data-file=- --project=${PROJECT_ID}"
 echo
 echo "Reachability from Cloud Run:"
