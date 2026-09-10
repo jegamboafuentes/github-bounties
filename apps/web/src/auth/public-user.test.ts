@@ -19,7 +19,16 @@ describe("authz JSON helpers", () => {
     });
     const ok = jsonMe(user);
     assert.equal(ok.status, 200);
-    assert.deepEqual(await ok.json(), { ok: true, user });
+    assert.deepEqual(await ok.json(), {
+      ok: true,
+      user: {
+        id: user.id,
+        google_sub: user.google_sub,
+        email: user.email,
+        display_name: user.display_name,
+        wallet_address: null,
+      },
+    });
 
     const meDenied = jsonMe(null);
     assert.equal(meDenied.status, 401);

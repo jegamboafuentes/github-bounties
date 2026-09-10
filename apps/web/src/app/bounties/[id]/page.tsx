@@ -3,16 +3,19 @@ import { getCurrentPublicUser } from "@/auth/protect";
 import {
   acquireClaimLockAction,
   cancelBountyAction,
+  claimPayoutAction,
   releaseClaimLockAction,
   fundBountyAction,
 } from "@/app/actions/bounties";
 import {
   bountyStatusLabel,
+  formatUsdc,
   getBoardBounty,
   HOSTED_CHECKOUT_DISABLED_COPY,
   LOCK_NOT_MONEY_COPY,
   FUND_LOCK_COPY,
 } from "@/bounties";
+import { ClaimPayoutPanel } from "@/components/claim-payout-form";
 import { AppHeader } from "@/components/header";
 import { getRuntimeDb } from "@/db/runtime";
 import { getEscrowSnapshot } from "@/escrow";
@@ -53,15 +56,25 @@ export default async function BountyDetailPage({
   }
 
   const isPoster = user?.id === bounty.posterUserId;
-  const isClaimant = user?.id === bounty.activeLock?.hunterUserId;
+  const isLockHolder = user?.id === bounty.activeLock?.hunterUserId;
+  const isEligibleHunter = Boolean(user && bounty.payout && user.id === bounty.payout.hunterUserId);
   const canFund = Boolean(isPoster && bounty.status === "pending_fund");
-  const canClaim = Boolean(user && bounty.status === "funded" && !bounty.activeLock);
-  const canRelease = Boolean(bounty.activeLock && (isClaimant || isPoster));
+  const canLock = Boolean(user && bounty.status === "funded" && !bounty.activeLock && !bounty.payout);
+  const canRelease = Boolean(bounty.activeLock && (isLockHolder || isPoster) && !bounty.payout);
   const canCancel = Boolean(
     isPoster &&
+      !bounty.payout &&
       (bounty.status === "pending_fund" ||
         bounty.status === "funded" ||
         bounty.status === "claim_locked"),
+  );
+  const canClaimPayout = Boolean(
+    isEligibleHunter &&
+      bounty.payout?.status === "eligible" &&
+      (bounty.status === "funded" ||
+        bounty.status === "claim_locked" ||
+        bounty.status === "settling" ||
+        bounty.status === "settled_partial"),
   );
 
   return (
@@ -74,7 +87,7 @@ export default async function BountyDetailPage({
           </p>
           <h1 className="text-3xl font-semibold tracking-tight">{bounty.title}</h1>
           <p className="text-lg font-medium">
-            {trimUsdc(bounty.amountUsdc)} {bounty.currency} · {bountyStatusLabel(bounty.status)}
+            {formatUsdc(bounty.amountUsdc)} {bounty.currency} · {bountyStatusLabel(bounty.status)}
           </p>
         </div>
 
@@ -96,6 +109,22 @@ export default async function BountyDetailPage({
 
         {query.error ? (
           <p className="text-sm text-red-600 dark:text-red-400">{query.error}</p>
+        ) : null}
+
+        {bounty.payout ? (
+          <ClaimPayoutPanel
+            bountyId={bounty.id}
+            faceUsdc={bounty.amountUsdc}
+            currency={bounty.currency}
+            payout={bounty.payout}
+            canClaim={canClaimPayout}
+            defaultAddress={
+              user?.wallet_address || bounty.payout.payoutAddress || ""
+            }
+            action={claimPayoutAction}
+            signedIn={Boolean(user)}
+            signInHref={`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bounty.id}`)}`}
+          />
         ) : null}
 
         {escrow ? (
@@ -163,7 +192,7 @@ export default async function BountyDetailPage({
             </form>
           ) : null}
 
-          {canClaim ? (
+          {canLock ? (
             <form action={acquireClaimLockAction}>
               <input type="hidden" name="bountyId" value={bounty.id} />
               <button
@@ -185,7 +214,7 @@ export default async function BountyDetailPage({
                 type="submit"
                 className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
               >
-                {isPoster && !isClaimant ? "Force-release lock" : "Release lock early"}
+                {isPoster && !isLockHolder ? "Force-release lock" : "Release lock early"}
               </button>
             </form>
           ) : null}
@@ -214,7 +243,7 @@ export default async function BountyDetailPage({
               >
                 Sign in with Google
               </Link>{" "}
-              to fund, claim, or release.
+              to fund, claim-lock, or claim a payout.
             </p>
           ) : null}
         </div>
@@ -227,8 +256,4 @@ export default async function BountyDetailPage({
       </main>
     </div>
   );
-}
-
-function trimUsdc(value: string): string {
-  return value.replace(/\.?0+$/, "") || "0";
 }

@@ -32,7 +32,7 @@ export default function Home() {
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 py-14">
         <div className="flex flex-col gap-4">
           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-            V1-5 escrow + 2% fee
+            V1-6 claim payout
           </p>
           <h1 className="text-4xl font-semibold tracking-tight">{PRODUCT_NAME}</h1>
           <p className="max-w-xl text-lg leading-8 text-zinc-600 dark:text-zinc-400">
@@ -98,8 +98,9 @@ export default function Home() {
           <Link href="/settings" className="underline underline-offset-4">
             Settings
           </Link>
-          . Claim-lock is coordination only; merge is still truth. Escrow holds face
-          in <code>gb-escrow</code>; 2% to <code>gb-fee</code> at settlement. Hosted
+          . Claim-lock is coordination only; merge is still truth. Eligible hunters
+          claim net-of-fee USDC to a BYO Base address. Escrow holds face in{" "}
+          <code>gb-escrow</code>; 2% to <code>gb-fee</code> at settlement. Hosted
           checkout is disabled.
         </p>
       </main>

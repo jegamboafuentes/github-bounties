@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { authModule } from "../modules/auth";
 import { bountiesModule } from "../modules/bounties";
+import { claimsModule } from "../modules/claims";
 import { escrowModule } from "../modules/escrow";
 import { webhooksModule } from "../modules/webhooks";
 import {
@@ -28,6 +29,8 @@ describe("product locks", () => {
     assert.equal(bountiesModule.name, "bounties");
     assert.equal(escrowModule.wired, true);
     assert.equal(escrowModule.name, "escrow");
+    assert.equal(claimsModule.wired, true);
+    assert.equal(claimsModule.name, "claims");
   });
 
   it("computes floor(face * 2%) like ADR 0001", () => {

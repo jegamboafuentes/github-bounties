@@ -29,12 +29,13 @@ export default async function BoardPage({
       <AppHeader />
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-14">
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">V1-5</p>
+          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">V1-6</p>
           <h1 className="text-3xl font-semibold tracking-tight">Bounty board</h1>
           <p className="text-zinc-600 dark:text-zinc-400">{LOCK_NOT_MONEY_COPY}</p>
           <p className="text-sm text-zinc-500">
-            Exclusive claim-lock is {CLAIM_LOCK_HOURS}h (coordination only). Face USDC
-            locks in gb-escrow; 2% is taken at settlement.
+            Exclusive claim-lock is {CLAIM_LOCK_HOURS}h (coordination only). After merge, the
+            eligible hunter claims net-of-fee USDC. Face locks in gb-escrow; 2% is taken at
+            settlement. Completed (paid) shows on the card.
           </p>
         </div>
 

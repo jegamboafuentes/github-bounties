@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { bountyStatusLabel } from "@/bounties";
+import { bountyStatusLabel, formatUsdc, payoutCaption } from "@/bounties";
 import type { BoardBounty } from "@/bounties/list";
 
 export function BountyCard({ bounty }: { bounty: BoardBounty }) {
@@ -18,12 +18,27 @@ export function BountyCard({ bounty }: { bounty: BoardBounty }) {
         </div>
         <div className="text-right">
           <p className="text-lg font-semibold">
-            {trimUsdc(bounty.amountUsdc)} {bounty.currency}
+            {formatUsdc(bounty.amountUsdc)} {bounty.currency}
           </p>
           <p className="text-xs text-zinc-500">{bountyStatusLabel(bounty.status)}</p>
         </div>
       </div>
-      {bounty.activeLock ? (
+      {bounty.payout ? (
+        <p
+          className={
+            bounty.payout.status === "paid"
+              ? "rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-100"
+              : "rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/40 dark:text-sky-100"
+          }
+        >
+          {payoutCaption(bounty.payout)}
+          {bounty.payout.payoutTxHash ? (
+            <span className="mt-1 block break-all font-mono text-xs opacity-80">
+              tx {bounty.payout.payoutTxHash}
+            </span>
+          ) : null}
+        </p>
+      ) : bounty.activeLock ? (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
           {bounty.activeLock.caption}
         </p>
@@ -37,8 +52,4 @@ export function BountyCard({ bounty }: { bounty: BoardBounty }) {
       </p>
     </article>
   );
-}
-
-function trimUsdc(value: string): string {
-  return value.replace(/\.?0+$/, "") || "0";
 }

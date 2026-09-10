@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requirePageUser } from "@/auth/protect";
 import { AppHeader } from "@/components/header";
 import { ConnectGitHubButton } from "@/components/connect-github";
+import { WalletForm } from "@/components/wallet-form";
 import { signOutToHome } from "@/app/actions/auth";
 import { PRODUCT_NAME } from "@/lib/constants";
 import { getRuntimeDb } from "@/db/runtime";
@@ -53,6 +54,12 @@ export default async function SettingsPage() {
             <dd className="sm:col-span-2 break-all font-mono text-sm">{user.id}</dd>
           </div>
           <div className="grid gap-1 px-4 py-3 sm:grid-cols-3 sm:gap-4">
+            <dt className="text-xs uppercase tracking-wide text-zinc-500">Base wallet</dt>
+            <dd className="sm:col-span-2 break-all font-mono text-sm">
+              {user.wallet_address ?? <span className="font-sans text-zinc-500">Not set</span>}
+            </dd>
+          </div>
+          <div className="grid gap-1 px-4 py-3 sm:grid-cols-3 sm:gap-4">
             <dt className="text-xs uppercase tracking-wide text-zinc-500">GitHub</dt>
             <dd className="sm:col-span-2">
               {link ? (
@@ -63,6 +70,20 @@ export default async function SettingsPage() {
             </dd>
           </div>
         </dl>
+
+        <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+            Payout wallet
+          </h2>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Bring-your-own Base address. Saved on{" "}
+            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm dark:bg-zinc-800">
+              users.wallet_address
+            </code>
+            . No custodial wallet.
+          </p>
+          <WalletForm defaultAddress={user.wallet_address ?? ""} />
+        </section>
 
         <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">

@@ -174,6 +174,18 @@ Escrow lock records `escrows.status=funded` (real CDP when secrets exist; otherw
 
 Optional live faucet+release still: `CDP_DRY_RUN_LIVE=1 node scripts/money-path-dry-run.mjs` after Ops stashes secrets in Secret Manager.
 
+## V1-6 — Claim payout UI
+
+Eligible hunter (merged PR author, `claims.status=eligible`) enters a BYO Base address and claims net-of-fee USDC. This calls V1-5 `settleEscrow` — it does not add a second money rail. Poster and the board show **Completed (paid)** plus face / 2% fee / net / tx. Non-hunters get a clear `not_hunter` error.
+
+| Item | Where |
+| --- | --- |
+| Form | `/bounties/[id]`, Settings wallet |
+| API | `POST /api/bounties/:id/claim` |
+| Docs | [docs/claims.md](docs/claims.md) |
+
+Mock rail remains OK until `CDP_*` is in Secret Manager. Hosted checkout stays disabled.
+
 ## GCP staging (V0-C)
 
 Eng runbook: [docs/gcp-bootstrap.md](docs/gcp-bootstrap.md).

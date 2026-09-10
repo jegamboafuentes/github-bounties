@@ -24,10 +24,14 @@ export const SEED = {
   pendingBountyId: "00000000-0000-4000-8000-000000000021",
   fundedBountyId: "00000000-0000-4000-8000-000000000022",
   unlockedBountyId: "00000000-0000-4000-8000-000000000023",
+  settledBountyId: "00000000-0000-4000-8000-000000000024",
   escrowId: "00000000-0000-4000-8000-000000000031",
+  settledEscrowId: "00000000-0000-4000-8000-000000000032",
   lockId: "00000000-0000-4000-8000-000000000041",
   claimId: "00000000-0000-4000-8000-000000000051",
+  settledClaimId: "00000000-0000-4000-8000-000000000052",
   feeId: "00000000-0000-4000-8000-000000000061",
+  settledFeeId: "00000000-0000-4000-8000-000000000062",
 } as const;
 
 async function main() {
@@ -143,6 +147,33 @@ async function main() {
       })
       .onConflictDoNothing();
 
+    const settledAt = new Date();
+    await db
+      .insert(bounties)
+      .values({
+        id: SEED.settledBountyId,
+        repoId: SEED.repoId,
+        githubIssueNumber: 44,
+        url: "https://github.com/octo/hello/issues/44",
+        posterUserId: SEED.maintainerId,
+        amountUsdc: "50.000000",
+        currency: "USDC",
+        chain: "base",
+        status: "settled",
+        title: "Seed: completed (paid) bounty on #44",
+        descriptionSnapshot: "Merged and paid. Poster/board see completed.",
+        fundedAt,
+      })
+      .onConflictDoUpdate({
+        target: bounties.id,
+        set: {
+          status: "settled",
+          title: "Seed: completed (paid) bounty on #44",
+          fundedAt,
+          updatedAt: settledAt,
+        },
+      });
+
     await db
       .insert(escrows)
       .values({
@@ -208,6 +239,50 @@ async function main() {
       })
       .onConflictDoNothing();
 
+    await db
+      .insert(escrows)
+      .values({
+        id: SEED.settledEscrowId,
+        bountyId: SEED.settledBountyId,
+        amountUsdc: "50.000000",
+        status: "settled",
+        fundTxHash: "mock:0xseedfund44",
+        payoutTxHash: "mock:0xseedpayout44",
+        feeTxHash: "mock:0xseedfee44",
+        escrowAddress: "0x00000000000000000000000000000000000e5c00",
+      })
+      .onConflictDoNothing();
+
+    await db
+      .insert(claims)
+      .values({
+        id: SEED.settledClaimId,
+        bountyId: SEED.settledBountyId,
+        hunterUserId: SEED.hunterId,
+        status: "paid",
+        prNumber: 18,
+        prUrl: "https://github.com/octo/hello/pull/18",
+        prAuthorLogin: "octocat",
+        closedIssueNumber: 44,
+        payoutAddress: "0x0000000000000000000000000000000000000001",
+        payoutUsdc: "49.000000",
+        payoutTxHash: "mock:0xseedpayout44",
+        paidAt: settledAt,
+      })
+      .onConflictDoNothing();
+
+    await db
+      .insert(feeLedger)
+      .values({
+        id: SEED.settledFeeId,
+        bountyId: SEED.settledBountyId,
+        faceUsdc: "50.000000",
+        feeUsdc: feeFromFaceUsdc("50.000000", FEE_BPS),
+        feeBps: FEE_BPS,
+        settledAt,
+      })
+      .onConflictDoNothing();
+
     const [funded] = await db
       .select({
         id: bounties.id,
@@ -241,6 +316,7 @@ async function main() {
     console.log(`  repo: octo/hello`);
     console.log(`  bounty pending_fund: ${SEED.pendingBountyId} (#41)`);
     console.log(`  bounty funded (unlocked): ${SEED.unlockedBountyId} (#43)`);
+    console.log(`  bounty settled/paid: ${SEED.settledBountyId} (#44)`);
     console.log(
       `  bounty funded: ${funded?.id ?? SEED.fundedBountyId} status=${funded?.status} amount_usdc=${funded?.amountUsdc}`,
     );

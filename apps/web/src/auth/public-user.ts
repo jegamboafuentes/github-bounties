@@ -6,6 +6,7 @@ export type PublicUser = {
   google_sub: string;
   email: string;
   display_name: string;
+  wallet_address: string | null;
 };
 
 export function toPublicUser(row: UserRow): PublicUser {
@@ -14,6 +15,7 @@ export function toPublicUser(row: UserRow): PublicUser {
     google_sub: row.googleSub,
     email: row.email,
     display_name: row.displayName,
+    wallet_address: row.walletAddress,
   };
 }
 

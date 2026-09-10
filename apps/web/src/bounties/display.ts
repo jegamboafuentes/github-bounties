@@ -1,4 +1,5 @@
-import { CLAIM_LOCK_HOURS } from "../lib/constants";
+import { CLAIM_LOCK_HOURS, FEE_BPS } from "../lib/constants";
+import { splitFaceUsdc } from "../lib/money";
 import type { bountyStatusValues } from "../db/schema";
 
 export const LOCK_NOT_MONEY_COPY =
@@ -9,6 +10,9 @@ export const FUND_LOCK_COPY =
 
 export const HOSTED_CHECKOUT_DISABLED_COPY =
   "Hosted Coinbase checkout is disabled until ADR 0001 confirms settlement.feeAmount / net proceeds equal face. Do not treat a checkout as escrow.";
+
+export const CLAIM_PAYOUT_COPY =
+  "Eligible hunter only: the merged pull request author claims net-of-fee USDC to a bring-your-own Base address. Poster and the board then see completed (paid).";
 
 export type BoardLockView = {
   hunterLabel: string;
@@ -58,9 +62,9 @@ export function bountyStatusLabel(status: (typeof bountyStatusValues)[number] | 
     case "settling":
       return "Settling";
     case "settled":
-      return "Settled";
+      return "Completed (paid)";
     case "settled_partial":
-      return "Settled (partial)";
+      return "Paid (partial)";
     case "refunding":
       return "Refunding";
     case "refunded":
@@ -74,4 +78,50 @@ export function bountyStatusLabel(status: (typeof bountyStatusValues)[number] | 
     default:
       return status;
   }
+}
+
+export function claimStatusLabel(status: string): string {
+  switch (status) {
+    case "eligible":
+      return "Eligible";
+    case "paid":
+      return "Paid";
+    case "rejected":
+      return "Rejected";
+    case "disputed":
+      return "Disputed";
+    default:
+      return status;
+  }
+}
+
+/** Trim trailing zeros for UI amounts. */
+export function formatUsdc(value: string): string {
+  if (!value.includes(".")) return value || "0";
+  return value.replace(/\.?0+$/, "") || "0";
+}
+
+export function payoutBreakdown(faceUsdc: string) {
+  const split = splitFaceUsdc(faceUsdc);
+  return {
+    faceUsdc: split.faceUsdc,
+    feeUsdc: split.feeUsdc,
+    hunterUsdc: split.hunterUsdc,
+    feeBps: split.feeBps,
+    feePercent: split.feeBps / 100,
+  };
+}
+
+export function payoutCaption(payout: { status: string; hunterLabel: string }): string {
+  if (payout.status === "paid") {
+    return `Paid to ${payout.hunterLabel}`;
+  }
+  if (payout.status === "eligible") {
+    return `Payout eligible — ${payout.hunterLabel} can claim`;
+  }
+  return claimStatusLabel(payout.status);
+}
+
+export function feeBpsLabel(feeBps = FEE_BPS): string {
+  return `${feeBps / 100}% platform fee`;
 }

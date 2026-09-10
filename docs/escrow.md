@@ -107,7 +107,9 @@ CDP_NETWORK=base-sepolia          # default
 | --- | --- | --- |
 | Poster **Lock in escrow** on `/bounties/[id]` | Google | pending → funded + escrow lock |
 | Poster **Cancel and refund** | Google | full-face refund or void if never funded |
-| `POST /api/bounties/:id/settle` | Google | minimal settle (V1-6 owns payout UI) |
+| `POST /api/bounties/:id/settle` | Google | minimal settle (poster or hunter) |
+| Hunter **Claim payout** on `/bounties/[id]` | Google | V1-6 hunter-only path; calls `settleEscrow` |
+| `POST /api/bounties/:id/claim` | Google | same hunter-only claim (BYO Base address) |
 | `POST /api/bounties/:id/refund` | Google | same as cancel |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` | claim-lock expiry **and** `bounties.expires_at` refunds |
 
@@ -124,6 +126,6 @@ ADR 0001 open Q: Coinbase Business Checkouts `settlement.feeAmount` may skim a m
 ## Out of scope
 
 - V2 participation pool
-- V1-6 claim payout UI polish
+- V1-6 claim payout UI ([claims.md](claims.md))
 - Multi-rail / Lightning / Solana
 - Production user funds / mainnet USDC

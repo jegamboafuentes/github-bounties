@@ -22,7 +22,7 @@ The create form is the **draft**. Schema has no `draft` status. Submit writes `p
 
 `pending_fund` → **escrow lock** → `funded` → **claim-lock** → `claim_locked` → release or lock-expiry → `funded`
 
-Money: `funded` → settle → `settled` / `settled_partial`, or cancel / `expires_at` → `refunded` (bounty `cancelled` / `expired`). See [escrow.md](escrow.md).
+Money: `funded` → eligible hunter claims → `settled` / `settled_partial` (board: **Completed (paid)**), or cancel / `expires_at` → `refunded` (bounty `cancelled` / `expired`). See [escrow.md](escrow.md) and [claims.md](claims.md).
 
 ## Surfaces
 
@@ -30,7 +30,7 @@ Money: `funded` → settle → `settled` / `settled_partial`, or cancel / `expir
 | --- | --- | --- |
 | `/board` | public | List + filter by repo / status. Shows **Claimed by X until …** when a lock is active |
 | `/bounties/new` | Google session | Create from issue URL |
-| `/bounties/[id]` | public read; Google for actions | Escrow lock, claim, early release, poster force-release, cancel/refund |
+| `/bounties/[id]` | public read; Google for actions | Escrow lock, claim-lock, hunter payout claim, early release, poster force-release, cancel/refund |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` | Cron-friendly expiry |
 
 CLI (same function): `cd apps/web && npm run expire-locks`
@@ -41,10 +41,11 @@ Expiry sets overdue `claim_locks.status=expired` and restores `claim_locked` bou
 
 After a successful lock, the app **best-effort** comments on the issue and adds label `bounty-claimed` when an installation token is available. Missing App env or GitHub errors do **not** roll back the lock.
 
+Hunter payout after merge: [claims.md](claims.md).
+
 ## Out of scope
 
 - Participation pool (V2)
-- Payout claim UI polish (V1-6)
 - Hosted checkout (blocked — ADR 0001 fee-skim open Q)
 
 ## Secrets
