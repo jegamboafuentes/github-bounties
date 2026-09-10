@@ -2,6 +2,10 @@
 /**
  * Rewrite a Cloud Run unix-socket DATABASE_URL for Cloud SQL Auth Proxy on localhost.
  * Never logs the URL. Use --exec to run a child with the rewritten env.
+ *
+ * Always sets sslmode=disable on the rewritten URL. Auth Proxy already encrypts
+ * the hop to Cloud SQL; sslmode=require against 127.0.0.1 caused ECONNRESET
+ * (the local proxy port is plain TCP).
  */
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
@@ -34,9 +38,9 @@ export function rewriteDatabaseUrlForProxy(url, listen = PROXY_HOST) {
   const dbName = match[3];
   const params = new URLSearchParams(match[4] ?? "");
   params.delete("host");
-  if (!params.get("sslmode")) {
-    params.set("sslmode", "require");
-  }
+  // Auth Proxy already encrypts to Cloud SQL. Force disable so node-pg does
+  // not try TLS to the local proxy (sslmode=require → ECONNRESET).
+  params.set("sslmode", "disable");
   const qs = params.toString();
   return `postgresql://${auth}@${listen}/${dbName}${qs ? `?${qs}` : ""}`;
 }
@@ -44,7 +48,8 @@ export function rewriteDatabaseUrlForProxy(url, listen = PROXY_HOST) {
 function usage() {
   process.stderr.write(
     [
-      "Rewrite Cloud SQL unix-socket DATABASE_URL for Auth Proxy. Never prints the URL.",
+      "Rewrite Cloud SQL unix-socket DATABASE_URL for Auth Proxy (sslmode=disable).",
+      "Never prints the URL. Proxy already encrypts to Cloud SQL.",
       "",
       "  node infra/gcloud/proxy-database-url.mjs --exec <command> [args...]",
       "",
