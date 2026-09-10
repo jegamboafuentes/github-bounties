@@ -136,7 +136,6 @@ export async function lockEscrowFunds(
     } else {
       await tx.insert(escrows).values({
         bountyId,
-        amountUsdc: bounty.amountUsdc,
         ...patch,
       });
     }
@@ -197,6 +196,18 @@ export async function settleEscrow(
   const now = opts.now ?? new Date();
   const rail = railOf(opts);
   const bounty = await loadBounty(opts.db, bountyId);
+  const escrow = await loadEscrow(opts.db, bountyId);
+  const splitEarly = splitFaceUsdc(bounty.amountUsdc, FEE_BPS);
+
+  if (
+    (bounty.status === "settled" || escrow?.status === "settled") &&
+    escrow?.payoutTxHash &&
+    (escrow.feeTxHash || splitEarly.feeAtomic === BigInt(0))
+  ) {
+    const wallets = await rail.ensureWallets();
+    return finishSettleResult(bountyId, bounty.amountUsdc, escrow, "settled", rail, wallets);
+  }
+
   if (
     !SETTLEABLE_BOUNTY_STATUSES.includes(
       bounty.status as (typeof SETTLEABLE_BOUNTY_STATUSES)[number],
@@ -205,14 +216,8 @@ export async function settleEscrow(
     throw new EscrowError("not_settleable", `Bounty is ${bounty.status}, not settleable.`);
   }
 
-  const escrow = await loadEscrow(opts.db, bountyId);
-  if (!escrow || (escrow.status !== "funded" && escrow.status !== "settling" && escrow.status !== "settled_partial" && escrow.status !== "settled")) {
+  if (!escrow || (escrow.status !== "funded" && escrow.status !== "settling" && escrow.status !== "settled_partial")) {
     throw new EscrowError("not_settleable", "Escrow is not locked (funded) — cannot settle.");
-  }
-
-  if (escrow.status === "settled" && escrow.payoutTxHash && (escrow.feeTxHash || splitFaceUsdc(bounty.amountUsdc).feeAtomic === BigInt(0))) {
-    const wallets = await rail.ensureWallets();
-    return finishSettleResult(bountyId, bounty.amountUsdc, escrow, "settled", rail, wallets);
   }
 
   const hunter = await resolveHunter(opts.db, bountyId, input);
@@ -220,25 +225,24 @@ export async function settleEscrow(
     throw new EscrowError("not_settler", "Only the poster or the winning hunter can settle.");
   }
 
-  const split = splitFaceUsdc(bounty.amountUsdc, FEE_BPS);
+  const split = splitEarly;
   const wallets = await rail.ensureWallets();
   const hunterKey = moneyIdempotencyKey(bountyId, "HUNTER_PAYOUT");
   const feeKey = moneyIdempotencyKey(bountyId, "FEE_OUT");
 
-  await opts.db
-    .update(bounties)
-    .set({ status: "settling", updatedAt: now })
-    .where(
-      and(
-        eq(bounties.id, bountyId),
-        inArray(bounties.status, ["funded", "claim_locked", "settling", "settled_partial"]),
-      ),
-    );
-  assertEscrowTransition(escrow.status, "settling");
-  await opts.db
-    .update(escrows)
-    .set({ status: "settling", escrowAddress: wallets.escrowAddress, updatedAt: now })
-    .where(eq(escrows.id, escrow.id));
+  if (escrow.status === "funded") {
+    assertEscrowTransition(escrow.status, "settling");
+    await opts.db
+      .update(bounties)
+      .set({ status: "settling", updatedAt: now })
+      .where(
+        and(eq(bounties.id, bountyId), inArray(bounties.status, ["funded", "claim_locked"])),
+      );
+    await opts.db
+      .update(escrows)
+      .set({ status: "settling", escrowAddress: wallets.escrowAddress, updatedAt: now })
+      .where(eq(escrows.id, escrow.id));
+  }
 
   let payoutTxHash = escrow.payoutTxHash;
   let feeTxHash = escrow.feeTxHash;

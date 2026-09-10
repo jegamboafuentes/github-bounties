@@ -20,6 +20,7 @@ describe("escrow state machine", () => {
     assert.equal(canTransitionEscrow("settling", "settled"), true);
     assert.equal(canTransitionEscrow("settling", "settled_partial"), true);
     assert.equal(canTransitionEscrow("settled_partial", "settled"), true);
+    assert.equal(canTransitionEscrow("settled_partial", "settling"), true);
   });
 
   it("allows funded → refunding → refunded and pending → failed", () => {

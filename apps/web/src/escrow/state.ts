@@ -18,7 +18,7 @@ const ALLOWED: Record<EscrowStatus, readonly EscrowStatus[]> = {
   pending: ["funded", "failed"],
   funded: ["settling", "refunding"],
   settling: ["settled", "settled_partial", "refunding"],
-  settled_partial: ["settled", "settled_partial"],
+  settled_partial: ["settled", "settled_partial", "settling"],
   refunding: ["refunded"],
   settled: [],
   refunded: [],
