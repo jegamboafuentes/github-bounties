@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { createBountyAction, type BountyActionState } from "@/app/actions/bounties";
-import { LOCK_NOT_MONEY_COPY, STUB_FUND_COPY } from "@/bounties/display";
+import { FUND_LOCK_COPY, LOCK_NOT_MONEY_COPY } from "@/bounties/display";
 
 const initial: BountyActionState = { ok: true };
 
@@ -34,7 +34,7 @@ export function CreateBountyForm() {
       </label>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         Submit stores <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">pending_fund</code>.
-        The form is the draft — the schema has no draft status. {STUB_FUND_COPY}
+        The form is the draft — the schema has no draft status. {FUND_LOCK_COPY}
       </p>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">{LOCK_NOT_MONEY_COPY}</p>
       {state && !state.ok ? (

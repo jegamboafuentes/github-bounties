@@ -6,7 +6,7 @@ import { createDb } from "../db/client";
 import { loadDotenvFiles } from "../db/load-dotenv";
 import { bounties, claims, escrows, feeLedger, repos, users } from "../db/schema";
 import { createBountyFromIssueUrl } from "../bounties/create";
-import { stubFundBounty } from "../bounties/fund";
+import { fundBounty } from "../bounties/fund";
 import { createMockRail, MOCK_FEE_ADDRESS } from "./rail";
 import { expireUnmergedBounties, refundEscrow, settleEscrow } from "./service";
 import { probeCdpEnv } from "./env";
@@ -78,7 +78,7 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
       const [before] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
       assert.equal(before?.status, "pending");
 
-      const funded = await stubFundBounty(created.id, posterId, db, new Date(), { rail });
+      const funded = await fundBounty(created.id, posterId, db, new Date(), { rail });
       assert.equal(funded.status, "funded");
       assert.equal(funded.rail, "mock");
       assert.ok(funded.fundTxHash?.startsWith("mock:"));
@@ -98,7 +98,7 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
     const { db, sql, posterId, hunterId, fullName, rail } = await fixture();
     try {
       const created = await postBounty(db, posterId, fullName, 22);
-      await stubFundBounty(created.id, posterId, db, new Date(), { rail });
+      await fundBounty(created.id, posterId, db, new Date(), { rail });
 
       const first = await settleEscrow(
         created.id,
@@ -154,7 +154,7 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
     };
     try {
       const created = await postBounty(db, posterId, fullName, 23);
-      await stubFundBounty(created.id, posterId, db, new Date(), { rail: failFeeOnce });
+      await fundBounty(created.id, posterId, db, new Date(), { rail: failFeeOnce });
       const partial = await settleEscrow(
         created.id,
         { actorUserId: posterId, hunterUserId: hunterId, hunterPayoutAddress: HUNTER_ADDRESS },
@@ -181,7 +181,7 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
     const { db, sql, posterId, fullName, rail } = await fixture();
     try {
       const cancellable = await postBounty(db, posterId, fullName, 24, "40");
-      await stubFundBounty(cancellable.id, posterId, db, new Date(), { rail });
+      await fundBounty(cancellable.id, posterId, db, new Date(), { rail });
       const cancelled = await refundEscrow(
         cancellable.id,
         { actorUserId: posterId, reason: "cancel" },
@@ -194,7 +194,7 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
       assert.equal(fees.length, 0);
 
       const expiring = await postBounty(db, posterId, fullName, 25, "15");
-      await stubFundBounty(expiring.id, posterId, db, new Date(), { rail });
+      await fundBounty(expiring.id, posterId, db, new Date(), { rail });
       const past = new Date("2020-01-01T00:00:00.000Z");
       await db.update(bounties).set({ expiresAt: past }).where(eq(bounties.id, expiring.id));
       const expired = await expireUnmergedBounties({ db, rail, now: new Date("2026-09-10T00:00:00.000Z") });
@@ -228,7 +228,7 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
     const { db, sql, posterId, hunterId, fullName, rail } = await fixture();
     try {
       const created = await postBounty(db, posterId, fullName, 27);
-      await stubFundBounty(created.id, posterId, db, new Date(), { rail });
+      await fundBounty(created.id, posterId, db, new Date(), { rail });
       const [claim] = await db
         .insert(claims)
         .values({

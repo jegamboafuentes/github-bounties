@@ -8,7 +8,7 @@ import {
   createBountyFromIssueUrl,
   isBountyError,
   releaseClaimLock,
-  stubFundBounty,
+  fundBounty,
 } from "@/bounties";
 import { getRuntimeDb } from "@/db/runtime";
 import { isEscrowError, refundEscrow } from "@/escrow";
@@ -61,14 +61,14 @@ export async function createBountyAction(
   }
 }
 
-export async function stubFundBountyAction(formData: FormData): Promise<void> {
+export async function fundBountyAction(formData: FormData): Promise<void> {
   const bountyId = String(formData.get("bountyId") ?? "");
   const user = await getCurrentPublicUser();
   if (!user) {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
   }
   try {
-    const funded = await stubFundBounty(bountyId, user.id, getRuntimeDb());
+    const funded = await fundBounty(bountyId, user.id, getRuntimeDb());
     refreshBounty(bountyId);
     if (funded.rail === "mock" && funded.missingEnv?.length) {
       redirect(

@@ -15,7 +15,7 @@ export type FundedBounty = {
  * Fund lock: pending_fund → funded, escrow pending → funded (locked).
  * Uses the CDP rail when secrets exist; otherwise a documented mock path.
  */
-export async function stubFundBounty(
+export async function fundBounty(
   bountyId: string,
   actorUserId: string,
   db: Database,

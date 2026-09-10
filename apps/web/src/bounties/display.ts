@@ -4,7 +4,7 @@ import type { bountyStatusValues } from "../db/schema";
 export const LOCK_NOT_MONEY_COPY =
   "Claim-lock is coordination only. It does not move money. Merge is still truth: the winner is the author of the merged pull request that closes the funded issue.";
 
-export const STUB_FUND_COPY =
+export const FUND_LOCK_COPY =
   "Locks face USDC in gb-escrow (CDP server wallet on Base Sepolia when CDP_* is set; otherwise a documented mock rail that lists the exact missing env). Hosted checkout is disabled. Claim-lock still does not move money.";
 
 export const HOSTED_CHECKOUT_DISABLED_COPY =

@@ -4,14 +4,14 @@ import {
   acquireClaimLockAction,
   cancelBountyAction,
   releaseClaimLockAction,
-  stubFundBountyAction,
+  fundBountyAction,
 } from "@/app/actions/bounties";
 import {
   bountyStatusLabel,
   getBoardBounty,
   HOSTED_CHECKOUT_DISABLED_COPY,
   LOCK_NOT_MONEY_COPY,
-  STUB_FUND_COPY,
+  FUND_LOCK_COPY,
 } from "@/bounties";
 import { AppHeader } from "@/components/header";
 import { getRuntimeDb } from "@/db/runtime";
@@ -150,7 +150,7 @@ export default async function BountyDetailPage({
 
         <div className="flex flex-col gap-3">
           {canFund ? (
-            <form action={stubFundBountyAction}>
+            <form action={fundBountyAction}>
               <input type="hidden" name="bountyId" value={bounty.id} />
               <button
                 type="submit"
@@ -158,7 +158,7 @@ export default async function BountyDetailPage({
               >
                 Lock in escrow
               </button>
-              <p className="mt-2 text-xs text-zinc-500">{STUB_FUND_COPY}</p>
+              <p className="mt-2 text-xs text-zinc-500">{FUND_LOCK_COPY}</p>
               <p className="mt-1 text-xs text-zinc-500">{HOSTED_CHECKOUT_DISABLED_COPY}</p>
             </form>
           ) : null}
