@@ -7,8 +7,10 @@
  *
  * Cloud Run unix-socket URLs with an empty host (`@/dbname?host=/cloudsql/...`)
  * throw `Invalid URL` in Node / postgres.js. Rewrite that host to `localhost`
- * so URL parsing succeeds. postgres.js does **not** treat query `host=` as the
- * connect host — `createDb` passes it as `options.host`.
+ * so URL parsing succeeds. Secret Manager may still document `?host=/cloudsql/...`
+ * as the source shape; `createDb` extracts it as `options.host` and strips the
+ * query key before `postgres()` so postgres.js does not send `host` as a GUC
+ * (Postgres 42704 unrecognized configuration parameter "host").
  */
 
 /** Cloud SQL (`/cloudsql/...`) or any unix socket absolute path from `?host=`. */
@@ -19,6 +21,26 @@ export function unixSocketHostParam(url: string): string | null {
   if (!host) return null;
   // Cloud SQL (`/cloudsql/...`) or any unix socket absolute path.
   return host.startsWith("/") ? host : null;
+}
+
+/**
+ * Drop unix-socket `host=` from the query. Keep other params. No-op when
+ * `host` is missing or not an absolute path (TCP URLs stay unchanged).
+ */
+export function stripUnixSocketHostQuery(databaseUrl: string): string {
+  const url = databaseUrl.trim();
+  if (!unixSocketHostParam(url)) return url;
+  const queryStart = url.indexOf("?");
+  if (queryStart === -1) return url;
+  const hashStart = url.indexOf("#", queryStart);
+  const query =
+    hashStart === -1 ? url.slice(queryStart + 1) : url.slice(queryStart + 1, hashStart);
+  const hash = hashStart === -1 ? "" : url.slice(hashStart);
+  const params = new URLSearchParams(query);
+  params.delete("host");
+  const rest = params.toString();
+  const base = url.slice(0, queryStart);
+  return rest ? `${base}?${rest}${hash}` : `${base}${hash}`;
 }
 
 function hasEmptyHostname(url: string): boolean {
