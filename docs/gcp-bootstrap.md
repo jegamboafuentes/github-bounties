@@ -143,9 +143,10 @@ gcloud artifacts repositories create github-bounties \
 `DATABASE_URL` shapes (password never in git):
 
 ```text
-# Cloud Run unix socket (`localhost` so Node / postgres.js can parse the URL).
-# `host=` is the Cloud SQL socket directory; apps/web passes it as postgres.js
-# `options.host` (query `host` is not the connect host).
+# Cloud Run unix socket — Secret Manager *source* shape (`localhost` so Node
+# can parse). Runtime extracts `host=` as postgres.js `options.host` and
+# strips the query key before connect (otherwise postgres.js sends `host` as
+# a startup GUC → Postgres 42704).
 postgresql://gb_app:PASSWORD@localhost/github_bounties?host=/cloudsql/experiment-jegf:us-central1:github-bounties-staging
 
 # Auth Proxy on localhost (laptop / sidecar)

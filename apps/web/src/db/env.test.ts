@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { loadDatabaseUrl, normalizeDatabaseUrl } from "./env";
+import {
+  loadDatabaseUrl,
+  normalizeDatabaseUrl,
+  stripUnixSocketHostQuery,
+} from "./env";
 
 const FAKE_PASSWORD = "fake-password";
 const CLOUD_SQL_SOCKET =
@@ -41,6 +45,24 @@ describe("normalizeDatabaseUrl", () => {
   it("does not rewrite empty host without a unix-socket host= query", () => {
     const raw = `postgresql://gb_app:${FAKE_PASSWORD}@/github_bounties`;
     assert.equal(normalizeDatabaseUrl(raw), raw);
+  });
+});
+
+describe("stripUnixSocketHostQuery", () => {
+  it("removes host= and keeps other query params", () => {
+    const raw = `postgresql://gb_app:${FAKE_PASSWORD}@localhost/github_bounties?sslmode=disable&host=${CLOUD_SQL_SOCKET}`;
+    const stripped = stripUnixSocketHostQuery(raw);
+    assert.equal(stripped.includes("host="), false);
+    const parsed = new URL(stripped);
+    assert.equal(parsed.searchParams.has("host"), false);
+    assert.equal(parsed.searchParams.get("sslmode"), "disable");
+    assert.equal(parsed.hostname, "localhost");
+    assert.equal(parsed.password, FAKE_PASSWORD);
+  });
+
+  it("leaves TCP URLs unchanged", () => {
+    const tcp = `postgresql://gb_app:${FAKE_PASSWORD}@127.0.0.1:5432/github_bounties?sslmode=require`;
+    assert.equal(stripUnixSocketHostQuery(tcp), tcp);
   });
 });
 
