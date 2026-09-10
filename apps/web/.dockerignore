@@ -5,6 +5,5 @@ node_modules
 .env.*
 !.env.example
 *.md
-drizzle
 src/db/*.test.ts
 src/lib/*.test.ts

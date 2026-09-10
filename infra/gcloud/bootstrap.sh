@@ -104,6 +104,11 @@ run gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
   --member="serviceAccount:${RUNTIME_SA}" \
   --role="roles/logging.logWriter" \
   --condition=None
+# Cloud Run service agent mounts --set-secrets (web + migrate job).
+run gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+  --member="serviceAccount:service-${PROJECT_NUMBER}@serverless-robot-prod.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor" \
+  --condition=None
 
 echo
 echo "# IAM — build"
@@ -144,7 +149,8 @@ run gcloud iam service-accounts add-iam-policy-binding "${RUNTIME_SA}" \
   --project="${PROJECT_ID}"
 
 echo
-echo "# Next (not in this script): infra/gcloud/sql-staging.sh then deploy-hello.sh"
+echo "# Next (not in this script): infra/gcloud/sql-staging.sh then migrate-staging.sh"
+echo "# then deploy-hello.sh (canary) and/or deploy-web.sh / cloudbuild.web.yaml (V1 product)"
 if [[ "${APPLY}" -eq 0 ]]; then
   echo "Dry-run finished. Re-run with --apply after preflight.sh exits 0."
 fi

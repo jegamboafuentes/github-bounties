@@ -57,8 +57,14 @@ locals {
   # Ticket list + ADR 0001 CDP names. Empty placeholders — no versions.
   secret_ids = [
     "DATABASE_URL",
+    "AUTH_SECRET",
+    "AUTH_URL",
+    "GITHUB_APP_ID",
+    "GITHUB_APP_SLUG",
     "GITHUB_APP_PRIVATE_KEY",
     "GITHUB_WEBHOOK_SECRET",
+    "GITHUB_APP_CLIENT_ID",
+    "GITHUB_APP_CLIENT_SECRET",
     "CDP_API_KEY_ID",
     "CDP_API_KEY_SECRET",
     "CDP_WALLET_SECRET",
@@ -67,6 +73,7 @@ locals {
     "CDP_WEBHOOK_SECRET",
     "GOOGLE_OAUTH_CLIENT_ID",
     "GOOGLE_OAUTH_CLIENT_SECRET",
+    "CRON_SECRET",
   ]
 }
 
