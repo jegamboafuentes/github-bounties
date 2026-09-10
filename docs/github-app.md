@@ -35,6 +35,10 @@ Placeholder origin used in `.env.example`:
 
 `https://github-bounties-staging.example.com`
 
+After V1-7, use the live `github-bounties-web` origin from
+`gcloud run services describe` ([staging-deploy.md](staging-deploy.md)). Do not
+point the App at the hello canary.
+
 Examples once you have a real host:
 
 - `https://<host>/webhooks/github`

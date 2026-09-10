@@ -77,7 +77,7 @@ Do **not** invent a `*.run.app` host. After Cloud Run exists, add the **real** s
 
 Newer Cloud Run URLs look like `https://<service>-<project-number>.<region>.run.app` (project number `42206083192`). Use whichever host the service actually serves. Custom domains: `https://<your-domain>/api/auth/callback/google`.
 
-`PUBLIC_BASE_URL` in the repo-root `.env.example` is a docs placeholder (`https://github-bounties-staging.example.com`), not a live host.
+`PUBLIC_BASE_URL` in the repo-root `.env.example` is a docs placeholder (`https://github-bounties-staging.example.com`), not a live host. After V1-7 deploy, use the real `github-bounties-web` origin from `gcloud run services describe` ([staging-deploy.md](staging-deploy.md)).
 
 4. Copy the client id and secret into local `.env` or Secret Manager. Ops sets Secret Manager versions out-of-band.
 

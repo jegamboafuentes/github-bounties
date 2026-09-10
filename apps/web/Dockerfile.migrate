@@ -1,0 +1,18 @@
+# One-shot Drizzle migrate image for Cloud Run Job / Cloud SQL unix socket.
+# Does not bake secrets. DATABASE_URL comes from Secret Manager at runtime.
+FROM node:22-alpine
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY drizzle.config.ts tsconfig.json ./
+COPY drizzle ./drizzle
+COPY src/db ./src/db
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+
+# drizzle-kit / tsx stay available from npm ci (not a production-only prune).
+USER node
+CMD ["npx", "tsx", "src/db/migrate.ts"]

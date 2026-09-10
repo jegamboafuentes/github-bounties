@@ -56,10 +56,18 @@ CI runs the same against an empty `postgres:16` service (`.github/workflows/ci.y
 
 Instance **`github-bounties-staging`** exists in GCP project `experiment-jegf` / `42206083192`, database `github_bounties`.
 
+Ops runbook (V1-7): [docs/staging-deploy.md](../../docs/staging-deploy.md). Prefer the scripted path so `DATABASE_URL` is never echoed:
+
+```bash
+./infra/gcloud/migrate-staging.sh              # dry-run
+./infra/gcloud/migrate-staging.sh --apply      # Auth Proxy + drizzle
+./infra/gcloud/migrate-staging.sh --apply --job  # Cloud Run Job one-shot
+```
+
 1. Ops places the connection string in Secret Manager key **`DATABASE_URL`**. Do not invent or ask for the password in chat/PRs.
 2. Reach the instance with Cloud SQL Auth Proxy or a Cloud Run job that mounts the unix socket (see [docs/gcp-bootstrap.md](../../docs/gcp-bootstrap.md)).
 3. Export `DATABASE_URL` in your shell **from the secret** (never paste it into git).
-4. From `apps/web`: `npm run db:migrate` then optionally `npm run db:seed` (seed is for empty/dev DBs).
+4. From `apps/web`: `npm run db:migrate` then optionally `npm run db:seed` (seed is for empty/dev DBs — not a default staging step).
 
 Shapes (password never in git):
 
@@ -73,7 +81,19 @@ postgresql://gb_app:PASSWORD@/github_bounties?host=/cloudsql/experiment-jegf:us-
 
 ## Cloud Run
 
-`output: "standalone"` and [`Dockerfile`](./Dockerfile) listen on `PORT` (default 8080). Staging Cloud Build still deploys `services/hello` only; do not point `cloudbuild.yaml` at this app until a later ticket.
+`output: "standalone"` and [`Dockerfile`](./Dockerfile) listen on `PORT` (default 8080).
+
+| Path | Service | Config |
+| --- | --- | --- |
+| Hello canary | `github-bounties-hello` | [`cloudbuild.yaml`](../../cloudbuild.yaml) — **unchanged** |
+| V1 product | `github-bounties-web` | [`cloudbuild.web.yaml`](../../cloudbuild.web.yaml), [`infra/gcloud/deploy-web.sh`](../../infra/gcloud/deploy-web.sh) |
+| Migrate job | `github-bounties-migrate` | [`Dockerfile.migrate`](./Dockerfile.migrate) |
+
+```bash
+gcloud builds submit --project=experiment-jegf --config=cloudbuild.web.yaml .
+```
+
+Do not point `cloudbuild.yaml` at this app. Closed-beta checklist: [docs/staging-e2e.md](../../docs/staging-e2e.md).
 
 ## Scripts
 

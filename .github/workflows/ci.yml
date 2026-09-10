@@ -21,6 +21,10 @@ jobs:
       - name: Hello canary
         working-directory: services/hello
         run: npm test
+      - name: V1-7 staging wiring
+        run: bash scripts/check-staging-wiring.sh
+      - name: DATABASE_URL proxy rewrite
+        run: node --test infra/gcloud/proxy-database-url.test.mjs
 
   schema:
     name: V1 migrate + seed

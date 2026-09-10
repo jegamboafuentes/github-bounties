@@ -9,6 +9,9 @@ terraform plan
 # terraform apply   # needs ADC + billing
 ```
 
-`create_sql` defaults to **false**. Cloud Run hello is **not** a Terraform resource — use `cloudbuild.yaml` or `../gcloud/deploy-hello.sh` so we never invent a `*.run.app` URL in state.
+`create_sql` defaults to **false**. Cloud Run services are **not** Terraform
+resources — use `cloudbuild.yaml` / `../gcloud/deploy-hello.sh` for the hello
+canary and `cloudbuild.web.yaml` / `../gcloud/deploy-web.sh` for `apps/web` so
+we never invent a `*.run.app` URL in state.
 
 Do not commit `terraform.tfvars` or `*.tfstate`.

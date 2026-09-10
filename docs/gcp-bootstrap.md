@@ -20,6 +20,7 @@ change their product decisions.
 | Region | **Hunch:** `us-central1` (ticket did not lock a region; override `GB_REGION`) |
 | Artifact Registry | `us-central1-docker.pkg.dev/experiment-jegf/github-bounties` |
 | Cloud Run hello | service `github-bounties-hello` — `GET /` and `GET /api/health` → 200 |
+| Cloud Run web | service `github-bounties-web` — V1 product (`apps/web`); see [staging-deploy.md](staging-deploy.md) |
 | Cloud SQL | instance `github-bounties-staging`, Postgres 16, **Enterprise** edition + `db-f1-micro` (not Enterprise Plus), DB `github_bounties` |
 | Runtime SA | `github-bounties-runtime@experiment-jegf.iam.gserviceaccount.com` (SA id unchanged) |
 | Build SA | `github-bounties-build@experiment-jegf.iam.gserviceaccount.com` |
@@ -170,18 +171,23 @@ GitHub App settings, Cloud SQL, and Google OAuth. Aligns with
 | `CDP_PROJECT_ID` | `CDP_PROJECT_ID` | CDP Portal (recommended in ADR) | Audit / SDK |
 | `CDP_CLIENT_API_KEY` | `CDP_CLIENT_API_KEY` | Optional (Embedded Wallets later) | Not V1-blocking |
 | `CDP_WEBHOOK_SECRET` | `CDP_WEBHOOK_SECRET` | When Coinbase webhooks are enabled | Verify CDP callbacks |
-| `GOOGLE_OAUTH_CLIENT_ID` | `GOOGLE_OAUTH_CLIENT_ID` | Google Cloud OAuth client (product login) | Google Sign-In later |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | `GOOGLE_OAUTH_CLIENT_SECRET` | Same OAuth client | Google Sign-In later |
+| `GOOGLE_OAUTH_CLIENT_ID` | `GOOGLE_OAUTH_CLIENT_ID` | Google Cloud OAuth client (product login) | Google Sign-In |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | `GOOGLE_OAUTH_CLIENT_SECRET` | Same OAuth client | Google Sign-In |
+| `AUTH_SECRET` | `AUTH_SECRET` | Auth.js cookie encryption | Cloud Run web |
+| `GITHUB_APP_CLIENT_ID` | `GITHUB_APP_CLIENT_ID` | GitHub App user-to-server OAuth | Connect GitHub (version may already exist) |
+| `GITHUB_APP_CLIENT_SECRET` | `GITHUB_APP_CLIENT_SECRET` | Same App OAuth client | Connect GitHub |
+| `CRON_SECRET` | `CRON_SECRET` | Optional bearer for expire-locks | Claim-lock cron |
 
 ADR also mentions `CDP_PAYMASTER_URL` (optional, not a V0-C placeholder).
 
 V0-A uses these **unprefixed sandbox** names. Future prod: `prod-CDP_*` in a separate env — not this project’s job today.
 
 ```bash
-for s in DATABASE_URL GITHUB_APP_PRIVATE_KEY GITHUB_WEBHOOK_SECRET \
+for s in DATABASE_URL AUTH_SECRET GITHUB_APP_PRIVATE_KEY GITHUB_WEBHOOK_SECRET \
+  GITHUB_APP_CLIENT_ID GITHUB_APP_CLIENT_SECRET \
   CDP_API_KEY_ID CDP_API_KEY_SECRET CDP_WALLET_SECRET CDP_PROJECT_ID \
   CDP_CLIENT_API_KEY CDP_WEBHOOK_SECRET \
-  GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET
+  GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET CRON_SECRET
 do
   gcloud secrets create "$s" --replication-policy=automatic \
     --labels=product=github-bounties,env=staging
@@ -244,8 +250,13 @@ curl -sS -H "Authorization: Bearer $(gcloud auth print-identity-token)" "$URL/"
 curl -sS -H "Authorization: Bearer $(gcloud auth print-identity-token)" "$URL/api/health"
 ```
 
-When V0-B’s webhook service lands, either point a second Cloud Run service at it or
-replace this canary. Do not invent webhook URLs here.
+V1 product is a **second** Cloud Run service (`github-bounties-web`), not a
+replacement for this canary. Build/deploy:
+[`cloudbuild.web.yaml`](../cloudbuild.web.yaml),
+[`infra/gcloud/deploy-web.sh`](../infra/gcloud/deploy-web.sh).
+Ops commands + secret map: [staging-deploy.md](staging-deploy.md).
+Closed-beta checklist: [staging-e2e.md](staging-e2e.md).
+Do not invent webhook URLs here.
 
 ---
 
@@ -254,6 +265,7 @@ replace this canary. Do not invent webhook URLs here.
 | SA | Roles | Why |
 | --- | --- | --- |
 | `github-bounties-runtime` | `secretmanager.secretAccessor`, `cloudsql.client`, `logging.logWriter` | Cloud Run process |
+| Cloud Run service agent `service-42206083192@serverless-robot-prod.iam.gserviceaccount.com` | `secretmanager.secretAccessor` | Mount `--set-secrets` on web + migrate job |
 | `github-bounties-build` | `artifactregistry.writer`, `run.developer`, `logging.logWriter` + `iam.serviceAccountUser` **on runtime** | Cloud Build / image push / deploy |
 | `github-bounties-ci` | same deploy shape as build + `cloudbuild.builds.editor` | GitHub Actions via **Workload Identity Federation** |
 
@@ -281,7 +293,8 @@ Runtime should **not** have `roles/editor` or `roles/secretmanager.admin`.
 5. `./infra/gcloud/sql-staging.sh --apply` (or `--apply --private` if VPC is ready).
 6. Put real secret versions in Secret Manager (still not in git).
 7. `./infra/gcloud/deploy-hello.sh --apply` **or** `gcloud builds submit --project=experiment-jegf --config=cloudbuild.yaml .` (optional `--substitutions=COMMIT_SHA=$(git rev-parse HEAD)`). Unauth 403 under DRS: use authenticated curl / `roles/run.invoker`, not a public IAM binding if org policy blocks `allUsers`.
-8. Record the real `status.url` in this doc (replace the blocked line). Point GitHub App webhook at that host when V0-B is deployed.
+8. Record the real hello `status.url` in this doc (replace the blocked line).
+9. V1-7 web (after required SM versions exist): `./infra/gcloud/migrate-staging.sh --apply` then `gcloud builds submit --project=experiment-jegf --config=cloudbuild.web.yaml .` — see [staging-deploy.md](staging-deploy.md). Point Google OAuth + GitHub App URLs at the **web** origin, not hello.
 
 Terraform equivalent: `infra/terraform` with `create_sql = false` until billing is on.
 

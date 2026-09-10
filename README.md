@@ -198,4 +198,31 @@ Eng runbook: [docs/gcp-bootstrap.md](docs/gcp-bootstrap.md).
 | Live Cloud Run URL | **blocked: missing gcloud auth / billing** in the bootstrap environment — do not invent a `*.run.app` host |
 | Billing account | name `LB_MVP1_Billing_account` (human lock) / id `011B0B-3BA3C5-CCE451` (`gcloud billing`) |
 
-gcloud/Terraform stubs live under [`infra/`](infra/). Cloud Build stub: [`cloudbuild.yaml`](cloudbuild.yaml). Evidence: [docs/spikes/v0-c-gcp-bootstrap.md](docs/spikes/v0-c-gcp-bootstrap.md).
+gcloud/Terraform stubs live under [`infra/`](infra/). Hello Cloud Build:
+[`cloudbuild.yaml`](cloudbuild.yaml). Evidence: [docs/spikes/v0-c-gcp-bootstrap.md](docs/spikes/v0-c-gcp-bootstrap.md).
+
+## V1-7 — Staging Cloud Run + E2E runbook
+
+`apps/web` deploys to a **new** Cloud Run service `github-bounties-web`. The hello
+canary (`github-bounties-hello` / `cloudbuild.yaml`) is unchanged. Ops execute
+live migrate + deploy after merge — this repo only lands the wiring and docs.
+
+| Item | Where |
+| --- | --- |
+| Web image | [`apps/web/Dockerfile`](apps/web/Dockerfile) (`PORT=8080`) |
+| Web Cloud Build | [`cloudbuild.web.yaml`](cloudbuild.web.yaml) |
+| Deploy helper | [`infra/gcloud/deploy-web.sh`](infra/gcloud/deploy-web.sh) |
+| Migrate (SM `DATABASE_URL`) | [`infra/gcloud/migrate-staging.sh`](infra/gcloud/migrate-staging.sh) |
+| Secret map + Ops commands | [docs/staging-deploy.md](docs/staging-deploy.md) |
+| Closed-beta E2E checklist | [docs/staging-e2e.md](docs/staging-e2e.md) |
+
+```bash
+# After merge, on an Ops machine (never from this PR / agent):
+./infra/gcloud/migrate-staging.sh --apply
+gcloud builds submit --project=experiment-jegf --config=cloudbuild.web.yaml .
+gcloud run services describe github-bounties-web \
+  --project=experiment-jegf --region=us-central1 \
+  --format='value(status.url)'
+```
+
+Do not invent a `*.run.app` host until that describe succeeds.
