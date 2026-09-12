@@ -274,18 +274,15 @@ export async function settleEscrow(
   const hunterKey = moneyIdempotencyKey(bountyId, "HUNTER_PAYOUT");
   const feeKey = moneyIdempotencyKey(bountyId, "FEE_OUT");
 
-  let wallets: Awaited<ReturnType<CdpRail["ensureWallets"]>>;
-  try {
-    wallets = await rail.ensureWallets();
-  } catch (err) {
-    await persistSettleRailFail(
+  const wallets = await rail.ensureWallets().catch((err: unknown) =>
+    persistSettleRailFail(
       opts.db,
       bountyId,
       err,
       now,
       "Settle rail failed before hunter payout.",
-    );
-  }
+    ),
+  );
 
   if (escrow.status === "funded") {
     assertEscrowTransition(escrow.status, "settling");
