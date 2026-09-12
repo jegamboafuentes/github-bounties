@@ -6,6 +6,10 @@
 #   (default) Cloud SQL Auth Proxy on localhost + apps/web `npm run db:migrate`
 #   --job     Cloud Run Job one-shot (unix-socket DATABASE_URL, no laptop proxy)
 #
+# Secret Manager DATABASE_URL may be empty-host (`@/db?host=/cloudsql/…`) or
+# the Cloud Run source shape (`@localhost/db?host=/cloudsql/…`). The proxy
+# helper accepts both; it strips `host=` (not a PG GUC) and sets sslmode=disable.
+#
 # Default dry-run. Pass --apply to execute.
 set -euo pipefail
 
@@ -127,7 +131,7 @@ fi
 echo "Auth Proxy path:"
 echo "  1. Start cloud-sql-proxy ${SQL_CONNECTION} --port=${PROXY_PORT}"
 echo "  2. gcloud secrets versions access latest --secret=DATABASE_URL (captured, not printed)"
-echo "  3. Rewrite unix-socket URLs to 127.0.0.1:${PROXY_PORT} with sslmode=disable (never echoed)"
+echo "  3. Rewrite empty-host / @localhost?host=/cloudsql URLs to 127.0.0.1:${PROXY_PORT} (strip host=, sslmode=disable; never echoed)"
 echo "  4. cd apps/web && npm run db:migrate"
 echo "  5. unset DATABASE_URL"
 echo
