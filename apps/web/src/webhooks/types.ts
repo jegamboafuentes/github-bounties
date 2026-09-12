@@ -49,6 +49,8 @@ export type EligibilityDecision = {
 
 export type HandleResult = {
   duplicate: boolean;
+  /** True when this delivery id already existed but claim writes were retried. */
+  replayed?: boolean;
   deliveryId: string;
   event: string;
   decision?: EligibilityDecision;
@@ -62,6 +64,8 @@ export type ClaimWriteResult = {
   claimId?: string;
   status?: string;
   skip?: string;
+  prNumber?: number | null;
+  winnerLogin?: string | null;
 };
 
 export type GitHubWebhookPayload = {

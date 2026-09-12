@@ -1,10 +1,13 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { bounties, claims, githubLinks, repos } from "../db/schema";
+import { bounties, claims, githubLinks, repos, webhookDeliveries } from "../db/schema";
+import { CLAIM_SKIP } from "./outcome";
 import type { ClaimWriteResult, EligibilityDecision, GitHubWebhookPayload } from "./types";
 
 /** Bounty statuses that still have face value open for a merge winner. */
 export const FUNDED_BOUNTY_STATUSES = ["funded", "claim_locked"] as const;
+
+export { CLAIM_SKIP };
 
 const TERMINAL_CLAIM_STATUSES = new Set(["paid", "disputed"]);
 
@@ -22,6 +25,15 @@ export function postgresClaimWriter(db: Database): ClaimWriter {
   };
 }
 
+function resultMeta(
+  decision: EligibilityDecision,
+): Pick<ClaimWriteResult, "prNumber" | "winnerLogin"> {
+  return {
+    prNumber: decision.pullRequestNumber ?? null,
+    winnerLogin: decision.winnerLogin ?? null,
+  };
+}
+
 export async function markEligibleClaims(
   decision: EligibilityDecision,
   payload: GitHubWebhookPayload,
@@ -31,11 +43,13 @@ export async function markEligibleClaims(
     return [];
   }
 
+  const meta = resultMeta(decision);
   const fullName = decision.repositoryFullName;
   if (!fullName) {
     return decision.closedIssueNumbers.map((issueNumber) => ({
       issueNumber,
-      skip: "repo_unknown",
+      skip: CLAIM_SKIP.repoUnknown,
+      ...meta,
     }));
   }
 
@@ -53,7 +67,8 @@ export async function markEligibleClaims(
   if (!repo) {
     return decision.closedIssueNumbers.map((issueNumber) => ({
       issueNumber,
-      skip: "repo_not_connected",
+      skip: CLAIM_SKIP.repoNotConnected,
+      ...meta,
     }));
   }
 
@@ -81,7 +96,7 @@ export async function markEligibleClaims(
       .limit(1);
 
     if (!bounty) {
-      results.push({ issueNumber, skip: "no_funded_bounty" });
+      results.push({ issueNumber, skip: CLAIM_SKIP.noFundedBounty, ...meta });
       continue;
     }
 
@@ -89,13 +104,19 @@ export async function markEligibleClaims(
       results.push({
         issueNumber,
         bountyId: bounty.id,
-        skip: "hunter_not_linked",
+        skip: CLAIM_SKIP.hunterNotLinked,
+        ...meta,
       });
       continue;
     }
 
     if (prNumber == null) {
-      results.push({ issueNumber, bountyId: bounty.id, skip: "pr_number_missing" });
+      results.push({
+        issueNumber,
+        bountyId: bounty.id,
+        skip: CLAIM_SKIP.prNumberMissing,
+        ...meta,
+      });
       continue;
     }
 
@@ -111,7 +132,8 @@ export async function markEligibleClaims(
         bountyId: bounty.id,
         claimId: existing.id,
         status: existing.status,
-        skip: "claim_terminal",
+        skip: CLAIM_SKIP.claimTerminal,
+        ...meta,
       });
       continue;
     }
@@ -121,6 +143,7 @@ export async function markEligibleClaims(
         .update(claims)
         .set({
           status: "eligible",
+          hunterUserId: hunter.userId,
           prUrl,
           prAuthorLogin: decision.winnerLogin ?? existing.prAuthorLogin,
           mergedAt,
@@ -135,6 +158,7 @@ export async function markEligibleClaims(
         bountyId: bounty.id,
         claimId: updated?.id ?? existing.id,
         status: updated?.status ?? "eligible",
+        ...meta,
       });
       continue;
     }
@@ -159,10 +183,75 @@ export async function markEligibleClaims(
       bountyId: bounty.id,
       claimId: inserted?.id,
       status: inserted?.status ?? "eligible",
+      ...meta,
     });
   }
 
   return results;
+}
+
+/**
+ * After Connect GitHub, attach any `hunter_not_linked` outcomes whose
+ * winner login/id now matches this user. Safe if none are pending.
+ */
+export async function backfillUnlinkedClaimsForHunter(
+  hunter: { userId: string; githubLogin: string; githubId?: bigint },
+  db: Database,
+): Promise<ClaimWriteResult[]> {
+  const login = hunter.githubLogin.trim().toLowerCase();
+  if (!login) return [];
+
+  const deliveries = await db
+    .select()
+    .from(webhookDeliveries)
+    .where(eq(webhookDeliveries.eligible, true));
+
+  const written: ClaimWriteResult[] = [];
+  for (const delivery of deliveries) {
+    const rows = delivery.claimResults ?? [];
+    const pending = rows.filter((row) => row.skip === CLAIM_SKIP.hunterNotLinked);
+    if (pending.length === 0) continue;
+
+    const winner = (delivery.winnerLogin ?? pending[0]?.winnerLogin ?? "").trim().toLowerCase();
+    if (!winner || winner !== login) continue;
+
+    if (!delivery.repositoryFullName) continue;
+
+    const decision: EligibilityDecision = {
+      eligible: true,
+      reason: "github-link backfill",
+      closedIssueNumbers: pending.map((row) => row.issueNumber),
+      winnerLogin: hunter.githubLogin,
+      winnerId:
+        hunter.githubId != null && hunter.githubId <= BigInt(Number.MAX_SAFE_INTEGER)
+          ? Number(hunter.githubId)
+          : undefined,
+      pullRequestNumber: delivery.pullRequestNumber ?? pending[0]?.prNumber ?? undefined,
+      repositoryFullName: delivery.repositoryFullName,
+    };
+
+    const payload: GitHubWebhookPayload = {
+      pull_request: {
+        number: decision.pullRequestNumber,
+        html_url: decision.pullRequestNumber
+          ? `https://github.com/${delivery.repositoryFullName}/pull/${decision.pullRequestNumber}`
+          : null,
+        user: { login: hunter.githubLogin },
+      },
+    };
+
+    const next = await markEligibleClaims(decision, payload, db);
+    written.push(...next);
+
+    const byIssue = new Map(next.map((row) => [row.issueNumber, row]));
+    const merged = rows.map((row) => byIssue.get(row.issueNumber) ?? row);
+    await db
+      .update(webhookDeliveries)
+      .set({ claimResults: merged })
+      .where(eq(webhookDeliveries.deliveryId, delivery.deliveryId));
+  }
+
+  return written;
 }
 
 async function findHunter(

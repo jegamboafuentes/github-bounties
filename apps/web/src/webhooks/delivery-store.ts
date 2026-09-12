@@ -1,14 +1,26 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { webhookDeliveries } from "../db/schema";
-import type { EligibilityDecision } from "./types";
+import type { ClaimWriteResult, EligibilityDecision } from "./types";
 
 export type StoredDelivery = {
   deliveryId: string;
   event: string;
   action?: string | null;
   eligible?: boolean | null;
+  winnerLogin?: string | null;
+  pullRequestNumber?: number | null;
+  repositoryFullName?: string | null;
+  claimResults?: ClaimWriteResult[] | null;
   receivedAt?: Date;
+};
+
+export type DeliveryRecordInput = {
+  deliveryId: string;
+  event: string;
+  action?: string;
+  decision?: EligibilityDecision;
+  claims?: ClaimWriteResult[];
 };
 
 function isUniqueViolation(err: unknown): boolean {
@@ -41,6 +53,36 @@ function isUniqueViolation(err: unknown): boolean {
   return false;
 }
 
+function outcomeFields(entry: DeliveryRecordInput): {
+  eligible: boolean | null;
+  winnerLogin: string | null;
+  pullRequestNumber: number | null;
+  repositoryFullName: string | null;
+  claimResults: ClaimWriteResult[] | null;
+} {
+  return {
+    eligible: entry.decision?.eligible ?? null,
+    winnerLogin: entry.decision?.winnerLogin ?? null,
+    pullRequestNumber: entry.decision?.pullRequestNumber ?? null,
+    repositoryFullName: entry.decision?.repositoryFullName || null,
+    claimResults: entry.claims ?? null,
+  };
+}
+
+function toStoredDelivery(row: typeof webhookDeliveries.$inferSelect): StoredDelivery {
+  return {
+    deliveryId: row.deliveryId,
+    event: row.event,
+    action: row.action,
+    eligible: row.eligible,
+    winnerLogin: row.winnerLogin,
+    pullRequestNumber: row.pullRequestNumber,
+    repositoryFullName: row.repositoryFullName,
+    claimResults: row.claimResults ?? null,
+    receivedAt: row.receivedAt,
+  };
+}
+
 export async function getDelivery(
   deliveryId: string,
   db: Database,
@@ -50,7 +92,7 @@ export async function getDelivery(
     .from(webhookDeliveries)
     .where(eq(webhookDeliveries.deliveryId, deliveryId))
     .limit(1);
-  return row;
+  return row ? toStoredDelivery(row) : undefined;
 }
 
 /**
@@ -58,12 +100,7 @@ export async function getDelivery(
  * Unique on `delivery_id` makes concurrent replays safe.
  */
 export async function recordDeliveryIfNew(
-  entry: {
-    deliveryId: string;
-    event: string;
-    action?: string;
-    decision?: EligibilityDecision;
-  },
+  entry: DeliveryRecordInput,
   db: Database,
 ): Promise<boolean> {
   const existing = await getDelivery(entry.deliveryId, db);
@@ -73,7 +110,7 @@ export async function recordDeliveryIfNew(
       deliveryId: entry.deliveryId,
       event: entry.event,
       action: entry.action,
-      eligible: entry.decision?.eligible ?? null,
+      ...outcomeFields(entry),
     });
     return true;
   } catch (err) {
@@ -82,20 +119,27 @@ export async function recordDeliveryIfNew(
   }
 }
 
+export async function updateDeliveryOutcome(
+  entry: DeliveryRecordInput,
+  db: Database,
+): Promise<void> {
+  await db
+    .update(webhookDeliveries)
+    .set(outcomeFields(entry))
+    .where(eq(webhookDeliveries.deliveryId, entry.deliveryId));
+}
+
 export type DeliveryRecorder = {
   get(deliveryId: string): Promise<StoredDelivery | undefined>;
-  recordIfNew(entry: {
-    deliveryId: string;
-    event: string;
-    action?: string;
-    decision?: EligibilityDecision;
-  }): Promise<boolean>;
+  recordIfNew(entry: DeliveryRecordInput): Promise<boolean>;
+  updateOutcome(entry: DeliveryRecordInput): Promise<void>;
 };
 
 export function postgresDeliveryRecorder(db: Database): DeliveryRecorder {
   return {
     get: (deliveryId) => getDelivery(deliveryId, db),
     recordIfNew: (entry) => recordDeliveryIfNew(entry, db),
+    updateOutcome: (entry) => updateDeliveryOutcome(entry, db),
   };
 }
 
@@ -112,9 +156,17 @@ export function memoryDeliveryRecorder(): DeliveryRecorder {
         deliveryId: entry.deliveryId,
         event: entry.event,
         action: entry.action,
-        eligible: entry.decision?.eligible,
+        ...outcomeFields(entry),
       });
       return true;
+    },
+    async updateOutcome(entry) {
+      const current = map.get(entry.deliveryId);
+      if (!current) return;
+      map.set(entry.deliveryId, {
+        ...current,
+        ...outcomeFields(entry),
+      });
     },
   };
 }

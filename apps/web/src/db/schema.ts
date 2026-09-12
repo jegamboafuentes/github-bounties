@@ -5,6 +5,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -317,15 +318,31 @@ export const feeLedger = pgTable(
   ],
 );
 
+/** Persisted markEligible outcome — skip reasons are queryable without Cloud Logging. */
+export type WebhookClaimResult = {
+  issueNumber: number;
+  bountyId?: string;
+  claimId?: string;
+  status?: string;
+  skip?: string;
+  prNumber?: number | null;
+  winnerLogin?: string | null;
+};
+
 /**
  * GitHub delivery-id idempotency (V1-3).
  * Redeliveries keep the same `X-GitHub-Delivery` GUID.
+ * `claim_results` stores Claim upserts and skip reasons (`hunter_not_linked`, …).
  */
 export const webhookDeliveries = pgTable("webhook_deliveries", {
   deliveryId: text("delivery_id").primaryKey(),
   event: text("event").notNull(),
   action: text("action"),
   eligible: boolean("eligible"),
+  winnerLogin: text("winner_login"),
+  pullRequestNumber: integer("pull_request_number"),
+  repositoryFullName: text("repository_full_name"),
+  claimResults: jsonb("claim_results").$type<WebhookClaimResult[] | null>(),
   receivedAt: timestamp("received_at", { withTimezone: true, mode: "date" })
     .notNull()
     .defaultNow(),

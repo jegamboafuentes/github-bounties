@@ -54,7 +54,9 @@ A second POST with the same id:
 
 - returns **200** with `duplicate: true` (so GitHub does not keep retrying)
 - logs `[idempotency] skip duplicate delivery <guid>`
-- does **not** emit a second eligibility write
+- does **not** emit a second eligibility write **when a Claim row was already written**
+
+If the first pass recorded `eligible=true` but every closed issue skipped (`hunter_not_linked`, `no_funded_bounty`, …), redelivery **retries** `markEligible` and sets `replayed: true`. That is how Ops recovers after the hunter Connects GitHub. Successful writes stay idempotent via `claims (bounty_id, pr_number)`.
 
 V1 also unique on `(bounty_id, pr_number)` on `claims` so a later `issues.closed` handler cannot double-insert. This path **ignores** `issues` for eligibility for that reason.
 
@@ -85,7 +87,7 @@ Case-insensitive; optional colon. Same-repo: `Fixes #42`. Cross-repo: `Fixes own
 
 **Winner** = `pull_request.user.login` (and `user.id` when present). V1-3 intersects `closedIssueNumbers` with **funded** (or `claim_locked`) bounties on a connected `repos` row and upserts `claims` with `status=eligible`.
 
-The hunter must already have a `github_links` row (`github_id` or `github_login`). Otherwise the delivery is recorded and eligibility is logged as `hunter_not_linked` — `claims.hunter_user_id` is required.
+The hunter must already have a `github_links` row (`github_id` or `github_login`). Otherwise no `claims` row is written — `claims.hunter_user_id` is required. That skip is persisted on `webhook_deliveries.claim_results` (and returned as `claims` / `claimSkips` on the webhook HTTP body) so Ops can see `hunter_not_linked` without Cloud Logging. After the hunter Connects GitHub as the PR author login, **Redeliver** the same GUID (or wait for Connect GitHub backfill) to insert the eligible Claim.
 
 Known GitHub behavior we reproduce: `must NOT close #N` still matches. Do not rely on negation in PR bodies.
 
@@ -161,7 +163,7 @@ Point `scripts/replay-delivery.ts` at `http://127.0.0.1:3000/webhooks/github` af
 
 1. GitHub → Settings → Developer settings → GitHub Apps → your staging App → **Advanced**.
 2. Under **Recent deliveries**, open the delivery GUID.
-3. **Redeliver**. `X-GitHub-Delivery` is unchanged; the worker must not write eligibility again.
+3. **Redeliver**. `X-GitHub-Delivery` is unchanged. If a Claim was already written, this is a no-op (`duplicate: true`). If the first pass skipped (`hunter_not_linked`, `no_funded_bounty`, or a pre-fix row with `eligible=true` and empty `claim_results`), the worker retries the Claim write (`replayed: true`).
 
 ### D. GitHub API
 

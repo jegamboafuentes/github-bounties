@@ -1,4 +1,5 @@
 import { processDelivery, type ProcessDeliveryDeps } from "./process-delivery";
+import { claimSkipReasons } from "./outcome";
 import type { GitHubWebhookPayload } from "./types";
 import {
   readWebhookSecret,
@@ -57,16 +58,20 @@ export async function handleGitHubWebhookRequest(args: {
     deps: args.deps,
   });
 
+  const claims = result.claims ?? [];
   return {
     status: 200,
     body: {
       ok: true,
       duplicate: result.duplicate,
+      replayed: result.replayed ?? false,
       deliveryId: result.deliveryId,
       event: result.event,
       eligible: result.decision?.eligible ?? false,
       closedIssueNumbers: result.decision?.closedIssueNumbers ?? [],
-      claims: result.claims ?? [],
+      winnerLogin: result.decision?.winnerLogin ?? null,
+      claims,
+      claimSkips: claimSkipReasons(claims),
     },
   };
 }

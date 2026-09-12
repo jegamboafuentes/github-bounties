@@ -18,7 +18,7 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 | `escrows` | 1:1 with bounty; fund / payout / fee / refund tx hashes + idempotency key (V1-5); last Lock `fail_code` / `fail_reason` |
 | `claims` | `eligible` \| `paid` \| `rejected` \| `disputed`; PR + merge + payout fields |
 | `fee_ledger` | `face_usdc`, `fee_usdc`, `fee_bps` default **200**, `settled_at` |
-| `webhook_deliveries` | GitHub `X-GitHub-Delivery` GUID primary key (V1-3 idempotency) |
+| `webhook_deliveries` | GitHub `X-GitHub-Delivery` GUID primary key (V1-3 idempotency); `claim_results` JSON + winner/PR/repo for skip reasons |
 
 `bounties.participation_pool_bps` / `participation_pool_usdc` are **nullable stubs** for V2. Do not implement the pool.
 
