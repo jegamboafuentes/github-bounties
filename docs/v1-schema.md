@@ -11,7 +11,7 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 | Table | Role |
 | --- | --- |
 | `users` | Google identity (`google_sub` unique), email, display name, nullable BYO Base `wallet_address` (V1-6) |
-| `github_links` | One GitHub account per user (`github_id`, `github_login`) |
+| `github_links` | One GitHub account per user (`github_id`, `github_login`). Unique on `user_id` and `github_id`. Settings Disconnect deletes this row only. |
 | `repos` | Connected repo (`github_repo_id`, `full_name`, `installation_id`, `connected_by_user_id`, `is_active`) |
 | `bounties` | Issue bounty; `amount_usdc`, `currency` default USDC, `chain` default `base` |
 | `claim_locks` | Exclusive lock; `expires_at` defaults to `now() + 72 hours`; one `active` row per bounty |

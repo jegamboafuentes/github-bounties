@@ -93,6 +93,7 @@ export const users = pgTable(
   ],
 );
 
+/** One GitHub account per user (`user_id` unique) and one user per GitHub id. */
 export const githubLinks = pgTable(
   "github_links",
   {

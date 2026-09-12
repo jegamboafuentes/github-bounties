@@ -44,7 +44,7 @@ No custodial wallet is created.
 | URL | Auth | Role |
 | --- | --- | --- |
 | `/bounties/[id]` | public read; Google for claim | Eligible hunter enters a Base address and claims |
-| `/settings` | Google | Save default BYO Base address |
+| `/settings` | Google | Save default BYO Base address. Shows connected GitHub login; **Disconnect** unlinks `github_links` (confirm) so a different login can Connect. |
 | `/board` | public | Eligible / completed (paid) captions + tx when paid |
 | `POST /api/bounties/:id/claim` | Google | Same hunter-only path as the form |
 
