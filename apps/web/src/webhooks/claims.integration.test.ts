@@ -182,10 +182,11 @@ describe("eligible Claim from merge+close funded #N", () => {
         title: "locked, hunter not linked",
       });
 
+      const winnerLogin = `enrique-${suffix}`;
       const payload = structuredClone(fixture.payload);
       if (payload.repository) payload.repository.full_name = fullName;
       if (payload.pull_request?.base?.repo) payload.pull_request.base.repo.full_name = fullName;
-      if (payload.pull_request?.user) payload.pull_request.user.login = "enrique-lb";
+      if (payload.pull_request?.user) payload.pull_request.user.login = winnerLogin;
       const rawBody = Buffer.from(JSON.stringify(payload), "utf8");
       const result = await handleGitHubWebhookRequest({
         rawBody,
@@ -212,7 +213,7 @@ describe("eligible Claim from merge+close funded #N", () => {
         .from(webhookDeliveries)
         .where(eq(webhookDeliveries.deliveryId, deliveryId));
       assert.equal(delivery?.eligible, true);
-      assert.equal(delivery?.winnerLogin, "enrique-lb");
+      assert.equal(delivery?.winnerLogin, winnerLogin);
       assert.equal(delivery?.claimResults?.[0]?.skip, "hunter_not_linked");
       assert.equal(delivery?.claimResults?.[0]?.bountyId, bountyId);
     } finally {
@@ -423,10 +424,11 @@ describe("eligible Claim from merge+close funded #N", () => {
         title: "funded, link later",
       });
 
+      const winnerLogin = `enrique-${suffix}`;
       const payload = structuredClone(fixture.payload);
       if (payload.repository) payload.repository.full_name = fullName;
       if (payload.pull_request?.base?.repo) payload.pull_request.base.repo.full_name = fullName;
-      if (payload.pull_request?.user) payload.pull_request.user.login = "enrique-lb";
+      if (payload.pull_request?.user) payload.pull_request.user.login = winnerLogin;
       const rawBody = Buffer.from(JSON.stringify(payload), "utf8");
       const deps = {
         store: postgresDeliveryRecorder(db),
@@ -448,7 +450,7 @@ describe("eligible Claim from merge+close funded #N", () => {
       await db.insert(githubLinks).values({
         userId: hunterId,
         githubId: BigInt(4_000_000 + Number.parseInt(suffix.slice(0, 6), 16)),
-        githubLogin: "enrique-lb",
+        githubLogin: winnerLogin,
       });
 
       const second = await handleGitHubWebhookRequest({
@@ -467,7 +469,7 @@ describe("eligible Claim from merge+close funded #N", () => {
       assert.equal(rows.length, 1);
       assert.equal(rows[0]?.status, "eligible");
       assert.equal(rows[0]?.hunterUserId, hunterId);
-      assert.equal(rows[0]?.prAuthorLogin, "enrique-lb");
+      assert.equal(rows[0]?.prAuthorLogin, winnerLogin);
     } finally {
       await sql.end({ timeout: 5 });
     }
