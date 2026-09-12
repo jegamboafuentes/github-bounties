@@ -109,6 +109,24 @@ Rail/client Lock errors are computed on the CDP rail (`inbound_unconfirmed`, `cd
 
 The HTML **Lock in escrow** button is a Next.js server action that redirects with `?error=code: reason` (the navigation looks like 2xx). Persist + GET/detail are the durable diagnosis path. Use the JSON fund route when you need a real 4xx.
 
+## Settle failures (same fail_code / fail_reason)
+
+Hunter `transferUsdc` (HUNTER_PAYOUT) can fail after the row has already moved `funded → settling` (dogfood: CDP `rail_failed` / insufficient ETH gas on `gb-escrow`). That used to throw without writing fail fields, leaving a silent hung `settling`.
+
+| Failure | Status (ADR-aligned) | Fail fields | Retry |
+| --- | --- | --- | --- |
+| Hunter transfer fails **before** a payout hash | Stay **`settling`** (no rollback to `funded` — ADR has no Settling → Open, and rollback would drop `claim_locked`) | `fail_code` + `fail_reason` (e.g. `rail_failed` · CDP message) | Claim / `POST …/settle` retry the hunter leg |
+| Hunter hash exists, FEE_OUT fails | **`settled_partial`** (unchanged) | Fee reason written if missing | Retry FEE_OUT only |
+| Both legs confirm | **`settled`** | Cleared | Idempotent no-op |
+
+Ops must still faucet ETH on `gb-escrow` (gas is platform opex, ADR 0001). This persist path only makes the hung settle diagnosable and retryable. `transferUsdc` has no `CDP_DRY_RUN_LIVE` skip.
+
+| Surface | What you see |
+| --- | --- |
+| `POST /api/bounties/:id/settle` / `:id/claim` | **4xx** JSON: `error` + `message` (`fail_code` / `fail_reason`) |
+| `GET /api/bounties/:id` | `escrow.failCode`, `escrow.failReason`, `escrow.failLabel` |
+| Bounty detail + Claim UI + board | Same Lock banner: `Escrow fail · rail_failed` plus the human reason |
+
 ## Idempotency + recon
 
 - One deterministic UUID per `(bounty_id, kind)` (`FUND_IN`, `HUNTER_PAYOUT`, `FEE_OUT`, `REFUND_OUT`). Passed through as the CDP idempotency key when the live rail runs.

@@ -167,6 +167,12 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
       assert.ok(partial.payoutTxHash);
       assert.equal(partial.feeTxHash, null);
 
+      const [afterFeeFail] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
+      assert.equal(afterFeeFail?.failCode, "rail_failed");
+      assert.match(afterFeeFail?.failReason ?? "", /simulated fee drop/);
+      const feeSnap = await getEscrowSnapshot(created.id, db);
+      assert.match(feeSnap?.failLabel ?? "", /rail_failed/);
+
       const retried = await settleEscrow(
         created.id,
         { actorUserId: posterId, hunterUserId: hunterId, hunterPayoutAddress: HUNTER_ADDRESS },
@@ -175,6 +181,9 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
       assert.equal(retried.bountyStatus, "settled");
       assert.equal(retried.payoutTxHash, partial.payoutTxHash);
       assert.ok(retried.feeTxHash?.startsWith("mock:"));
+      const [afterFeeOk] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
+      assert.equal(afterFeeOk?.failCode, null);
+      assert.equal(afterFeeOk?.failReason, null);
     } finally {
       await sql.end({ timeout: 5 });
     }
@@ -304,6 +313,76 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
       assert.equal(afterCancel?.status, "failed");
       assert.equal(afterCancel?.failCode, "inbound_unconfirmed");
       assert.match(afterCancel?.failReason ?? "", /Send face USDC/);
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("persists fail_code when hunter transfer throws after entering settling, then retries", async () => {
+    const { db, sql, posterId, hunterId, fullName } = await fixture();
+    const failHunterOnce = createMockRail(probeCdpEnv({}));
+    let hunterCalls = 0;
+    const orig = failHunterOnce.transferUsdc.bind(failHunterOnce);
+    failHunterOnce.transferUsdc = async (input) => {
+      if (input.purpose === "hunter") {
+        hunterCalls += 1;
+        if (hunterCalls === 1) {
+          throw new EscrowError(
+            "rail_failed",
+            "Insufficient balance to execute the transaction",
+          );
+        }
+      }
+      return orig(input);
+    };
+    try {
+      const created = await postBounty(db, posterId, fullName, 30, "50");
+      await fundBounty(created.id, posterId, db, new Date(), { rail: failHunterOnce });
+
+      await assert.rejects(
+        () =>
+          settleEscrow(
+            created.id,
+            { actorUserId: posterId, hunterUserId: hunterId, hunterPayoutAddress: HUNTER_ADDRESS },
+            { db, rail: failHunterOnce },
+          ),
+        (err: unknown) =>
+          err instanceof EscrowError &&
+          err.code === "rail_failed" &&
+          /Insufficient balance/.test(err.message),
+      );
+
+      const [row] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
+      assert.equal(row?.status, "settling");
+      assert.equal(row?.payoutTxHash, null);
+      assert.equal(row?.feeTxHash, null);
+      assert.equal(row?.failCode, "rail_failed");
+      assert.match(row?.failReason ?? "", /Insufficient balance/);
+
+      const [bounty] = await db
+        .select({ status: bounties.status })
+        .from(bounties)
+        .where(eq(bounties.id, created.id));
+      assert.equal(bounty?.status, "settling");
+
+      const snap = await getEscrowSnapshot(created.id, db);
+      assert.equal(snap?.failCode, "rail_failed");
+      assert.match(snap?.failLabel ?? "", /rail_failed/);
+
+      const retried = await settleEscrow(
+        created.id,
+        { actorUserId: posterId, hunterUserId: hunterId, hunterPayoutAddress: HUNTER_ADDRESS },
+        { db, rail: failHunterOnce },
+      );
+      assert.equal(retried.bountyStatus, "settled");
+      assert.equal(retried.escrowStatus, "settled");
+      assert.ok(retried.payoutTxHash?.startsWith("mock:"));
+      assert.ok(retried.feeTxHash?.startsWith("mock:"));
+
+      const [after] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
+      assert.equal(after?.status, "settled");
+      assert.equal(after?.failCode, null);
+      assert.equal(after?.failReason, null);
     } finally {
       await sql.end({ timeout: 5 });
     }

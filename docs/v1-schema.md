@@ -15,7 +15,7 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 | `repos` | Connected repo (`github_repo_id`, `full_name`, `installation_id`, `connected_by_user_id`, `is_active`) |
 | `bounties` | Issue bounty; `amount_usdc`, `currency` default USDC, `chain` default `base` |
 | `claim_locks` | Exclusive lock; `expires_at` defaults to `now() + 72 hours`; one `active` row per bounty |
-| `escrows` | 1:1 with bounty; fund / payout / fee / refund tx hashes + idempotency key (V1-5); last Lock `fail_code` / `fail_reason` |
+| `escrows` | 1:1 with bounty; fund / payout / fee / refund tx hashes + idempotency key (V1-5); last Lock/settle `fail_code` / `fail_reason` |
 | `claims` | `eligible` \| `paid` \| `rejected` \| `disputed`; PR + merge + payout fields |
 | `fee_ledger` | `face_usdc`, `fee_usdc`, `fee_bps` default **200**, `settled_at` |
 | `webhook_deliveries` | GitHub `X-GitHub-Delivery` GUID primary key (V1-3 idempotency); `claim_results` JSON + winner/PR/repo for skip reasons |
