@@ -13,13 +13,13 @@ export function resolveLockFundTxHash(input: {
   return recorded || undefined;
 }
 
+/** True when x402 inbound (or any fund hash) was persisted — including after Lock/settle. */
 export function inboundIsRecorded(row: {
   status?: string | null;
   fundTxHash?: string | null;
   x402PaymentId?: string | null;
 } | null | undefined): boolean {
   if (!row) return false;
-  if (row.status && row.status !== "pending") return false;
   return Boolean(row.fundTxHash?.trim() || row.x402PaymentId?.trim());
 }
 
