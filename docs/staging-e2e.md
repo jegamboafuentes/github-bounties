@@ -73,6 +73,7 @@ Pass when:
 - [ ] `escrow.rail` is `cdp` and `escrow.missing` is empty (first-deploy CDP secrets are bound)
 - [ ] If someone detached CDP secrets: `rail=mock` and `missing` lists exact names only
 - [ ] `escrow.hosted_checkout.enabled` is `false`
+- [ ] `escrow.x402_exact.scheme` is `exact` and `hostedCheckout` is `disabled`
 - [ ] Response does **not** contain secret values or connection strings
 
 Unauth `curl "$URL/api/health"` → **403** under Domain Restricted Sharing is
@@ -110,7 +111,15 @@ If `/signin` lists missing env **names** (`AUTH_SECRET`, `GOOGLE_OAUTH_*`,
 
 ### 4. Fund (escrow lock)
 
-- [ ] Poster: **Lock in escrow** on the bounty page
+Preferred on DEV (no hash paste):
+
+- [ ] `GET {ORIGIN}/api/bounties/<id>/x402` → **402** `exact` to `gb-escrow`
+- [ ] Settle with an x402 client (Base Sepolia test USDC) → inbound recorded
+- [ ] Poster: **Lock in escrow** with the hash field empty → `funded`
+
+Fallback (unchanged):
+
+- [ ] Poster: paste a direct-transfer `fundTxHash` then **Lock in escrow**
 - [ ] Status becomes `funded` / board shows funded
 - [ ] Live CDP: `escrows.fund_tx_hash` is a real Sepolia hash
 - [ ] Mock: hash is `mock:0x…` and the UI lists the exact missing `CDP_*` names

@@ -14,7 +14,7 @@ This package hosts GitHub App install, `POST /webhooks/github`, the bounty board
 | Fee | 2% → `fee_ledger.fee_bps` default **200** |
 | Claim-lock | exclusive **72h** (`expires_at` default `now() + 72 hours`) |
 | Winner | author of the merged PR that closes funded `#N` |
-| CDP / x402 | V1-5 escrow lock / settle / refund (mock if `CDP_*` missing; hosted checkout disabled) |
+| CDP / x402 | V1-5 escrow lock / settle / refund (x402 exact inbound on DEV; mock if `CDP_*` missing; hosted checkout disabled) |
 | Payout | V1-6 eligible hunter claims net-of-fee USDC to a BYO Base address |
 
 ## Local Postgres + migrate

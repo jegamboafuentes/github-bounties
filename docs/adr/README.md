@@ -5,6 +5,7 @@ This directory records money-path and platform decisions for **GitHub Bounties**
 | ADR | Title | Status |
 | --- | --- | --- |
 | [0001](./0001-cdp-x402-wallets.md) | CDP wallets + x402 USDC escrow, 2% fee | **Accepted** (PR #1) |
+| [0002](./0002-x402-exact-dev-fund.md) | DEV fund Lock via x402 `exact` (hosted checkout still off) | **Proposed** |
 
 ## Rules
 

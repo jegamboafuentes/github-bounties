@@ -12,6 +12,7 @@ import { EscrowError } from "./errors";
 import { createMockRail, resolveRail } from "./rail";
 import { attributedAtomic, reconcileBountyNotes } from "./reconcile";
 import { moneyIdempotencyKey } from "./idempotency";
+import { escrowHealth } from "./service";
 
 describe("CDP env + mainnet refuse", () => {
   it("lists exact missing CDP_* names without reading values", () => {
@@ -83,6 +84,10 @@ describe("CDP env + mainnet refuse", () => {
     });
     assert.ok(notes.some((n) => n.includes("rail=mock")));
     assert.ok(notes.some((n) => n.includes("Hosted checkout")));
+    const health = escrowHealth({});
+    assert.equal(health.hosted_checkout.enabled, false);
+    assert.equal(health.x402_exact.scheme, "exact");
+    assert.equal(health.x402_exact.hostedCheckout, "disabled");
   });
 
   it("derives stable idempotency keys per bounty+kind", () => {

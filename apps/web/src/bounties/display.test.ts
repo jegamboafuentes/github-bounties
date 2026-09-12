@@ -9,6 +9,7 @@ import {
   hunterLabel,
   isActiveClaimLock,
   LOCK_NOT_MONEY_COPY,
+  X402_EXACT_FUND_COPY,
   payoutBreakdown,
   payoutCaption,
 } from "./display";
@@ -61,6 +62,8 @@ describe("board display helpers", () => {
     assert.equal(bountyStatusLabel("funded"), "Funded (open)");
     assert.equal(bountyStatusLabel("settled"), "Completed (paid)");
     assert.match(CLAIM_PAYOUT_COPY, /eligible hunter/i);
+    assert.match(X402_EXACT_FUND_COPY, /x402 exact/i);
+    assert.match(X402_EXACT_FUND_COPY, /no hash paste|without x402|Lock does not need a paste/i);
   });
 
   it("shows face / 2% fee / net and paid captions", () => {

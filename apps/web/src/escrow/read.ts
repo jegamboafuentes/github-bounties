@@ -4,9 +4,11 @@ import { escrows } from "../db/schema";
 import { probeCdpEnv, type CdpRailMode } from "./env";
 import { formatEscrowFailLabel } from "./fail";
 import { hostedCheckoutStatus } from "./hosted";
+import { inboundIsRecorded } from "./inbound";
 import { isMockTxHash } from "./idempotency";
 import { reconcileBountyNotes } from "./reconcile";
 import type { EscrowStatus } from "./state";
+import { publicOrigin, X402_RESOURCE_PATH, x402ResourceUrl } from "./x402";
 
 export type EscrowRailLabel = CdpRailMode | "unknown";
 
@@ -27,6 +29,16 @@ export type EscrowSnapshot = {
   failLabel: string | null;
   rail: EscrowRailLabel;
   hostedCheckout: ReturnType<typeof hostedCheckoutStatus>;
+  x402PaymentId: string | null;
+  x402Url: string | null;
+  inboundRecorded: boolean;
+  x402: {
+    scheme: "exact";
+    resourcePath: string;
+    resourceUrl: string;
+    inboundRecorded: boolean;
+    hostedCheckout: false;
+  };
   reconcile: string[];
 };
 
@@ -53,6 +65,9 @@ export async function getEscrowSnapshot(
   if (!row) return null;
   const hashes = [row.fundTxHash, row.payoutTxHash, row.feeTxHash, row.refundTxHash];
   const rail = inferEscrowRail(hashes);
+  const origin = publicOrigin();
+  const resourcePath = X402_RESOURCE_PATH(row.bountyId);
+  const inboundRecorded = inboundIsRecorded(row);
   return {
     id: row.id,
     bountyId: row.bountyId,
@@ -70,6 +85,16 @@ export async function getEscrowSnapshot(
     failLabel: formatEscrowFailLabel(row.failCode, row.failReason),
     rail,
     hostedCheckout: hostedCheckoutStatus(),
+    x402PaymentId: row.x402PaymentId,
+    x402Url: row.x402Url,
+    inboundRecorded,
+    x402: {
+      scheme: "exact",
+      resourcePath,
+      resourceUrl: x402ResourceUrl(row.bountyId, origin),
+      inboundRecorded,
+      hostedCheckout: false,
+    },
     reconcile: reconcileBountyNotes({
       bountyId: row.bountyId,
       faceUsdc: row.amountUsdc,
