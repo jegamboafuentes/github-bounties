@@ -7,8 +7,11 @@ import { loadDotenvFiles } from "../db/load-dotenv";
 import { bounties, claims, escrows, feeLedger, repos, users } from "../db/schema";
 import { createBountyFromIssueUrl } from "../bounties/create";
 import { fundBounty } from "../bounties/fund";
+import { EscrowError } from "./errors";
+import { VOIDED_UNFUNDED_CODE } from "./fail";
+import { getEscrowSnapshot } from "./read";
 import { createMockRail, MOCK_FEE_ADDRESS } from "./rail";
-import { expireUnmergedBounties, refundEscrow, settleEscrow } from "./service";
+import { expireUnmergedBounties, lockEscrowFunds, refundEscrow, settleEscrow } from "./service";
 import { probeCdpEnv } from "./env";
 
 loadDotenvFiles();
@@ -219,6 +222,8 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
       assert.equal(voided.refundTxHash, null);
       const [escrow] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
       assert.equal(escrow?.status, "failed");
+      assert.equal(escrow?.failCode, VOIDED_UNFUNDED_CODE);
+      assert.ok(escrow?.failReason);
     } finally {
       await sql.end({ timeout: 5 });
     }
@@ -249,6 +254,74 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
       assert.equal(paid?.status, "paid");
       assert.equal(paid?.payoutUsdc, "98.000000");
       assert.equal(paid?.payoutTxHash, settled.payoutTxHash);
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("stores and returns fail_code + fail_reason on a failed Lock (inbound_unconfirmed)", async () => {
+    const { db, sql, posterId, fullName } = await fixture();
+    const rail = createMockRail(probeCdpEnv({}));
+    rail.lockFace = async () => {
+      throw new EscrowError(
+        "inbound_unconfirmed",
+        "Send face USDC to gb-escrow (0xabc) on base-sepolia, then retry fund with the on-chain tx hash.",
+        { details: { escrowAddress: "0xabc", network: "base-sepolia" } },
+      );
+    };
+    try {
+      const created = await postBounty(db, posterId, fullName, 28, "12");
+      await assert.rejects(
+        () => fundBounty(created.id, posterId, db, new Date(), { rail }),
+        (err: unknown) =>
+          err instanceof EscrowError &&
+          err.code === "inbound_unconfirmed" &&
+          /Send face USDC/.test(err.message),
+      );
+
+      const [row] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
+      assert.equal(row?.status, "pending");
+      assert.equal(row?.failCode, "inbound_unconfirmed");
+      assert.match(row?.failReason ?? "", /Send face USDC/);
+
+      const snap = await getEscrowSnapshot(created.id, db);
+      assert.equal(snap?.failCode, "inbound_unconfirmed");
+      assert.match(snap?.failReason ?? "", /Send face USDC/);
+      assert.match(snap?.failLabel ?? "", /inbound_unconfirmed/);
+
+      await assert.rejects(
+        () => lockEscrowFunds(created.id, posterId, { db, rail }),
+        (err: unknown) => err instanceof EscrowError && err.code === "inbound_unconfirmed",
+      );
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("clears fail_code after a successful Lock retry", async () => {
+    const { db, sql, posterId, fullName } = await fixture();
+    const failThenOk = createMockRail(probeCdpEnv({}));
+    let calls = 0;
+    const orig = failThenOk.lockFace.bind(failThenOk);
+    failThenOk.lockFace = async (input) => {
+      calls += 1;
+      if (calls === 1) {
+        throw new EscrowError("rail_failed", "simulated CDP transfer() missing");
+      }
+      return orig(input);
+    };
+    try {
+      const created = await postBounty(db, posterId, fullName, 29, "9");
+      await assert.rejects(
+        () => fundBounty(created.id, posterId, db, new Date(), { rail: failThenOk }),
+        (err: unknown) => err instanceof EscrowError && err.code === "rail_failed",
+      );
+      const funded = await fundBounty(created.id, posterId, db, new Date(), { rail: failThenOk });
+      assert.equal(funded.status, "funded");
+      const [row] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
+      assert.equal(row?.status, "funded");
+      assert.equal(row?.failCode, null);
+      assert.equal(row?.failReason, null);
     } finally {
       await sql.end({ timeout: 5 });
     }

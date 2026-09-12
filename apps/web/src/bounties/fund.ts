@@ -38,21 +38,12 @@ export async function fundBounty(
       missingEnv: locked.missingEnv,
     };
   } catch (err) {
-    throw toBountyError(err);
+    throw toFundError(err);
   }
 }
 
-function toBountyError(err: unknown): never {
+function toFundError(err: unknown): never {
   if (err instanceof BountyError) throw err;
-  if (err instanceof EscrowError) {
-    const mapped =
-      err.code === "unauthorized" ||
-      err.code === "bounty_not_found" ||
-      err.code === "not_poster" ||
-      err.code === "not_fundable"
-        ? err.code
-        : "not_fundable";
-    throw new BountyError(mapped, err.message);
-  }
+  if (err instanceof EscrowError) throw err;
   throw err;
 }

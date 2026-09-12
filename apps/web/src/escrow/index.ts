@@ -1,5 +1,13 @@
 export { EscrowError, isEscrowError, type EscrowErrorCode } from "./errors";
 export {
+  formatEscrowFailLabel,
+  persistEscrowFail,
+  toPersistedLockFailure,
+  VOIDED_UNFUNDED_CODE,
+  VOIDED_UNFUNDED_REASON,
+} from "./fail";
+export { escrowErrorJson, httpStatusForEscrowCode, jsonForUnknown } from "./http";
+export {
   CDP_OPTIONAL_ENV_KEYS,
   CDP_REQUIRED_ENV_KEYS,
   cdpMissingEnvMessage,
@@ -21,7 +29,7 @@ export {
   type CdpRail,
 } from "./rail";
 export { attributedAtomic, reconcileBountyNotes, sumAttributedAtomic } from "./reconcile";
-export { getEscrowSnapshot, type EscrowSnapshot } from "./read";
+export { getEscrowSnapshot, inferEscrowRail, type EscrowSnapshot } from "./read";
 export {
   escrowHealth,
   expireUnmergedBounties,

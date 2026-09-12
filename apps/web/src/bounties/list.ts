@@ -4,11 +4,13 @@ import {
   bounties,
   bountyStatusValues,
   claimLocks,
+  escrows,
   githubLinks,
   repos,
   users,
 } from "../db/schema";
 import { listPayoutClaimsForBounties, type PayoutClaimView } from "../claims/read";
+import { formatEscrowFailLabel } from "../escrow/fail";
 import { claimedByUntilLabel, hunterLabel, isActiveClaimLock } from "./display";
 import { expireClaimLocks } from "./expire";
 
@@ -37,6 +39,7 @@ export type BoardBounty = {
     caption: string;
   } | null;
   payout: PayoutClaimView | null;
+  escrowFail: { code: string; reason: string; label: string } | null;
 };
 
 const STATUS_SET = new Set<string>(bountyStatusValues);
@@ -75,6 +78,8 @@ export async function listBoardBounties(
       lockStatus: claimLocks.status,
       lockExpiresAt: claimLocks.expiresAt,
       lockHunterUserId: claimLocks.hunterUserId,
+      escrowFailCode: escrows.failCode,
+      escrowFailReason: escrows.failReason,
     })
     .from(bounties)
     .innerJoin(repos, eq(repos.id, bounties.repoId))
@@ -83,6 +88,7 @@ export async function listBoardBounties(
       claimLocks,
       and(eq(claimLocks.bountyId, bounties.id), eq(claimLocks.status, "active")),
     )
+    .leftJoin(escrows, eq(escrows.bountyId, bounties.id))
     .where(
       and(
         repoFilter
@@ -152,6 +158,8 @@ export async function getBoardBounty(
       lockStatus: claimLocks.status,
       lockExpiresAt: claimLocks.expiresAt,
       lockHunterUserId: claimLocks.hunterUserId,
+      escrowFailCode: escrows.failCode,
+      escrowFailReason: escrows.failReason,
     })
     .from(bounties)
     .innerJoin(repos, eq(repos.id, bounties.repoId))
@@ -160,6 +168,7 @@ export async function getBoardBounty(
       claimLocks,
       and(eq(claimLocks.bountyId, bounties.id), eq(claimLocks.status, "active")),
     )
+    .leftJoin(escrows, eq(escrows.bountyId, bounties.id))
     .where(eq(bounties.id, bountyId))
     .limit(1);
 
@@ -205,6 +214,8 @@ type ListRow = {
   lockStatus: string | null;
   lockExpiresAt: Date | null;
   lockHunterUserId: string | null;
+  escrowFailCode: string | null;
+  escrowFailReason: string | null;
 };
 
 function toBoardBounty(
@@ -249,7 +260,17 @@ function toBoardBounty(
           }
         : null,
     payout,
+    escrowFail: toEscrowFail(row.escrowFailCode, row.escrowFailReason),
   };
+}
+
+function toEscrowFail(
+  code: string | null,
+  reason: string | null,
+): BoardBounty["escrowFail"] {
+  const label = formatEscrowFailLabel(code, reason);
+  if (!label || !code) return null;
+  return { code, reason: reason ?? "", label };
 }
 
 function escapeLike(value: string): string {

@@ -133,8 +133,15 @@ export default async function BountyDetailPage({
               <dt className="text-xs uppercase tracking-wide text-zinc-500">Escrow</dt>
               <dd className="sm:col-span-2">
                 {escrow.status} · rail {escrow.rail}
+                {escrow.failCode ? ` · ${escrow.failCode}` : ""}
               </dd>
             </div>
+            {escrow.failReason ? (
+              <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
+                <dt className="text-xs uppercase tracking-wide text-zinc-500">Fail reason</dt>
+                <dd className="sm:col-span-2 text-red-700 dark:text-red-400">{escrow.failReason}</dd>
+              </div>
+            ) : null}
             {escrow.fundTxHash ? (
               <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
                 <dt className="text-xs uppercase tracking-wide text-zinc-500">Fund tx</dt>

@@ -182,6 +182,13 @@ export async function releaseClaimLockAction(formData: FormData): Promise<void> 
 }
 
 function redirectBountyError(bountyId: string, err: unknown): never {
+  const code = isBountyError(err)
+    ? err.code
+    : isClaimError(err)
+      ? err.code
+      : isEscrowError(err)
+        ? err.code
+        : "unknown";
   const message = isBountyError(err)
     ? err.message
     : isClaimError(err)
@@ -191,7 +198,8 @@ function redirectBountyError(bountyId: string, err: unknown): never {
         : err instanceof Error
           ? err.message
           : "Something went wrong.";
-  redirect(`/bounties/${bountyId}?error=${encodeURIComponent(message)}`);
+  refreshBounty(bountyId);
+  redirect(`/bounties/${bountyId}?error=${encodeURIComponent(`${code}: ${message}`)}`);
 }
 
 function isRedirectError(err: unknown): boolean {

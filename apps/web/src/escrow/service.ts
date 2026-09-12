@@ -5,6 +5,12 @@ import { FEE_BPS } from "../lib/constants";
 import { splitFaceUsdc } from "../lib/money";
 import { EscrowError } from "./errors";
 import { probeCdpEnv } from "./env";
+import {
+  persistEscrowFail,
+  toPersistedLockFailure,
+  VOIDED_UNFUNDED_CODE,
+  VOIDED_UNFUNDED_REASON,
+} from "./fail";
 import { hostedCheckoutStatus } from "./hosted";
 import { moneyIdempotencyKey } from "./idempotency";
 import { resolveRail, type CdpRail } from "./rail";
@@ -83,7 +89,6 @@ export async function lockEscrowFunds(
     throw new EscrowError("unauthorized", "Sign in with Google to fund a bounty.");
   }
   const now = opts.now ?? new Date();
-  const rail = railOf(opts);
   const bounty = await loadBounty(opts.db, bountyId);
   if (bounty.posterUserId !== actorUserId) {
     throw new EscrowError("not_poster", "Only the poster can lock escrow for this bounty.");
@@ -94,11 +99,25 @@ export async function lockEscrowFunds(
 
   const split = splitFaceUsdc(bounty.amountUsdc);
   const fundKey = moneyIdempotencyKey(bountyId, "FUND_IN");
-  const locked = await rail.lockFace({
-    amountAtomic: split.faceAtomic,
-    idempotencyKey: fundKey,
-    fundTxHash: opts.fundTxHash,
-  });
+
+  let rail: CdpRail;
+  let locked: Awaited<ReturnType<CdpRail["lockFace"]>>;
+  try {
+    rail = railOf(opts);
+    locked = await rail.lockFace({
+      amountAtomic: split.faceAtomic,
+      idempotencyKey: fundKey,
+      fundTxHash: opts.fundTxHash,
+    });
+  } catch (err) {
+    const failure = toPersistedLockFailure(err);
+    await persistEscrowFail(opts.db, bountyId, {
+      code: failure.code,
+      reason: failure.reason,
+      now,
+    });
+    throw failure.error;
+  }
 
   const [poster] = await opts.db
     .select({ walletAddress: users.walletAddress })
@@ -128,6 +147,8 @@ export async function lockEscrowFunds(
       idempotencyKey: fundKey,
       checkoutId: null,
       x402Url: null,
+      failCode: null,
+      failReason: null,
       updatedAt: now,
     };
     if (existing) {
@@ -502,7 +523,12 @@ export async function refundEscrow(
       if (existing && existing.status === "pending") {
         await tx
           .update(escrows)
-          .set({ status: "failed", updatedAt: now })
+          .set({
+            status: "failed",
+            failCode: VOIDED_UNFUNDED_CODE,
+            failReason: VOIDED_UNFUNDED_REASON,
+            updatedAt: now,
+          })
           .where(eq(escrows.id, existing.id));
       }
     });
