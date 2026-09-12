@@ -63,7 +63,8 @@ describe("board display helpers", () => {
     assert.equal(bountyStatusLabel("settled"), "Completed (paid)");
     assert.match(CLAIM_PAYOUT_COPY, /eligible hunter/i);
     assert.match(X402_EXACT_FUND_COPY, /x402 exact/i);
-    assert.match(X402_EXACT_FUND_COPY, /no hash paste|without x402|Lock does not need a paste/i);
+    assert.match(X402_EXACT_FUND_COPY, /wallet|WalletConnect/i);
+    assert.match(X402_EXACT_FUND_COPY, /no explorer hash|no hash paste|Lock does not need a paste/i);
   });
 
   it("shows face / 2% fee / net and paid captions", () => {

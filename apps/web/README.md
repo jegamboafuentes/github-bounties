@@ -162,7 +162,7 @@ If Google env is missing, `/signin` lists the unset variable names. Home and `/a
 | --- | --- |
 | `/board` | public list + repo/status filters |
 | `/bounties/new` | Google session; issue URL must match an App-connected repo |
-| `/bounties/[id]` | escrow lock (poster), claim-lock (hunter), hunter payout claim, early/force release, cancel/refund |
+| `/bounties/[id]` | escrow lock (poster: WalletConnect / Pay face / Advanced paste-hash), claim-lock (hunter), hunter payout claim, early/force release, cancel/refund |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` bearer |
 
 Claim-lock is exclusive **72h** coordination. **It does not move money.** Merge is still truth (V1-3 eligible Claim). See [docs/bounties.md](../../docs/bounties.md).
@@ -178,6 +178,8 @@ Claim-lock is exclusive **72h** coordination. **It does not move money.** Merge 
 | Docs | [docs/escrow.md](../../docs/escrow.md) |
 
 Missing `CDP_*` → mock rail that records `mock:` hashes and lists the exact missing names. Mainnet (`CDP_NETWORK=base`) is refused unless `CDP_ALLOW_MAINNET=1`. Hosted checkout is disabled (ADR 0001 `settlement.feeAmount` open Q).
+
+Poster fund UX (V1.5): amount chips on `/bounties/new`; on Lock, **Pay {face} USDC with wallet** (WalletConnect / injected, Base Sepolia) then auto-Lock. Ops must set public `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` for the WalletConnect QR (not Secret Manager). See [docs/spikes/v15-fund-walletconnect.md](../../docs/spikes/v15-fund-walletconnect.md).
 
 ## Claim payout (V1-6)
 

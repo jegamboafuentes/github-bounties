@@ -12,7 +12,7 @@ export const HOSTED_CHECKOUT_DISABLED_COPY =
   "Hosted Coinbase checkout is disabled until ADR 0001 confirms settlement.feeAmount / net proceeds equal face. Do not treat a checkout as escrow.";
 
 export const X402_EXACT_FUND_COPY =
-  "Pay face F with x402 exact to gb-escrow (GET|POST /api/bounties/:id/x402). After settlement the inbound hash is recorded and Lock does not need a paste. Direct-transfer hash paste remains a fallback.";
+  "Connect a Base Sepolia wallet, then Pay face F (x402 exact to gb-escrow). Settlement records inbound so Lock needs no explorer hash. Advanced paste-hash remains a fallback. Hosted checkout stays disabled.";
 
 export const CLAIM_PAYOUT_COPY =
   "Eligible hunter only: the merged pull request author claims net-of-fee USDC to a bring-your-own Base address. Poster and the board then see completed (paid).";

@@ -50,6 +50,8 @@ Already-paid GET/POST returns 200 and does **not** demand a second payment.
 - Working DEV path for agents (`CdpX402Client` / `@x402/fetch`) and for a poster
   who Locks after the 402 settle — no hash paste.
 - Humans without an x402 client still use the optional paste-hash fallback.
+- V1.5 Lock UI can WalletConnect + sign EIP-3009 in-browser (see
+  [v15-fund-walletconnect.md](../spikes/v15-fund-walletconnect.md)).
 - Ops does **not** need Coinbase Business domain callbacks for this spike.
 - New runtime deps: `@x402/core`, `@x402/evm` (CDP SDK optional peers, now direct).
 - Existing `CDP_API_KEY_ID` / `CDP_API_KEY_SECRET` must be allowed to call the

@@ -1,13 +1,15 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { createBountyAction, type BountyActionState } from "@/app/actions/bounties";
 import { FUND_LOCK_COPY, LOCK_NOT_MONEY_COPY } from "@/bounties/display";
+import { AmountPresetChips } from "@/components/amount-presets";
 
 const initial: BountyActionState = { ok: true };
 
 export function CreateBountyForm() {
   const [state, action, pending] = useActionState(createBountyAction, initial);
+  const [amountUsdc, setAmountUsdc] = useState("");
 
   return (
     <form action={action} className="flex flex-col gap-4">
@@ -21,6 +23,7 @@ export function CreateBountyForm() {
           className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
         />
       </label>
+      <AmountPresetChips value={amountUsdc} onChange={setAmountUsdc} disabled={pending} />
       <label className="flex flex-col gap-1 text-sm">
         <span className="font-medium">Face amount (USDC)</span>
         <input
@@ -28,7 +31,9 @@ export function CreateBountyForm() {
           type="text"
           required
           inputMode="decimal"
-          placeholder="25"
+          placeholder="Custom, or tap a preset"
+          value={amountUsdc}
+          onChange={(event) => setAmountUsdc(event.target.value)}
           className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
         />
       </label>
