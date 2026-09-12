@@ -139,8 +139,11 @@ hunter_atomic = F - fee_atomic       // remainder
 - **Do not take the fee at fund.** If the bounty expires, the funder gets **full `F`**
   back (minus nothing). Platform earns 2% only when work is accepted (merge/release).
 
-**V2 (do not implement):** ~15% participation pool. Fee remains **2% of full face**.
-Sketch only: `pool ≈ 0.15 * F`, `hunter ≈ F - fee - pool`. No pool ledger in V1.
+**V2 (do not implement in V1):** participation pool. Fee remains **2% of full face**.
+The one-line sketch `pool ≈ 0.15 * F` is **superseded** by
+[ADR 0003](./0003-v2-multi-hunter-pool.md): of the remaining 98%, winner 85% /
+pool 15% (winner ≈ 0.833F, pool ≈ 0.147F). Empty pool → winner gets 100% of
+post-fee. No pool ledger in V1. **Do not implement V2 in the ADR 0003 planning PR.**
 
 ### Fee collection point: settlement (not fund)
 
@@ -412,7 +415,7 @@ Wallet secret: CDP Portal → Wallets → Security.
 
 - Production escrow wired into UI
 - Fee dashboards / payout reports
-- V2 participation-pool accounting or disbursement
+- V2 participation-pool accounting or disbursement (see [ADR 0003](./0003-v2-multi-hunter-pool.md); plan/docs only until V2-0…V2-5)
 - Multi-rail, Lightning, crowdfunding, fiat on-ramp as a product surface
 - Full app scaffold (V0-B / V0-C)
 - Running our own x402 facilitator

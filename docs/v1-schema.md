@@ -20,7 +20,7 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 | `fee_ledger` | `face_usdc`, `fee_usdc`, `fee_bps` default **200**, `settled_at` |
 | `webhook_deliveries` | GitHub `X-GitHub-Delivery` GUID primary key (V1-3 idempotency); `claim_results` JSON + winner/PR/repo for skip reasons |
 
-`bounties.participation_pool_bps` / `participation_pool_usdc` are **nullable stubs** for V2. Do not implement the pool.
+`bounties.participation_pool_bps` / `participation_pool_usdc` are **nullable stubs** for V2. Do not implement the pool in V1. Frozen meaning (ADR 0003): **1500 bps of post-fee**, not of face. Tickets: [v2-tickets.md](v2-tickets.md).
 
 ## Status enums (ADR 0001 mapping)
 

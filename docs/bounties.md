@@ -45,7 +45,7 @@ Hunter payout after merge: [claims.md](claims.md).
 
 ## Out of scope
 
-- Participation pool (V2)
+- Participation pool (V2) — spec in [ADR 0003](adr/0003-v2-multi-hunter-pool.md); do not implement in V1-4
 - Hosted checkout (blocked — ADR 0001 fee-skim open Q)
 
 ## Secrets

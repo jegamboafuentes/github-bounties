@@ -4,7 +4,7 @@ Official name: **GitHub Bounties**. Money path follows [ADR 0001](adr/0001-cdp-x
 
 `gb-escrow` (CDP server wallet) holds face **F**. On merge/settle, hunter gets `F − floor(F × 0.02)` and `gb-fee` gets the 2%. On poster cancel or bounty `expires_at` (unmerged), the funder gets **full F**. Claim-lock is still coordination only and **does not** refund.
 
-This is not Lightning Bounties / LB1. V2 participation pool is out of scope. Hosted Coinbase Business checkout stays **disabled**. DEV fund without a pasted hash uses x402 `exact` to `gb-escrow` ([ADR 0002](adr/0002-x402-exact-dev-fund.md)).
+This is not Lightning Bounties / LB1. V2 participation pool is out of scope for V1-5 ([ADR 0003](adr/0003-v2-multi-hunter-pool.md) / [v2-tickets.md](v2-tickets.md); plan only). Hosted Coinbase Business checkout stays **disabled**. DEV fund without a pasted hash uses x402 `exact` to `gb-escrow` ([ADR 0002](adr/0002-x402-exact-dev-fund.md)).
 
 ## Status mapping
 

@@ -30,11 +30,13 @@ This is not Lightning Bounties, LB1, or “Lightning Bounties 2”.
 | Escrow | Platform CDP wallet `gb-escrow` holds face value |
 | Fee | **2% of bounty face** at **settlement**: `fee = floor(face * 0.02)`, hunter gets the remainder |
 | Claim-lock | V1 exclusive **72h** coordination lock — **does not move money** |
-| V2 | ~15% participation pool later; fee still on full face; not implemented |
+| V2 | Multi-hunter pool (ADR 0003 **Proposed**): 15% of **post-fee**, max 10, no exclusive 72h lock. **Not implemented** — [tickets](docs/v2-tickets.md) |
 
 Read the decision, sequences, failure modes, and GCP Secret Manager names in:
 
 - [ADR 0001 — CDP wallets + x402 USDC escrow](docs/adr/0001-cdp-x402-wallets.md)
+- [ADR 0003 — V2 multi-hunter pool](docs/adr/0003-v2-multi-hunter-pool.md) (Proposed; plan/docs only)
+- [V2 tickets / spike plan](docs/v2-tickets.md)
 - [ADR index](docs/adr/README.md)
 
 ## V0-B — GitHub App webhooks (spike)

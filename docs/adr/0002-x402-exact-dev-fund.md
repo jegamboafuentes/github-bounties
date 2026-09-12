@@ -28,7 +28,9 @@ Humans and agents both need a path that does not invent a fake checkout button.
 | Fallback | Direct USDC + optional `fundTxHash` paste | Unchanged. Do not break it. |
 | Lock confirm | Record inbound (tx hash + `x402_payment_id`) on the **pending** escrow row, then poster Lock with no paste | Recon treats `pending` as 0 attributed, so storing the hash before `funded` is safe. |
 
-V2 multi-hunter (~15% pool) is out of scope.
+V2 multi-hunter pool is out of scope here — see [ADR 0003](./0003-v2-multi-hunter-pool.md)
+(15% of post-fee, not ~15% of face). V1.5 WalletConnect + amount chips is parallel
+polish after this inbound path and does not block 0003.
 
 ## Sequence (DEV)
 
