@@ -45,6 +45,22 @@ export async function findActiveRepoByFullName(
   return row ?? null;
 }
 
+/**
+ * Delete the signed-in user's `github_links` row only.
+ * Does not touch `users`, `repos`, bounties, or claims.
+ * GitHub App installations stay on `repos` (shared by `installation_id`).
+ */
+export async function deleteGithubLinkByUserId(
+  userId: string,
+  db: Database,
+): Promise<GithubLinkRow | null> {
+  const [row] = await db
+    .delete(githubLinks)
+    .where(eq(githubLinks.userId, userId))
+    .returning();
+  return row ?? null;
+}
+
 export async function upsertGithubLink(
   userId: string,
   identity: GitHubIdentity,

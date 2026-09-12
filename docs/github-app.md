@@ -17,6 +17,7 @@ Money path (CDP / x402 / 2% fee) is a separate V0-A ADR. Do not put USDC secrets
 7. **Where can this GitHub App be installed?** For staging, **Only on this account** is fine.
 8. Create the App. Record **App ID** and **slug**. Download the **private key** PEM once. The file is gitignored (`*.pem`). Store PEM contents as `GITHUB_APP_PRIVATE_KEY` (Secret Manager / env). Never commit it.
 9. Install the App from the product **Settings → Connect GitHub** path (signed-in Google user). Prefer a private test repo.
+10. **Settings → Disconnect** unlinks `github_links` for the signed-in Google user only (confirm dialog). Use this to switch GitHub logins (e.g. `jegamboafuentes` → `enrique-lb`). It does **not** sign out of Google, delete `users`, or cascade-delete bounties/claims. After Disconnect, Connect GitHub can link a different login.
 
 Do not upload the PEM, webhook secret, client secret, or client ID to git.
 
@@ -74,6 +75,18 @@ Do **not** request Administration, Checks, Actions, or Members for V1 eligibilit
 | **Installation** | Log install/uninstall; uninstall marks `repos.is_active=false` | Uninstall → pause claim-expiry jobs for that account |
 
 Leave **webhooks Active**. Always set a webhook secret.
+
+## Disconnect vs App uninstall
+
+`github_links` is 1:1 with `users` (`github_links_user_id_uidx`) and 1:1 with GitHub account id (`github_links_github_id_uidx`). Settings **Disconnect** deletes that row for the session user so a different login can be linked.
+
+| Action | What it does | What it does not do |
+| --- | --- | --- |
+| **Settings → Disconnect** | Deletes the signed-in user’s `github_links` row | Does not delete `users`, bounties, claims, or `repos`. Does **not** revoke or uninstall the GitHub App. Google session stays. |
+| **Connect GitHub** (after Disconnect) | App install/update + user-to-server OAuth writes a new `github_links` row | Does not reuse the previous GitHub login unless that account is authorized again |
+| **GitHub App uninstall** (on GitHub, or `installation.deleted` / `suspend` webhook) | Marks matching `repos.is_active=false` | Not offered in Settings. An installation is repo/account-scoped and may be the authority for bounties other users posted. Revoking it from Disconnect would be unsafe. |
+
+To uninstall the App, use GitHub’s install settings. The product then deactivates `repos` via webhook. That is independent of hunter identity on `github_links`.
 
 ## After install: ping
 

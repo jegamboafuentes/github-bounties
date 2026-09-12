@@ -27,17 +27,11 @@ export function ConnectGitHubButton({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <Link
-        href="/api/github/connect"
-        className="w-fit rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-      >
-        {githubLogin ? "Manage GitHub App install" : "Connect GitHub"}
-      </Link>
-      <p className="text-sm text-zinc-500">
-        Product login stays Google. This installs the GitHub App for repo authority
-        and webhooks, then links <code>github_links</code> to your user.
-      </p>
-    </div>
+    <Link
+      href="/api/github/connect"
+      className="w-fit rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+    >
+      {githubLogin ? "Manage GitHub App install" : "Connect GitHub"}
+    </Link>
   );
 }
