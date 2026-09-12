@@ -105,7 +105,7 @@ Rail/client Lock errors are computed on the CDP rail (`inbound_unconfirmed`, `cd
 | `escrows` row | `fail_code` + `fail_reason` (last attempt). Status stays **`pending`** so Lock is retryable. |
 | Bounty detail + board | `pending · rail cdp · inbound_unconfirmed` plus the human reason |
 
-`escrows.status=failed` is only for **voided unfunded cancel/expiry** (`fail_code=voided_unfunded`). A failed Lock does **not** flip the row to `failed` (that state is terminal and would block retry).
+`escrows.status=failed` is only for **voided unfunded cancel/expiry**. A failed Lock does **not** flip the row to `failed` (that state is terminal and would block retry). If the poster then cancels, the row becomes `failed` but **keeps** the last Lock `fail_code` (e.g. `inbound_unconfirmed`). A cancel with no prior Lock failure stores `voided_unfunded`.
 
 The HTML **Lock in escrow** button is a Next.js server action that redirects with `?error=code: reason` (the navigation looks like 2xx). Persist + GET/detail are the durable diagnosis path. Use the JSON fund route when you need a real 4xx.
 

@@ -525,8 +525,9 @@ export async function refundEscrow(
           .update(escrows)
           .set({
             status: "failed",
-            failCode: VOIDED_UNFUNDED_CODE,
-            failReason: VOIDED_UNFUNDED_REASON,
+            // Keep the last Lock rail reason if present (dogfood: cancel after inbound_unconfirmed).
+            failCode: existing.failCode ?? VOIDED_UNFUNDED_CODE,
+            failReason: existing.failReason ?? VOIDED_UNFUNDED_REASON,
             updatedAt: now,
           })
           .where(eq(escrows.id, existing.id));

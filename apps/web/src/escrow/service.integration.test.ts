@@ -293,6 +293,17 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
         () => lockEscrowFunds(created.id, posterId, { db, rail }),
         (err: unknown) => err instanceof EscrowError && err.code === "inbound_unconfirmed",
       );
+
+      const voided = await refundEscrow(
+        created.id,
+        { actorUserId: posterId, reason: "cancel" },
+        { db, rail },
+      );
+      assert.equal(voided.bountyStatus, "cancelled");
+      const [afterCancel] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
+      assert.equal(afterCancel?.status, "failed");
+      assert.equal(afterCancel?.failCode, "inbound_unconfirmed");
+      assert.match(afterCancel?.failReason ?? "", /Send face USDC/);
     } finally {
       await sql.end({ timeout: 5 });
     }
