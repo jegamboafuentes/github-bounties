@@ -3,12 +3,14 @@ import { requirePageUser } from "@/auth/protect";
 import { AppHeader } from "@/components/header";
 import { ConnectGitHubButton } from "@/components/connect-github";
 import { DisconnectGitHubButton } from "@/components/disconnect-github";
+import { GitHubAvatar } from "@/components/github-avatar";
 import { WalletForm } from "@/components/wallet-form";
 import { signOutToHome } from "@/app/actions/auth";
 import { PRODUCT_NAME } from "@/lib/constants";
 import { getRuntimeDb } from "@/db/runtime";
 import { findGithubLinkByUserId, listReposForUser } from "@/github/persist";
 import { missingGitHubAppInstallEnv } from "@/webhooks/env";
+import { walletConnectConfigured } from "@/wallet/env";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +71,10 @@ export default async function SettingsPage({
             <dt className="text-xs uppercase tracking-wide text-zinc-500">GitHub</dt>
             <dd className="sm:col-span-2">
               {link ? (
-                <span className="font-medium">{link.githubLogin}</span>
+                <span className="inline-flex items-center gap-2 font-medium">
+                  <GitHubAvatar login={link.githubLogin} size={24} />
+                  {link.githubLogin}
+                </span>
               ) : (
                 <span className="text-zinc-500">Not linked</span>
               )}
@@ -88,13 +93,20 @@ export default async function SettingsPage({
             Payout wallet
           </h2>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Bring-your-own Base address. Saved on{" "}
+            Connect with WalletConnect (same Reown /{" "}
+            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm dark:bg-zinc-800">
+              NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+            </code>{" "}
+            wiring as fund / Lock) and save the address. Advanced paste stays available. Saved on{" "}
             <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm dark:bg-zinc-800">
               users.wallet_address
             </code>
-            . No custodial wallet.
+            . No custodial wallet. Hosted checkout stays disabled.
           </p>
-          <WalletForm defaultAddress={user.wallet_address ?? ""} />
+          <WalletForm
+            defaultAddress={user.wallet_address ?? ""}
+            walletConnectConfigured={walletConnectConfigured()}
+          />
         </section>
 
         <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -104,7 +116,8 @@ export default async function SettingsPage({
           {link ? (
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Linked as{" "}
-              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+              <span className="inline-flex items-center gap-2 align-middle font-medium text-zinc-900 dark:text-zinc-100">
+                <GitHubAvatar login={link.githubLogin} size={24} />
                 {link.githubLogin}
               </span>
               . Merge payouts match this login. Disconnect to Connect a different

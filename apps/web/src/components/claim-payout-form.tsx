@@ -6,6 +6,7 @@ import {
   payoutBreakdown,
 } from "@/bounties";
 import type { PayoutClaimView } from "@/claims";
+import { GitHubAvatar } from "@/components/github-avatar";
 import { FEE_BPS } from "@/lib/constants";
 
 export function ClaimPayoutPanel({
@@ -51,7 +52,8 @@ export function ClaimPayoutPanel({
         </div>
         <div className="grid gap-1 px-3 py-2 sm:grid-cols-3">
           <dt className="text-xs uppercase tracking-wide text-zinc-500">Hunter</dt>
-          <dd className="sm:col-span-2">
+          <dd className="inline-flex items-center gap-2 sm:col-span-2">
+            <GitHubAvatar login={payout.githubLogin} size={20} />
             {payout.hunterLabel}
             {payout.prUrl ? (
               <>

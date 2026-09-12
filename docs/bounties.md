@@ -28,7 +28,8 @@ Money: `funded` → eligible hunter claims → `settled` / `settled_partial` (bo
 
 | URL | Auth | Role |
 | --- | --- | --- |
-| `/board` | public | List + filter by repo / status. Shows **Claimed by X until …** when a lock is active |
+| `/board` | public | List + filter by repo / status. Shows **Claimed by X until …** when a lock is active. Poster and claimed/paid hunter GitHub avatars when a login is present (`avatars.githubusercontent.com/{login}`) |
+| `/settings` | Google session | Linked GitHub avatar + username. Payout wallet: WalletConnect (same Reown project id as fund) or Advanced paste |
 | `/bounties/new` | Google session | Create from issue URL. Face chips `$1 / $5 / $10 / $50 / $100` + custom |
 | `/bounties/[id]` | public read; Google for actions | Escrow lock (WalletConnect / Pay face + Advanced paste-hash), claim-lock, hunter payout claim, early release, poster force-release, cancel/refund |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` | Cron-friendly expiry |

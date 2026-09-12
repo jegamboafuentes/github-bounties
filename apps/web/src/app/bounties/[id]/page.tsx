@@ -16,6 +16,7 @@ import {
 } from "@/bounties";
 import { ClaimPayoutPanel } from "@/components/claim-payout-form";
 import { FundLockPanel } from "@/components/fund-lock-panel";
+import { GitHubAvatar } from "@/components/github-avatar";
 import { AppHeader } from "@/components/header";
 import { getRuntimeDb } from "@/db/runtime";
 import { getEscrowSnapshot } from "@/escrow";
@@ -97,8 +98,11 @@ export default async function BountyDetailPage({
         </p>
 
         {bounty.activeLock ? (
-          <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
-            {bounty.activeLock.caption} ({CLAIM_LOCK_HOURS}h exclusive lock)
+          <p className="flex items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
+            <GitHubAvatar login={bounty.activeLock.githubLogin} size={20} className="mt-0.5" />
+            <span>
+              {bounty.activeLock.caption} ({CLAIM_LOCK_HOURS}h exclusive lock)
+            </span>
           </p>
         ) : null}
 
@@ -203,7 +207,10 @@ export default async function BountyDetailPage({
         <dl className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white text-sm dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
             <dt className="text-xs uppercase tracking-wide text-zinc-500">Poster</dt>
-            <dd className="sm:col-span-2">{bounty.posterDisplayName}</dd>
+            <dd className="inline-flex items-center gap-2 sm:col-span-2">
+              <GitHubAvatar login={bounty.posterGithubLogin} size={24} />
+              {bounty.posterDisplayName}
+            </dd>
           </div>
           <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
             <dt className="text-xs uppercase tracking-wide text-zinc-500">Issue</dt>

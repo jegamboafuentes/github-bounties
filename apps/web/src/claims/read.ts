@@ -10,6 +10,8 @@ export type PayoutClaimView = {
   bountyId: string;
   hunterUserId: string;
   hunterLabel: string;
+  /** Linked github_links.login, else merged PR author login. */
+  githubLogin: string | null;
   status: "eligible" | "paid" | string;
   prNumber: number | null;
   prUrl: string | null;
@@ -65,6 +67,7 @@ export async function listPayoutClaimsForBounties(
         githubLogin: row.githubLogin ?? row.prAuthorLogin,
         displayName: row.displayName,
       }),
+      githubLogin: row.githubLogin ?? row.prAuthorLogin,
       status: row.status,
       prNumber: row.prNumber,
       prUrl: row.prUrl,

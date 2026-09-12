@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { bountyStatusLabel, formatUsdc, payoutCaption, pendingHunterLinkCaption } from "@/bounties";
 import type { BoardBounty } from "@/bounties/list";
+import { GitHubAvatar } from "@/components/github-avatar";
 
 export function BountyCard({ bounty }: { bounty: BoardBounty }) {
   return (
@@ -32,36 +33,44 @@ export function BountyCard({ bounty }: { bounty: BoardBounty }) {
         </p>
       ) : null}
       {bounty.pendingHunterLink ? (
-        <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/40 dark:text-sky-100">
-          {pendingHunterLinkCaption(bounty.pendingHunterLink.winnerLogin)}
+        <p className="flex items-start gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/40 dark:text-sky-100">
+          <GitHubAvatar login={bounty.pendingHunterLink.winnerLogin} size={20} className="mt-0.5" />
+          <span>{pendingHunterLinkCaption(bounty.pendingHunterLink.winnerLogin)}</span>
         </p>
       ) : null}
       {bounty.payout ? (
         <p
           className={
             bounty.payout.status === "paid"
-              ? "rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-100"
-              : "rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/40 dark:text-sky-100"
+              ? "flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-950 dark:bg-emerald-950/40 dark:text-emerald-100"
+              : "flex items-start gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/40 dark:text-sky-100"
           }
         >
-          {payoutCaption(bounty.payout)}
-          {bounty.payout.payoutTxHash ? (
-            <span className="mt-1 block break-all font-mono text-xs opacity-80">
-              tx {bounty.payout.payoutTxHash}
-            </span>
-          ) : null}
+          <GitHubAvatar login={bounty.payout.githubLogin} size={20} className="mt-0.5" />
+          <span>
+            {payoutCaption(bounty.payout)}
+            {bounty.payout.payoutTxHash ? (
+              <span className="mt-1 block break-all font-mono text-xs opacity-80">
+                tx {bounty.payout.payoutTxHash}
+              </span>
+            ) : null}
+          </span>
         </p>
       ) : bounty.activeLock ? (
-        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
-          {bounty.activeLock.caption}
+        <p className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
+          <GitHubAvatar login={bounty.activeLock.githubLogin} size={20} className="mt-0.5" />
+          <span>{bounty.activeLock.caption}</span>
         </p>
       ) : null}
-      <p className="text-xs text-zinc-500">
-        Posted by {bounty.posterDisplayName}
-        {" · "}
-        <a href={bounty.url} className="underline underline-offset-4" target="_blank" rel="noreferrer">
-          GitHub issue
-        </a>
+      <p className="flex items-center gap-2 text-xs text-zinc-500">
+        <GitHubAvatar login={bounty.posterGithubLogin} size={20} />
+        <span>
+          Posted by {bounty.posterDisplayName}
+          {" · "}
+          <a href={bounty.url} className="underline underline-offset-4" target="_blank" rel="noreferrer">
+            GitHub issue
+          </a>
+        </span>
       </p>
     </article>
   );

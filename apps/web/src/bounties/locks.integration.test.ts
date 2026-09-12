@@ -45,11 +45,18 @@ async function fixture() {
       displayName: "Hunter Two",
     },
   ]);
-  await db.insert(githubLinks).values({
-    userId: hunterId,
-    githubId: BigInt(5_000_000 + Number.parseInt(suffix.slice(0, 6), 16)),
-    githubLogin: `octo-${suffix}`,
-  });
+  await db.insert(githubLinks).values([
+    {
+      userId: posterId,
+      githubId: BigInt(4_000_000 + Number.parseInt(suffix.slice(0, 6), 16)),
+      githubLogin: `ada-${suffix}`,
+    },
+    {
+      userId: hunterId,
+      githubId: BigInt(5_000_000 + Number.parseInt(suffix.slice(0, 6), 16)),
+      githubLogin: `octo-${suffix}`,
+    },
+  ]);
   await db.insert(repos).values({
     id: repoId,
     githubRepoId,
@@ -175,6 +182,8 @@ describe("V1-4 bounty post + claim-lock", () => {
 
       const board = await getBoardBounty(created.id, db, new Date("2026-09-09T13:00:00.000Z"));
       assert.ok(board?.activeLock);
+      assert.equal(board.posterGithubLogin, `ada-${suffix}`);
+      assert.equal(board.activeLock.githubLogin, `octo-${suffix}`);
       assert.equal(
         board.activeLock?.caption,
         claimedByUntilLabel({
@@ -192,6 +201,8 @@ describe("V1-4 bounty post + claim-lock", () => {
       );
       assert.equal(listed.length, 1);
       assert.ok(listed[0]?.activeLock?.caption.includes("Claimed by"));
+      assert.equal(listed[0]?.posterGithubLogin, `ada-${suffix}`);
+      assert.equal(listed[0]?.activeLock?.githubLogin, `octo-${suffix}`);
 
       await assert.rejects(
         () => releaseClaimLock(created.id, otherHunterId, db),

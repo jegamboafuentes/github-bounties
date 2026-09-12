@@ -5,24 +5,34 @@ import { FUND_CHAIN, isWalletConnectConnector, shortenAddress } from "@/wallet/c
 
 export function ConnectWalletButtons({
   walletConnectConfigured,
+  purpose = "fund",
 }: {
   walletConnectConfigured: boolean;
+  purpose?: "fund" | "payout";
 }) {
   const { address, isConnected, chainId } = useAccount();
   const { connect, connectors, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain, isPending: isSwitching } = useSwitchChain();
   const wrongChain = isConnected && chainId !== FUND_CHAIN.id;
+  const chainHint =
+    purpose === "payout"
+      ? wrongChain
+        ? " · switch to Base Sepolia if you also fund from this wallet"
+        : " · Base Sepolia"
+      : wrongChain
+        ? " · switch to Base Sepolia to pay"
+        : " · Base Sepolia";
 
   if (isConnected && address) {
     return (
       <div className="flex flex-col gap-2">
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
           Connected {shortenAddress(address)}
-          {wrongChain ? " · switch to Base Sepolia to pay" : " · Base Sepolia"}
+          {chainHint}
         </p>
         <div className="flex flex-wrap gap-2">
-          {wrongChain ? (
+          {wrongChain && purpose === "fund" ? (
             <button
               type="button"
               disabled={isSwitching}
