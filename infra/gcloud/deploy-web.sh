@@ -35,6 +35,7 @@ Env (plain, not secrets):
   AUTH_TRUST_HOST is always set to true on first deploy (not in SM).
   PUBLIC_BASE_URL (optional, after live origin). AUTH_URL is an SM key later.
   GB_REGION, GB_WEB_MEMORY, GB_WEB_CPU, GB_WEB_MAX_INSTANCES, CDP_NETWORK
+  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID  (optional; Reown Cloud project id, not a secret)
   GB_ATTACH_OPTIONAL_SECRETS=1  (also bind CDP_WEBHOOK_SECRET / CRON_SECRET / AUTH_URL)
 EOF
 }

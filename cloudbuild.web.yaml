@@ -21,6 +21,8 @@ substitutions:
   _IMAGE: github-bounties-web
   _PUBLIC_BASE_URL: ""
   _ATTACH_OPTIONAL_SECRETS: "0"
+  # Public Reown project id for WalletConnect QR (not a secret). Empty = injected only.
+  _WALLETCONNECT_PROJECT_ID: ""
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -73,6 +75,7 @@ steps:
       - PUBLIC_BASE_URL=${_PUBLIC_BASE_URL}
       - GB_ATTACH_OPTIONAL_SECRETS=${_ATTACH_OPTIONAL_SECRETS}
       - GB_REGION=${_REGION}
+      - NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${_WALLETCONNECT_PROJECT_ID}
     args:
       - -c
       - |

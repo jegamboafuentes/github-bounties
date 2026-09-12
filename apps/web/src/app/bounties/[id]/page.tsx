@@ -11,17 +11,16 @@ import {
   bountyStatusLabel,
   formatUsdc,
   getBoardBounty,
-  HOSTED_CHECKOUT_DISABLED_COPY,
   LOCK_NOT_MONEY_COPY,
-  FUND_LOCK_COPY,
-  X402_EXACT_FUND_COPY,
   pendingHunterLinkCaption,
 } from "@/bounties";
 import { ClaimPayoutPanel } from "@/components/claim-payout-form";
+import { FundLockPanel } from "@/components/fund-lock-panel";
 import { AppHeader } from "@/components/header";
 import { getRuntimeDb } from "@/db/runtime";
 import { getEscrowSnapshot } from "@/escrow";
 import { CLAIM_LOCK_HOURS } from "@/lib/constants";
+import { walletConnectConfigured } from "@/wallet/env";
 
 export const dynamic = "force-dynamic";
 
@@ -218,38 +217,16 @@ export default async function BountyDetailPage({
 
         <div className="flex flex-col gap-3">
           {canFund ? (
-            <form action={fundBountyAction} className="flex flex-col gap-3">
-              <input type="hidden" name="bountyId" value={bounty.id} />
-              <p className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
-                {X402_EXACT_FUND_COPY}{" "}
-                <code className="break-all">{escrow?.x402?.resourceUrl || `/api/bounties/${bounty.id}/x402`}</code>
-              </p>
-              {escrow?.inboundRecorded ? (
-                <p className="text-sm text-emerald-800 dark:text-emerald-300">
-                  x402 inbound is recorded. Lock in escrow — no hash paste.
-                </p>
-              ) : (
-                <label className="flex flex-col gap-1 text-sm">
-                  <span className="font-medium">Fund tx hash (optional fallback)</span>
-                  <input
-                    name="fundTxHash"
-                    type="text"
-                    placeholder="0x… only if you sent USDC without x402"
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-950"
-                  />
-                </label>
-              )}
-              <button
-                type="submit"
-                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-              >
-                Lock in escrow
-              </button>
-              <p className="text-xs text-zinc-500">{FUND_LOCK_COPY}</p>
-              <p className="text-xs text-zinc-500">{HOSTED_CHECKOUT_DISABLED_COPY}</p>
-            </form>
+            <FundLockPanel
+              bountyId={bounty.id}
+              faceUsdc={bounty.amountUsdc}
+              currency={bounty.currency}
+              inboundRecorded={Boolean(escrow?.inboundRecorded)}
+              resourceUrl={escrow?.x402?.resourceUrl || `/api/bounties/${bounty.id}/x402`}
+              escrowAddress={escrow?.escrowAddress ?? null}
+              walletConnectConfigured={walletConnectConfigured()}
+              fundAction={fundBountyAction}
+            />
           ) : null}
 
           {canLock ? (

@@ -29,8 +29,8 @@ Money: `funded` → eligible hunter claims → `settled` / `settled_partial` (bo
 | URL | Auth | Role |
 | --- | --- | --- |
 | `/board` | public | List + filter by repo / status. Shows **Claimed by X until …** when a lock is active |
-| `/bounties/new` | Google session | Create from issue URL |
-| `/bounties/[id]` | public read; Google for actions | Escrow lock, claim-lock, hunter payout claim, early release, poster force-release, cancel/refund |
+| `/bounties/new` | Google session | Create from issue URL. Face chips `$1 / $5 / $10 / $50 / $100` + custom |
+| `/bounties/[id]` | public read; Google for actions | Escrow lock (WalletConnect / Pay face + Advanced paste-hash), claim-lock, hunter payout claim, early release, poster force-release, cancel/refund |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` | Cron-friendly expiry |
 
 CLI (same function): `cd apps/web && npm run expire-locks`
@@ -51,3 +51,5 @@ Hunter payout after merge: [claims.md](claims.md).
 ## Secrets
 
 Do not commit `DATABASE_URL`, Google OAuth secrets, GitHub App secrets, or `CRON_SECRET`. Empty placeholders only in `.env.example`.
+
+`NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is a **public** Reown Cloud project id (not SM). Ops must set it on Cloud Run for the WalletConnect QR button. See [docs/spikes/v15-fund-walletconnect.md](spikes/v15-fund-walletconnect.md).

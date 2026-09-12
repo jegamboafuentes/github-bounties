@@ -15,6 +15,10 @@ web_plain_env_pairs() {
   if [[ -n "${PUBLIC_BASE_URL:-}" ]]; then
     pairs+=("PUBLIC_BASE_URL=${PUBLIC_BASE_URL}")
   fi
+  # Public Reown / WalletConnect project id (not a secret). QR connect is off if unset.
+  if [[ -n "${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:-}" ]]; then
+    pairs+=("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}")
+  fi
   local IFS=","
   echo "${pairs[*]}"
 }
@@ -98,4 +102,6 @@ web_print_secret_map() {
   echo "  Plain env (not secrets):"
   echo "    AUTH_TRUST_HOST=true, CDP_NETWORK=base-sepolia, NODE_ENV=production"
   echo "    PORT=8080 (Cloud Run). PUBLIC_BASE_URL optional after live origin."
+  echo "    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID  (optional; Reown Cloud project id,"
+  echo "      not SM. Export before deploy-web.sh so WalletConnect QR works on DEV.)"
 }

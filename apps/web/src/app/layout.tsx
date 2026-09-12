@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { PRODUCT_NAME } from "@/lib/constants";
+import { WalletProviders } from "@/wallet/providers";
+import { readWalletConnectProjectId } from "@/wallet/env";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,9 +17,12 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
+  const walletConnectProjectId = readWalletConnectProjectId();
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        <WalletProviders projectId={walletConnectProjectId}>{children}</WalletProviders>
+      </body>
     </html>
   );
 }

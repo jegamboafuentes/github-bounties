@@ -88,6 +88,9 @@ describe("CDP env + mainnet refuse", () => {
     assert.equal(health.hosted_checkout.enabled, false);
     assert.equal(health.x402_exact.scheme, "exact");
     assert.equal(health.x402_exact.hostedCheckout, "disabled");
+    assert.equal(health.walletconnect.configured, false);
+    assert.equal(health.walletconnect.env, "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID");
+    assert.equal(health.walletconnect.hostedCheckout, "disabled");
   });
 
   it("derives stable idempotency keys per bounty+kind", () => {

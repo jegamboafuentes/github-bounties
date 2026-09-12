@@ -16,6 +16,7 @@ import { hostedCheckoutStatus } from "./hosted";
 import { resolveLockFundTxHash } from "./inbound";
 import { moneyIdempotencyKey } from "./idempotency";
 import { resolveRail, type CdpRail } from "./rail";
+import { walletConnectStatus } from "../wallet/env";
 import { x402ExactStatus } from "./x402";
 import { reconcileBountyNotes, type EscrowReconRow } from "./reconcile";
 import {
@@ -769,6 +770,7 @@ export function escrowHealth(env = process.env) {
     missing: probe.missing,
     hosted_checkout: hostedCheckoutStatus(),
     x402_exact: x402ExactStatus(env),
+    walletconnect: walletConnectStatus(env),
     mainnet_refused: probe.unsafeNetwork && !probe.mainnetAllowed,
     fee_bps: FEE_BPS,
     wallets: { escrow: "gb-escrow", fee: "gb-fee" },

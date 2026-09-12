@@ -170,7 +170,7 @@ Poster creates a bounty from a GitHub issue URL (repo must be App-connected). Bo
 | Expiry | `GET\|POST /api/jobs/expire-claim-locks` or `npm run expire-locks` (locks + `expires_at` refunds) |
 | Docs | [docs/bounties.md](docs/bounties.md), [docs/escrow.md](docs/escrow.md) |
 
-Escrow lock records `escrows.status=funded` (real CDP when secrets exist; otherwise a mock hash plus the exact missing `CDP_*` names). DEV fund without a pasted hash: `GET|POST /api/bounties/:id/x402` (x402 `exact` → `gb-escrow`) then Lock. Settle: `POST /api/bounties/:id/settle`. Hosted checkout stays disabled.
+Escrow lock records `escrows.status=funded` (real CDP when secrets exist; otherwise a mock hash plus the exact missing `CDP_*` names). DEV fund without a pasted hash: WalletConnect / Pay face on `/bounties/[id]`, or `GET|POST /api/bounties/:id/x402` (x402 `exact` → `gb-escrow`) then Lock. Settle: `POST /api/bounties/:id/settle`. Hosted checkout stays disabled. Ops: set public `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` for the WalletConnect button.
 
 ## V1-5 — Escrow + 2% fee (CDP / x402)
 

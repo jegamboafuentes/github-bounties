@@ -38,7 +38,7 @@ Fee is computed from **face**, never from “amount received after Coinbase fees
 
 Hosted checkout create/capture is **not implemented**. See [open Q](#hosted-checkout-disabled).
 
-x402 `exact` seller **is** implemented: `GET|POST /api/bounties/:id/x402` (payTo = `gb-escrow`, price = face F). A settled payment records inbound on the pending escrow row; poster Lock then needs no `fundTxHash`. See [spike](spikes/x402-exact-fund-lock.md).
+x402 `exact` seller **is** implemented: `GET|POST /api/bounties/:id/x402` (payTo = `gb-escrow`, price = face F). A settled payment records inbound on the pending escrow row; poster Lock then needs no `fundTxHash`. The bounty Lock UI can **Pay with wallet** (WalletConnect / injected on Base Sepolia) so the poster does not copy a hash from a block explorer. Paste-hash stays under Advanced. See [spike](spikes/x402-exact-fund-lock.md) and [V1.5 fund UX](spikes/v15-fund-walletconnect.md).
 
 ## Secrets (names only)
 
@@ -62,7 +62,12 @@ CDP_NETWORK=base-sepolia          # default
 # CDP_ALLOW_MAINNET=1             # required in addition to CDP_NETWORK=base
 # CDP_DRY_RUN=1                   # documented dry-run (default in .env.example)
 # CDP_DRY_RUN_LIVE=1              # Sepolia faucet + live transfers only
+
+# Public Reown / WalletConnect project id (not Secret Manager).
+# NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 ```
+
+`GET /api/health` → `escrow.walletconnect.configured` is `true` when that public id is set (value is never returned).
 
 ## Sepolia dry-run (after Ops stashes CDP_*)
 

@@ -203,6 +203,10 @@ gcloud run deploy github-bounties-web \
 `--set-secrets` is `ENV=SECRET_NAME:latest` (names only). Do **not** add
 `CDP_WEBHOOK_SECRET`, `CRON_SECRET`, or `AUTH_URL` on this first revision.
 
+Optional WalletConnect QR (public Reown project id — **not** SM): append
+`,NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=<reown-project-id>` to `--set-env-vars`,
+or `export NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=…` before `deploy-web.sh`.
+
 ---
 
 ## 3. Secret map (web runtime)
@@ -239,6 +243,7 @@ Plain env (not Secret Manager):
 | `NODE_ENV` | `production` | |
 | `PORT` | `8080` | Cloud Run |
 | `PUBLIC_BASE_URL` | omit | Optional env after live origin (GitHub URL helpers) |
+| `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | omit | Public Reown Cloud project id (not SM). Needed for WalletConnect QR on fund / Lock. Browser wallets work without it. Allow `https://dev.githubbounties.xyz` and `http://localhost:3000` in the Reown dashboard. |
 
 `--set-secrets` fails if the named secret has **no enabled version**.
 
