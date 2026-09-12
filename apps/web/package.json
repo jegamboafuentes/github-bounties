@@ -19,6 +19,7 @@
     "test:db": "tsx --test src/db/schema.integration.test.ts src/auth/users.integration.test.ts src/webhooks/claims.integration.test.ts src/bounties/locks.integration.test.ts src/escrow/service.integration.test.ts src/claims/payout.integration.test.ts"
   },
   "dependencies": {
+    "@coinbase/cdp-sdk": "^1.55.0",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "next": "16.3.4",

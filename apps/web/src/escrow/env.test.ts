@@ -93,4 +93,9 @@ describe("CDP env + mainnet refuse", () => {
     assert.notEqual(a, c);
     assert.match(a, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}$/);
   });
+
+  it("resolves @coinbase/cdp-sdk CdpClient for the live rail", async () => {
+    const { CdpClient } = await import("@coinbase/cdp-sdk");
+    assert.equal(typeof CdpClient, "function");
+  });
 });

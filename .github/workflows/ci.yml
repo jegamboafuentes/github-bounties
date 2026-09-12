@@ -68,3 +68,18 @@ jobs:
       - run: npm run test:db
       - name: Build Cloud Run standalone
         run: npm run build
+      - name: Standalone traces @coinbase/cdp-sdk
+        run: |
+          node --input-type=module -e "
+          import { existsSync } from 'node:fs';
+          const roots = [
+            '.next/standalone/node_modules/@coinbase/cdp-sdk',
+            '.next/standalone/apps/web/node_modules/@coinbase/cdp-sdk',
+          ];
+          const found = roots.find((r) => existsSync(r));
+          if (!found) {
+            console.error('CDP SDK missing from Next standalone output', roots);
+            process.exit(1);
+          }
+          console.log('standalone includes', found);
+          "

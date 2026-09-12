@@ -91,7 +91,11 @@ export function createMockRail(
   };
 }
 
-/** Hidden from the bundler so `next build` does not require the optional SDK. */
+/**
+ * Live CDP server-wallet client. Literal `import()` so Next standalone
+ * file-tracing copies `@coinbase/cdp-sdk` into the Cloud Run image.
+ * Mock-rail tests never construct CdpClient.
+ */
 async function loadCdpSdk(): Promise<{
   CdpClient: new () => {
     evm: {
@@ -104,20 +108,7 @@ async function loadCdpSdk(): Promise<{
     };
   };
 }> {
-  const specifier = ["@coinbase", "cdp-sdk"].join("/");
-  const importer = new Function("s", "return import(s)") as (s: string) => Promise<{
-    CdpClient: new () => {
-      evm: {
-        getOrCreateAccount: (args: { name: string }) => Promise<LiveAccount>;
-        requestFaucet?: (args: {
-          address: string;
-          network: string;
-          token: string;
-        }) => Promise<{ transactionHash?: string }>;
-      };
-    };
-  }>;
-  return importer(specifier);
+  return import("@coinbase/cdp-sdk");
 }
 
 type LiveAccount = {
@@ -132,8 +123,8 @@ type LiveAccount = {
 };
 
 /**
- * Live CDP server-wallet rail. Dynamic-imports `@coinbase/cdp-sdk` so CI
- * does not need the package. Secrets stay in env; never logged.
+ * Live CDP server-wallet rail. Dynamic-imports `@coinbase/cdp-sdk` (a
+ * runtime dependency of apps/web). Secrets stay in env; never logged.
  */
 export function createCdpRail(env: EnvMap = process.env, probe = probeCdpEnv(env)): CdpRail {
   if (probe.unsafeNetwork && !isMainnetAllowed(env)) {
