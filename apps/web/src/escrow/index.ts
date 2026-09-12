@@ -28,6 +28,7 @@ export {
   publicOrigin,
   X402_EXACT_SCHEME,
   X402_RESOURCE_PATH,
+  x402ChallengeResponseBody,
   x402DollarPrice,
   x402ExactStatus,
   x402ResourceUrl,

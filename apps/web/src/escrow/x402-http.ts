@@ -11,6 +11,7 @@ import {
   encodePaymentRequiredHeader,
   extractPaymentHeader,
   publicOrigin,
+  x402ChallengeResponseBody,
   x402ResourceUrl,
 } from "./x402";
 import { processLiveX402Exact } from "./x402-seller";
@@ -47,13 +48,12 @@ function challengeResult(
     headers: jsonHeaders({
       "PAYMENT-REQUIRED": encoded,
     }),
-    body: {
-      ...challenge,
+    body: x402ChallengeResponseBody(challenge, {
       ok: false,
       error: "payment_required",
       hosted_checkout: hostedCheckoutStatus(),
       ...extras,
-    },
+    }),
   };
 }
 
@@ -148,7 +148,7 @@ export async function handleX402Fund(
   if (!paymentHeader) {
     return challengeResult(challenge, {
       payTo: wallets.escrowAddress,
-      resource: resourceUrl,
+      resourceUrl,
       rail: rail.mode,
     });
   }

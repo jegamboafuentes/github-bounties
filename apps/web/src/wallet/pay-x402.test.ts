@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { BASE_SEPOLIA_CAIP2, USDC_BASE_SEPOLIA } from "../lib/constants";
 import { decodePaymentRequiredHeader } from "../escrow/x402";
+import { encodePaymentRequiredHeader } from "../escrow/x402";
 import {
   buildEip3009Authorization,
   buildExactPaymentPayload,
@@ -9,8 +10,10 @@ import {
   eip3009TypedData,
   encodePaymentSignatureHeader,
   lockAfterInbound,
+  parseX402Challenge,
   payX402Exact,
   randomAuthorizationNonce,
+  sameOriginX402Path,
   type WalletTypedDataSigner,
 } from "./pay-x402";
 
@@ -147,6 +150,51 @@ describe("x402 browser pay payload", () => {
     );
     assert.equal(locked.ok, true);
     if (locked.ok) assert.equal(locked.alreadyFunded, true);
+  });
+
+  it("parses the DEV 402 body when extras overwrite resource with a URL string", async () => {
+    const clobbered = {
+      ...challenge,
+      ok: false,
+      error: "payment_required",
+      resource: challenge.resource.url,
+      payTo: challenge.accepts[0].payTo,
+      rail: "cdp",
+    };
+    const parsed = parseX402Challenge(clobbered, null, "/api/bounties/b1/x402");
+    assert.ok(parsed);
+    assert.equal(parsed?.accepts[0]?.scheme, "exact");
+    assert.equal(parsed?.accepts[0]?.amount, "10000000");
+    assert.equal(parsed?.resource.url, challenge.resource.url);
+    assert.equal(sameOriginX402Path(challenge.resource.url), "/api/bounties/b1/x402");
+
+    const signer: WalletTypedDataSigner = {
+      address: "0x1111111111111111111111111111111111111111",
+      signTypedData: async () => `0x${"cd".repeat(65)}`,
+    };
+    const paid = await payX402Exact({
+      resourceUrl: "https://dev.githubbounties.xyz/api/bounties/b1/x402",
+      signer,
+      nowSeconds: 1_778_000_000,
+      nonce: "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      fetchImpl: (async (url, init) => {
+        assert.equal(String(url), "/api/bounties/b1/x402");
+        const headers = Object.fromEntries(new Headers(init?.headers).entries());
+        if (!headers["payment-signature"]) {
+          return new Response(JSON.stringify(clobbered), {
+            status: 402,
+            headers: { "PAYMENT-REQUIRED": encodePaymentRequiredHeader(challenge) },
+          });
+        }
+        return new Response(
+          JSON.stringify({ ok: true, inboundRecorded: true, fundTxHash: "0xabc" }),
+          { status: 200 },
+        );
+      }) as typeof fetch,
+    });
+    assert.equal(paid.ok, true);
+    if (paid.ok) assert.equal(paid.inboundRecorded, true);
+    assert.equal(parseX402Challenge({ error: "payment_required", resource: "/x402" }, null), null);
   });
 
   it("refuses Base mainnet in the browser pay path", async () => {

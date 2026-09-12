@@ -110,10 +110,20 @@ describe("x402 exact inbound → Lock without paste-hash", () => {
         { db, rail: mockRail, env: { PUBLIC_BASE_URL: "https://dev.githubbounties.xyz" } },
       );
       assert.equal(unpaid.status, 402);
-      const body = unpaid.body as { accepts?: { scheme?: string; amount?: string; payTo?: string }[] };
+      const body = unpaid.body as {
+        accepts?: { scheme?: string; amount?: string; payTo?: string }[];
+        resource?: { url?: string } | string;
+        resourceUrl?: string;
+      };
       assert.equal(body.accepts?.[0]?.scheme, "exact");
       assert.equal(body.accepts?.[0]?.amount, "12000000");
       assert.equal(body.accepts?.[0]?.payTo, MOCK_ESCROW_ADDRESS);
+      assert.equal(typeof body.resource, "object");
+      assert.equal(
+        (body.resource as { url?: string }).url,
+        `https://dev.githubbounties.xyz/api/bounties/${created.id}/x402`,
+      );
+      assert.equal(body.resourceUrl, `https://dev.githubbounties.xyz/api/bounties/${created.id}/x402`);
       assert.ok(unpaid.headers["PAYMENT-REQUIRED"]);
 
       const mockPaid = await handleX402Fund(

@@ -222,7 +222,7 @@ export default async function BountyDetailPage({
               faceUsdc={bounty.amountUsdc}
               currency={bounty.currency}
               inboundRecorded={Boolean(escrow?.inboundRecorded)}
-              resourceUrl={escrow?.x402?.resourceUrl || `/api/bounties/${bounty.id}/x402`}
+              resourceUrl={`/api/bounties/${bounty.id}/x402`}
               escrowAddress={escrow?.escrowAddress ?? null}
               walletConnectConfigured={walletConnectConfigured()}
               fundAction={fundBountyAction}

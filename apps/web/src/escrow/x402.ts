@@ -120,6 +120,32 @@ export function encodePaymentRequiredHeader(body: X402PaymentRequired): string {
   return Buffer.from(JSON.stringify(body), "utf8").toString("base64");
 }
 
+/**
+ * 402 JSON extras (payTo, rail, …) must not clobber spec fields.
+ * DEV #31 remount: `resource: resourceUrl` overwrote the resource object with a
+ * string, so the WalletConnect client rejected the challenge as
+ * "missing exact requirements" even though PAYMENT-REQUIRED + accepts were exact.
+ */
+export function x402ChallengeResponseBody(
+  challenge: X402PaymentRequired,
+  extras: Record<string, unknown> = {},
+): Record<string, unknown> {
+  const safe = { ...extras };
+  if (typeof safe.resource === "string") {
+    safe.resourceUrl = safe.resource;
+    delete safe.resource;
+  }
+  delete safe.accepts;
+  delete safe.x402Version;
+  return {
+    ...challenge,
+    ...safe,
+    resource: challenge.resource,
+    accepts: challenge.accepts,
+    x402Version: challenge.x402Version,
+  };
+}
+
 export function decodePaymentRequiredHeader(header: string): X402PaymentRequired {
   const json = Buffer.from(header.trim(), "base64").toString("utf8");
   return JSON.parse(json) as X402PaymentRequired;
