@@ -124,7 +124,7 @@ describe("V1-4 bounty post + claim-lock", () => {
   });
 
   it("enforces one active lock, board caption, early release, and expiry restore", async () => {
-    const { db, sql, posterId, hunterId, otherHunterId, fullName } = await fixture();
+    const { db, sql, posterId, hunterId, otherHunterId, fullName, suffix } = await fixture();
     try {
       const created = await createBountyFromIssueUrl(
         {
