@@ -1,3 +1,13 @@
+<p align="center">
+  <a href="https://dev.githubbounties.xyz">
+    <img src="apps/web/public/logo-wordmark-on-dark.png" alt="GitHub Bounties" width="420" />
+  </a>
+</p>
+
+<p align="center">
+  <strong>Live staging / dev:</strong> <a href="https://dev.githubbounties.xyz">https://dev.githubbounties.xyz</a>
+</p>
+
 # GitHub Bounties
 
 USDC bounties on GitHub issues. Official name: **GitHub Bounties**.
