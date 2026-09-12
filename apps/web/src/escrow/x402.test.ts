@@ -78,7 +78,8 @@ describe("x402 exact fund challenge", () => {
     assert.equal(resolveLockFundTxHash({}), undefined);
     assert.equal(inboundIsRecorded({ status: "pending", fundTxHash: "0xabc" }), true);
     assert.equal(inboundIsRecorded({ status: "pending", x402PaymentId: "x402:1" }), true);
-    assert.equal(inboundIsRecorded({ status: "funded", fundTxHash: "0xabc" }), false);
+    assert.equal(inboundIsRecorded({ status: "funded", fundTxHash: "0xabc" }), true);
+    assert.equal(inboundIsRecorded({ status: "settled", x402PaymentId: "x402:1" }), true);
     assert.equal(inboundIsRecorded({ status: "pending" }), false);
   });
 });

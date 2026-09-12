@@ -93,11 +93,8 @@ export default async function SettingsPage({
             Payout wallet
           </h2>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Connect with WalletConnect (same Reown /{" "}
-            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm dark:bg-zinc-800">
-              NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
-            </code>{" "}
-            wiring as fund / Lock) and save the address. Advanced paste stays available. Saved on{" "}
+            Connect with WalletConnect (same Reown client as fund / Lock) and save the address.
+            Advanced paste stays available. Saved on{" "}
             <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm dark:bg-zinc-800">
               users.wallet_address
             </code>

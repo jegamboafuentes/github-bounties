@@ -92,6 +92,9 @@ describe("x402 exact inbound → Lock without paste-hash", () => {
       assert.equal(row?.status, "funded");
       assert.equal(row?.x402PaymentId, "x402:0xabc123");
       assert.equal(row?.fundTxHash, funded.fundTxHash);
+      const fundedSnap = await getEscrowSnapshot(created.id, db);
+      assert.equal(fundedSnap?.inboundRecorded, true);
+      assert.equal(fundedSnap?.x402.inboundRecorded, true);
     } finally {
       await sql.end({ timeout: 5 });
     }
