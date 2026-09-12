@@ -19,6 +19,11 @@ Human path on top of #29. **Not** V2 multi-hunter. Hosted Coinbase checkout stay
 - Advanced: collapsed paste-hash fallback
 - `GET /api/health` → `escrow.walletconnect.configured` (boolean only)
 
+If Pay fails with `x402_payment_invalid: x402 challenge was missing exact
+requirements`, the 402 JSON used to overwrite `resource` (object) with a URL
+string. The client now reads `PAYMENT-REQUIRED` + `accepts` even when `resource`
+is a string; the seller keeps the spec `resource` object. Paste-hash still works.
+
 ## Ops: `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
 
 This is a **public** Reown Cloud project id ([dashboard.reown.com](https://dashboard.reown.com)).

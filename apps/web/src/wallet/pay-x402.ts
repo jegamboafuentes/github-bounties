@@ -162,12 +162,97 @@ export function buildExactPaymentPayload(input: {
   };
 }
 
-function asChallenge(body: unknown): X402PaymentRequired | null {
-  if (!body || typeof body !== "object") return null;
-  const rec = body as Partial<X402PaymentRequired>;
-  if (!Array.isArray(rec.accepts) || rec.accepts.length === 0) return null;
-  if (!rec.resource || typeof rec.resource !== "object") return null;
-  return rec as X402PaymentRequired;
+function decodeJsonHeader(header: string): unknown {
+  const trimmed = header.trim();
+  try {
+    if (typeof Buffer !== "undefined") {
+      return JSON.parse(Buffer.from(trimmed, "base64").toString("utf8"));
+    }
+    return JSON.parse(atob(trimmed));
+  } catch {
+    return null;
+  }
+}
+
+function normalizeResource(
+  raw: unknown,
+  fallbackUrl: string,
+): X402PaymentRequired["resource"] | null {
+  if (typeof raw === "string" && raw.trim()) {
+    return { url: raw.trim(), description: "", mimeType: "application/json" };
+  }
+  if (raw && typeof raw === "object") {
+    const rec = raw as { url?: unknown };
+    const url = typeof rec.url === "string" && rec.url.trim() ? rec.url.trim() : fallbackUrl;
+    if (!url) return null;
+    return {
+      url,
+      description: typeof (raw as { description?: unknown }).description === "string"
+        ? (raw as { description: string }).description
+        : "",
+      mimeType: "application/json",
+    };
+  }
+  if (fallbackUrl) {
+    return { url: fallbackUrl, description: "", mimeType: "application/json" };
+  }
+  return null;
+}
+
+function exactAccept(accepts: unknown): X402ExactRequirements | null {
+  if (!Array.isArray(accepts)) return null;
+  const found = accepts.find(
+    (row) => row && typeof row === "object" && (row as { scheme?: unknown }).scheme === "exact",
+  ) as X402ExactRequirements | undefined;
+  return found ?? null;
+}
+
+/**
+ * Parse a 402 challenge from PAYMENT-REQUIRED (canonical) and/or JSON body.
+ * DEV #31 body extras used to overwrite `resource` with a URL string; accepts
+ * stayed exact. Do not require resource to be an object.
+ */
+export function parseX402Challenge(
+  body: unknown,
+  paymentRequiredHeader?: string | null,
+  fallbackResourceUrl = "",
+): X402PaymentRequired | null {
+  const fromHeader = paymentRequiredHeader ? decodeJsonHeader(paymentRequiredHeader) : null;
+  const headerObj = fromHeader && typeof fromHeader === "object" ? (fromHeader as Record<string, unknown>) : null;
+  const bodyObj = body && typeof body === "object" ? (body as Record<string, unknown>) : null;
+  const accepts = headerObj?.accepts ?? bodyObj?.accepts;
+  const requirements = exactAccept(accepts);
+  if (!requirements) return null;
+  const resourceRaw = headerObj?.resource ?? bodyObj?.resource ?? bodyObj?.resourceUrl;
+  const fallback =
+    fallbackResourceUrl ||
+    (typeof bodyObj?.resourceUrl === "string" ? bodyObj.resourceUrl : "") ||
+    (typeof requirements.payTo === "string" ? "" : "");
+  const resource = normalizeResource(resourceRaw, fallback);
+  if (!resource) return null;
+  return {
+    x402Version: 2,
+    error: typeof headerObj?.error === "string"
+      ? headerObj.error
+      : typeof bodyObj?.error === "string"
+        ? bodyObj.error
+        : "Payment required",
+    resource,
+    accepts: [requirements, ...((accepts as X402ExactRequirements[]).filter((row) => row !== requirements))],
+  };
+}
+
+/** Prefer same-origin /api/bounties/:id/x402 so Pay matches the page origin. */
+export function sameOriginX402Path(resourceUrl: string): string {
+  try {
+    const parsed = new URL(resourceUrl, "http://local.invalid");
+    if (parsed.pathname.includes("/api/bounties/") && parsed.pathname.endsWith("/x402")) {
+      return parsed.pathname;
+    }
+  } catch {
+    /* keep */
+  }
+  return resourceUrl;
 }
 
 function payFailure(error: string, message: string): PayX402Result {
@@ -194,7 +279,8 @@ export async function payX402Exact(input: {
   nonce?: `0x${string}`;
 }): Promise<PayX402Result> {
   const fetchImpl = input.fetchImpl ?? fetch;
-  const first = await fetchImpl(input.resourceUrl, {
+  const payUrl = sameOriginX402Path(input.resourceUrl);
+  const first = await fetchImpl(payUrl, {
     method: "GET",
     headers: { accept: "application/json" },
     credentials: "same-origin",
@@ -225,7 +311,9 @@ export async function payX402Exact(input: {
     );
   }
 
-  const challenge = asChallenge(firstBody);
+  const paymentRequired =
+    first.headers.get("PAYMENT-REQUIRED") || first.headers.get("payment-required");
+  const challenge = parseX402Challenge(firstBody, paymentRequired, payUrl);
   const requirements = challenge?.accepts[0];
   if (!challenge || !requirements) {
     return payFailure("x402_payment_invalid", "x402 challenge was missing exact requirements.");
@@ -265,7 +353,7 @@ export async function payX402Exact(input: {
     authorization,
     signature,
   });
-  const paid = await fetchImpl(input.resourceUrl, {
+  const paid = await fetchImpl(payUrl, {
     method: "POST",
     headers: {
       accept: "application/json",

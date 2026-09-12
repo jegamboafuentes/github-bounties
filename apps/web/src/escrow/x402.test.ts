@@ -9,6 +9,7 @@ import {
   encodePaymentRequiredHeader,
   extractPaymentHeader,
   publicOrigin,
+  x402ChallengeResponseBody,
   x402DollarPrice,
   x402ExactStatus,
   x402NetworkCaip2,
@@ -39,6 +40,16 @@ describe("x402 exact fund challenge", () => {
     const encoded = encodePaymentRequiredHeader(challenge);
     const decoded = decodePaymentRequiredHeader(encoded);
     assert.deepEqual(decoded.accepts, challenge.accepts);
+
+    const clobberedExtras = x402ChallengeResponseBody(challenge, {
+      payTo: challenge.accepts[0].payTo,
+      resource: challenge.resource.url,
+      rail: "cdp",
+    });
+    assert.equal(typeof clobberedExtras.resource, "object");
+    assert.equal((clobberedExtras.resource as { url: string }).url, challenge.resource.url);
+    assert.equal(clobberedExtras.resourceUrl, challenge.resource.url);
+    assert.deepEqual(clobberedExtras.accepts, challenge.accepts);
   });
 
   it("prefers PUBLIC_BASE_URL / AUTH_URL and formats dollar prices", () => {
