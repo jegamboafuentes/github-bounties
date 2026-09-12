@@ -49,6 +49,8 @@ No custodial wallet is created.
 
 `POST /api/bounties/:id/settle` remains the V1-5 minimal settle API (poster or hunter). Product claim UX goes through `/claim`.
 
+If Claim hits a rail error **before** a hunter payout hash (e.g. CDP `rail_failed` / insufficient ETH gas on `gb-escrow`), the bounty stays **`settling`** with `escrows.fail_code` / `fail_reason`. Detail + Claim UI show the same Lock-style fail banner. Claim stays eligible and retryable. Ops must still faucet ETH — this is observability, not a gas fix.
+
 ## Mock vs CDP
 
 | Mode | When | What the hunter sees |

@@ -3,6 +3,7 @@ export {
   formatEscrowFailLabel,
   persistEscrowFail,
   toPersistedLockFailure,
+  toPersistedRailFailure,
   VOIDED_UNFUNDED_CODE,
   VOIDED_UNFUNDED_REASON,
 } from "./fail";

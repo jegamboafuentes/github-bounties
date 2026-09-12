@@ -15,10 +15,13 @@ export type PersistedLockFailure = {
 };
 
 /**
- * Normalize a Lock/rail throw into a stable code + human-readable reason.
+ * Normalize a Lock/settle/rail throw into a stable code + human-readable reason.
  * Unknown errors become `rail_failed` so dogfood never sees a blank reason.
  */
-export function toPersistedLockFailure(err: unknown): PersistedLockFailure {
+export function toPersistedRailFailure(
+  err: unknown,
+  fallbackMessage = "Rail failed.",
+): PersistedLockFailure {
   if (err instanceof EscrowError) {
     return { code: err.code, reason: err.message, error: err };
   }
@@ -26,9 +29,14 @@ export function toPersistedLockFailure(err: unknown): PersistedLockFailure {
     "rail_failed",
     err instanceof Error && err.message.trim()
       ? err.message
-      : "Lock rail failed.",
+      : fallbackMessage,
   );
   return { code: error.code, reason: error.message, error };
+}
+
+/** Lock-specific wrapper — same persist shape, Lock fallback copy. */
+export function toPersistedLockFailure(err: unknown): PersistedLockFailure {
+  return toPersistedRailFailure(err, "Lock rail failed.");
 }
 
 export function formatEscrowFailLabel(

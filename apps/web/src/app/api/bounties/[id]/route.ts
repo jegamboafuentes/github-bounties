@@ -4,7 +4,7 @@ import { getEscrowSnapshot } from "@/escrow";
 
 export const dynamic = "force-dynamic";
 
-/** Public bounty + escrow snapshot (includes last Lock fail_code / fail_reason). */
+/** Public bounty + escrow snapshot (includes last Lock/settle fail_code / fail_reason). */
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },

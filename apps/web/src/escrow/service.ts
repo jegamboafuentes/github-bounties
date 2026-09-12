@@ -8,6 +8,7 @@ import { probeCdpEnv } from "./env";
 import {
   persistEscrowFail,
   toPersistedLockFailure,
+  toPersistedRailFailure,
   VOIDED_UNFUNDED_CODE,
   VOIDED_UNFUNDED_REASON,
 } from "./fail";
@@ -201,8 +202,31 @@ export type SettleResult = {
 };
 
 /**
+ * Persist a settle-rail throw, then rethrow. Status stays `settling` when
+ * we already entered that state (ADR: no Settling → funded rollback) so Claim
+ * / settle remain retryable. Never leave a hung settle without fail fields.
+ */
+async function persistSettleRailFail(
+  db: Database,
+  bountyId: string,
+  err: unknown,
+  now: Date,
+  fallbackMessage: string,
+): Promise<never> {
+  const failure = toPersistedRailFailure(err, fallbackMessage);
+  await persistEscrowFail(db, bountyId, {
+    code: failure.code,
+    reason: failure.reason,
+    now,
+  });
+  throw failure.error;
+}
+
+/**
  * Release hunter net of 2% + FEE_OUT to gb-fee. Idempotent.
  * SettledPartial retries FEE_OUT only (ADR 0001).
+ * Hunter-leg rail failure before a payout hash stays `settling` + fail_code
+ * (retryable). Fee-leg failure writes fail fields and becomes settled_partial.
  */
 export async function settleEscrow(
   bountyId: string,
@@ -247,9 +271,21 @@ export async function settleEscrow(
   }
 
   const split = splitEarly;
-  const wallets = await rail.ensureWallets();
   const hunterKey = moneyIdempotencyKey(bountyId, "HUNTER_PAYOUT");
   const feeKey = moneyIdempotencyKey(bountyId, "FEE_OUT");
+
+  let wallets: Awaited<ReturnType<CdpRail["ensureWallets"]>>;
+  try {
+    wallets = await rail.ensureWallets();
+  } catch (err) {
+    await persistSettleRailFail(
+      opts.db,
+      bountyId,
+      err,
+      now,
+      "Settle rail failed before hunter payout.",
+    );
+  }
 
   if (escrow.status === "funded") {
     assertEscrowTransition(escrow.status, "settling");
@@ -267,8 +303,8 @@ export async function settleEscrow(
 
   let payoutTxHash = escrow.payoutTxHash;
   let feeTxHash = escrow.feeTxHash;
-  let hunterFailed = false;
   let feeFailed = false;
+  let feeFail: { code: string; reason: string } | null = null;
 
   if (!payoutTxHash) {
     try {
@@ -285,18 +321,17 @@ export async function settleEscrow(
         .set({ payoutTxHash, updatedAt: now })
         .where(eq(escrows.id, escrow.id));
     } catch (err) {
-      hunterFailed = true;
-      if (err instanceof EscrowError) {
-        throw err;
-      }
-      throw new EscrowError(
-        "rail_failed",
-        err instanceof Error ? err.message : "Hunter payout transfer failed.",
+      await persistSettleRailFail(
+        opts.db,
+        bountyId,
+        err,
+        now,
+        "Hunter payout transfer failed.",
       );
     }
   }
 
-  if (!hunterFailed && !feeTxHash && split.feeAtomic > BigInt(0)) {
+  if (!feeTxHash && split.feeAtomic > BigInt(0)) {
     try {
       const sent = await rail.transferUsdc({
         to: wallets.feeAddress,
@@ -310,8 +345,15 @@ export async function settleEscrow(
         .update(escrows)
         .set({ feeTxHash, updatedAt: now })
         .where(eq(escrows.id, escrow.id));
-    } catch {
+    } catch (err) {
       feeFailed = true;
+      const failure = toPersistedRailFailure(err, "Fee transfer failed.");
+      feeFail = { code: failure.code, reason: failure.reason };
+      await persistEscrowFail(opts.db, bountyId, {
+        code: failure.code,
+        reason: failure.reason,
+        now,
+      });
     }
   }
 
@@ -328,6 +370,8 @@ export async function settleEscrow(
         payoutTxHash,
         feeTxHash,
         escrowAddress: wallets.escrowAddress,
+        failCode: terminal === "settled" ? null : feeFail?.code ?? escrow.failCode,
+        failReason: terminal === "settled" ? null : feeFail?.reason ?? escrow.failReason,
         updatedAt: now,
       })
       .where(eq(escrows.id, escrow.id));

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { EscrowError } from "./errors";
-import { formatEscrowFailLabel, toPersistedLockFailure } from "./fail";
+import { formatEscrowFailLabel, toPersistedLockFailure, toPersistedRailFailure } from "./fail";
 import { escrowErrorJson, httpStatusForEscrowCode } from "./http";
 import { inferEscrowRail } from "./read";
 
@@ -34,6 +34,26 @@ describe("Lock fail code + reason", () => {
     assert.equal(httpStatusForEscrowCode("cdp_sdk_missing"), 400);
     assert.equal(httpStatusForEscrowCode("unauthorized"), 401);
     assert.equal(httpStatusForEscrowCode("bounty_not_found"), 404);
+  });
+
+  it("wraps settle hunter throws as rail_failed with the CDP message", () => {
+    const persisted = toPersistedRailFailure(
+      new Error("Insufficient balance to execute the transaction"),
+      "Hunter payout transfer failed.",
+    );
+    assert.equal(persisted.code, "rail_failed");
+    assert.equal(persisted.reason, "Insufficient balance to execute the transaction");
+    assert.equal(persisted.error.code, "rail_failed");
+  });
+
+  it("keeps EscrowError code on settle persist (does not remap rail_failed)", () => {
+    const err = new EscrowError(
+      "rail_failed",
+      "Insufficient balance to execute the transaction",
+    );
+    const persisted = toPersistedRailFailure(err, "Hunter payout transfer failed.");
+    assert.equal(persisted.code, "rail_failed");
+    assert.equal(persisted.reason, "Insufficient balance to execute the transaction");
   });
 
   it("formats UI label and infers rail from probe when hashes are missing", () => {

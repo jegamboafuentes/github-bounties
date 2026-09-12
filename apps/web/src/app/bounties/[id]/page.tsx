@@ -111,6 +111,15 @@ export default async function BountyDetailPage({
           <p className="text-sm text-red-600 dark:text-red-400">{query.error}</p>
         ) : null}
 
+        {bounty.escrowFail ? (
+          <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-950 dark:bg-red-950/40 dark:text-red-100">
+            Escrow fail · {bounty.escrowFail.code}
+            {bounty.escrowFail.reason ? (
+              <span className="mt-1 block text-xs opacity-90">{bounty.escrowFail.reason}</span>
+            ) : null}
+          </p>
+        ) : null}
+
         {bounty.payout ? (
           <ClaimPayoutPanel
             bountyId={bounty.id}
@@ -124,6 +133,7 @@ export default async function BountyDetailPage({
             action={claimPayoutAction}
             signedIn={Boolean(user)}
             signInHref={`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bounty.id}`)}`}
+            escrowFail={bounty.escrowFail}
           />
         ) : null}
 

@@ -18,6 +18,7 @@ export function ClaimPayoutPanel({
   action,
   signedIn,
   signInHref,
+  escrowFail,
 }: {
   bountyId: string;
   faceUsdc: string;
@@ -28,6 +29,7 @@ export function ClaimPayoutPanel({
   action: (formData: FormData) => void | Promise<void>;
   signedIn: boolean;
   signInHref: string;
+  escrowFail?: { code: string; reason: string } | null;
 }) {
   const split = payoutBreakdown(faceUsdc);
   const paid = payout.status === "paid";
@@ -96,7 +98,28 @@ export function ClaimPayoutPanel({
             <dd className="break-all font-mono text-xs sm:col-span-2">{payout.payoutTxHash}</dd>
           </div>
         ) : null}
+        {escrowFail ? (
+          <div className="grid gap-1 px-3 py-2 sm:grid-cols-3">
+            <dt className="text-xs uppercase tracking-wide text-zinc-500">Escrow fail</dt>
+            <dd className="sm:col-span-2 text-red-700 dark:text-red-400">
+              {escrowFail.code}
+              {escrowFail.reason ? (
+                <span className="mt-1 block text-xs">{escrowFail.reason}</span>
+              ) : null}
+            </dd>
+          </div>
+        ) : null}
       </dl>
+
+      {escrowFail && canClaim ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-950 dark:bg-red-950/40 dark:text-red-100">
+          Last settle failed · {escrowFail.code}. Claim stays retryable after Ops
+          fixes the rail (e.g. ETH gas on gb-escrow).
+          {escrowFail.reason ? (
+            <span className="mt-1 block text-xs opacity-90">{escrowFail.reason}</span>
+          ) : null}
+        </p>
+      ) : null}
 
       {canClaim ? (
         <form action={action} className="flex flex-col gap-3">
