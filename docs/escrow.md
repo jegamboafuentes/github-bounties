@@ -4,7 +4,7 @@ Official name: **GitHub Bounties**. Money path follows [ADR 0001](adr/0001-cdp-x
 
 `gb-escrow` (CDP server wallet) holds face **F**. On merge/settle, hunter gets `F − floor(F × 0.02)` and `gb-fee` gets the 2%. On poster cancel or bounty `expires_at` (unmerged), the funder gets **full F**. Claim-lock is still coordination only and **does not** refund.
 
-This is not Lightning Bounties / LB1. V2 participation pool is out of scope. Hosted Coinbase Business checkout stays **disabled**.
+This is not Lightning Bounties / LB1. V2 participation pool is out of scope. Hosted Coinbase Business checkout stays **disabled**. DEV fund without a pasted hash uses x402 `exact` to `gb-escrow` ([ADR 0002](adr/0002-x402-exact-dev-fund.md)).
 
 ## Status mapping
 
@@ -37,6 +37,8 @@ Fee is computed from **face**, never from “amount received after Coinbase fees
 | **refused** | `CDP_NETWORK=base` (or other mainnet alias) without `CDP_ALLOW_MAINNET=1` | No transfers. Default network is `base-sepolia`. |
 
 Hosted checkout create/capture is **not implemented**. See [open Q](#hosted-checkout-disabled).
+
+x402 `exact` seller **is** implemented: `GET|POST /api/bounties/:id/x402` (payTo = `gb-escrow`, price = face F). A settled payment records inbound on the pending escrow row; poster Lock then needs no `fundTxHash`. See [spike](spikes/x402-exact-fund-lock.md).
 
 ## Secrets (names only)
 
@@ -90,9 +92,9 @@ CDP_NETWORK=base-sepolia          # default
 
    That path faucets test USDC into `gb-escrow`, then transfers 98% / 2% to `gb-hunter-dry` / `gb-fee`. It **refuses** `CDP_NETWORK=base` unless you also set `CDP_ALLOW_MAINNET=1` (do not do that in sandbox).
 
-6. Product lock without a prior inbound tx still requires either `CDP_DRY_RUN_LIVE=1` (faucet) or an explicit fund tx hash (direct USDC / x402 `exact` to `gb-escrow`). The app will not mark `funded` on a hosted-checkout redirect.
+6. Product lock without a pasted hash: pay `GET|POST /api/bounties/:id/x402` (x402 `exact` → `gb-escrow`), then Lock. Direct USDC + optional `fundTxHash` and `CDP_DRY_RUN_LIVE=1` still work. The app will not mark `funded` on a hosted-checkout redirect.
 
-`GET /api/health` → `escrow.missing` lists unset CDP names (no values). `escrow.hosted_checkout.enabled` is always `false`.
+`GET /api/health` → `escrow.missing` lists unset CDP names (no values). `escrow.hosted_checkout.enabled` is always `false`. `escrow.x402_exact.scheme` is `exact`.
 
 ## Lock failures (fail_code / fail_reason)
 
@@ -138,9 +140,10 @@ Ops must still faucet ETH on `gb-escrow` (gas is platform opex, ADR 0001). This 
 
 | Method | Auth | Role |
 | --- | --- | --- |
-| Poster **Lock in escrow** on `/bounties/[id]` | Google | pending → funded + escrow lock |
+| Poster **Lock in escrow** on `/bounties/[id]` | Google | pending → funded + escrow lock (uses recorded x402 inbound if present) |
 | `POST /api/bounties/:id/fund` | Google | same Lock; **4xx** + `fail_code`/`fail_reason` on rail/client failure |
-| `GET /api/bounties/:id` | public | bounty + escrow snapshot (includes last Lock fail) |
+| `GET\|POST /api/bounties/:id/x402` | public (payment is the auth) | x402 `exact` seller; unpaid **402**; settle records inbound |
+| `GET /api/bounties/:id` | public | bounty + escrow snapshot (includes last Lock fail + x402 resource) |
 | Poster **Cancel and refund** | Google | full-face refund or void if never funded |
 | `POST /api/bounties/:id/settle` | Google | minimal settle (poster or hunter) |
 | Hunter **Claim payout** on `/bounties/[id]` | Google | V1-6 hunter-only path; calls `settleEscrow` |

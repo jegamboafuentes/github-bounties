@@ -19,6 +19,19 @@ export {
   readCdpNetwork,
 } from "./env";
 export { HOSTED_CHECKOUT_BLOCKER, HOSTED_CHECKOUT_ENABLED, hostedCheckoutStatus } from "./hosted";
+export { inboundIsRecorded, recordExactInbound, resolveLockFundTxHash } from "./inbound";
+export { handleX402Fund } from "./x402-http";
+export {
+  buildX402ExactChallenge,
+  encodePaymentRequiredHeader,
+  extractPaymentHeader,
+  publicOrigin,
+  X402_EXACT_SCHEME,
+  X402_RESOURCE_PATH,
+  x402DollarPrice,
+  x402ExactStatus,
+  x402ResourceUrl,
+} from "./x402";
 export { isMockTxHash, moneyIdempotencyKey } from "./idempotency";
 export {
   createCdpRail,

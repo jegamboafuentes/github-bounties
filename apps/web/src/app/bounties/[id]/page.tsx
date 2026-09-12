@@ -14,6 +14,7 @@ import {
   HOSTED_CHECKOUT_DISABLED_COPY,
   LOCK_NOT_MONEY_COPY,
   FUND_LOCK_COPY,
+  X402_EXACT_FUND_COPY,
   pendingHunterLinkCaption,
 } from "@/bounties";
 import { ClaimPayoutPanel } from "@/components/claim-payout-form";
@@ -167,6 +168,12 @@ export default async function BountyDetailPage({
                 <dd className="sm:col-span-2 text-red-700 dark:text-red-400">{escrow.failReason}</dd>
               </div>
             ) : null}
+            {escrow.inboundRecorded && escrow.status === "pending" ? (
+              <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
+                <dt className="text-xs uppercase tracking-wide text-zinc-500">x402 inbound</dt>
+                <dd className="sm:col-span-2">Recorded — Lock without pasting a hash</dd>
+              </div>
+            ) : null}
             {escrow.fundTxHash ? (
               <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
                 <dt className="text-xs uppercase tracking-wide text-zinc-500">Fund tx</dt>
@@ -213,20 +220,27 @@ export default async function BountyDetailPage({
           {canFund ? (
             <form action={fundBountyAction} className="flex flex-col gap-3">
               <input type="hidden" name="bountyId" value={bounty.id} />
-              <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium">Fund tx hash</span>
-                <input
-                  name="fundTxHash"
-                  type="text"
-                  placeholder="0x…"
-                  autoComplete="off"
-                  spellCheck={false}
-                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-950"
-                />
-              </label>
-              <p className="text-xs text-zinc-500">
-                After sending face USDC to gb-escrow, paste the tx hash here then Lock.
+              <p className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+                {X402_EXACT_FUND_COPY}{" "}
+                <code className="break-all">{escrow?.x402?.resourceUrl || `/api/bounties/${bounty.id}/x402`}</code>
               </p>
+              {escrow?.inboundRecorded ? (
+                <p className="text-sm text-emerald-800 dark:text-emerald-300">
+                  x402 inbound is recorded. Lock in escrow — no hash paste.
+                </p>
+              ) : (
+                <label className="flex flex-col gap-1 text-sm">
+                  <span className="font-medium">Fund tx hash (optional fallback)</span>
+                  <input
+                    name="fundTxHash"
+                    type="text"
+                    placeholder="0x… only if you sent USDC without x402"
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                  />
+                </label>
+              )}
               <button
                 type="submit"
                 className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"

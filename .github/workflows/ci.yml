@@ -76,10 +76,15 @@ jobs:
             '.next/standalone/node_modules/@coinbase/cdp-sdk',
             '.next/standalone/apps/web/node_modules/@coinbase/cdp-sdk',
           ];
+          const x402Roots = [
+            '.next/standalone/node_modules/@x402/core',
+            '.next/standalone/apps/web/node_modules/@x402/core',
+          ];
           const found = roots.find((r) => existsSync(r));
-          if (!found) {
-            console.error('CDP SDK missing from Next standalone output', roots);
+          const x402 = x402Roots.find((r) => existsSync(r));
+          if (!found || !x402) {
+            console.error('CDP SDK / @x402/core missing from Next standalone output', { roots, x402Roots });
             process.exit(1);
           }
-          console.log('standalone includes', found);
+          console.log('standalone includes', found, x402);
           "

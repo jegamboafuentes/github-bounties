@@ -13,8 +13,10 @@ import {
   VOIDED_UNFUNDED_REASON,
 } from "./fail";
 import { hostedCheckoutStatus } from "./hosted";
+import { resolveLockFundTxHash } from "./inbound";
 import { moneyIdempotencyKey } from "./idempotency";
 import { resolveRail, type CdpRail } from "./rail";
+import { x402ExactStatus } from "./x402";
 import { reconcileBountyNotes, type EscrowReconRow } from "./reconcile";
 import {
   assertEscrowTransition,
@@ -79,7 +81,8 @@ export type LockResult = {
 /**
  * pending → locked (`escrows.status=funded`). Poster-only.
  * Mock rail records a mock fund hash and lists exact missing CDP_*.
- * Live rail requires a confirmed inbound tx or CDP_DRY_RUN_LIVE faucet.
+ * Live rail requires a confirmed inbound (x402 exact record or pasted hash)
+ * or CDP_DRY_RUN_LIVE faucet.
  */
 export async function lockEscrowFunds(
   bountyId: string,
@@ -100,6 +103,11 @@ export async function lockEscrowFunds(
 
   const split = splitFaceUsdc(bounty.amountUsdc);
   const fundKey = moneyIdempotencyKey(bountyId, "FUND_IN");
+  const existingBeforeLock = await loadEscrow(opts.db, bountyId);
+  const fundTxHash = resolveLockFundTxHash({
+    pasted: opts.fundTxHash,
+    recorded: existingBeforeLock?.fundTxHash,
+  });
 
   let rail: CdpRail;
   let locked: Awaited<ReturnType<CdpRail["lockFace"]>>;
@@ -108,7 +116,7 @@ export async function lockEscrowFunds(
     locked = await rail.lockFace({
       amountAtomic: split.faceAtomic,
       idempotencyKey: fundKey,
-      fundTxHash: opts.fundTxHash,
+      fundTxHash,
     });
   } catch (err) {
     const failure = toPersistedLockFailure(err);
@@ -146,8 +154,9 @@ export async function lockEscrowFunds(
       escrowAddress: locked.escrowAddress,
       funderAddress,
       idempotencyKey: fundKey,
-      checkoutId: null,
-      x402Url: null,
+      checkoutId: existing?.checkoutId ?? null,
+      x402PaymentId: existing?.x402PaymentId ?? null,
+      x402Url: existing?.x402Url ?? null,
       failCode: null,
       failReason: null,
       updatedAt: now,
@@ -759,6 +768,7 @@ export function escrowHealth(env = process.env) {
     rail: probe.mode,
     missing: probe.missing,
     hosted_checkout: hostedCheckoutStatus(),
+    x402_exact: x402ExactStatus(env),
     mainnet_refused: probe.unsafeNetwork && !probe.mainnetAllowed,
     fee_bps: FEE_BPS,
     wallets: { escrow: "gb-escrow", fee: "gb-fee" },

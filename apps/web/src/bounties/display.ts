@@ -6,10 +6,13 @@ export const LOCK_NOT_MONEY_COPY =
   "Claim-lock is coordination only. It does not move money. Merge is still truth: the winner is the author of the merged pull request that closes the funded issue.";
 
 export const FUND_LOCK_COPY =
-  "Locks face USDC in gb-escrow (CDP server wallet on Base Sepolia when CDP_* is set; otherwise a documented mock rail that lists the exact missing env). Hosted checkout is disabled. Claim-lock still does not move money.";
+  "Locks face USDC in gb-escrow (CDP server wallet on Base Sepolia when CDP_* is set; otherwise a documented mock rail that lists the exact missing env). Prefer x402 exact to gb-escrow, then Lock without pasting a hash. Hosted checkout is disabled. Claim-lock still does not move money.";
 
 export const HOSTED_CHECKOUT_DISABLED_COPY =
   "Hosted Coinbase checkout is disabled until ADR 0001 confirms settlement.feeAmount / net proceeds equal face. Do not treat a checkout as escrow.";
+
+export const X402_EXACT_FUND_COPY =
+  "Pay face F with x402 exact to gb-escrow (GET|POST /api/bounties/:id/x402). After settlement the inbound hash is recorded and Lock does not need a paste. Direct-transfer hash paste remains a fallback.";
 
 export const CLAIM_PAYOUT_COPY =
   "Eligible hunter only: the merged pull request author claims net-of-fee USDC to a bring-your-own Base address. Poster and the board then see completed (paid).";
