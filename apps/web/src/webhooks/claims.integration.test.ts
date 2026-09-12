@@ -145,6 +145,10 @@ describe("eligible Claim from merge+close funded #N", () => {
       assert.equal(deliveries[0]?.winnerLogin, winnerLogin);
       assert.equal(deliveries[0]?.claimResults?.[0]?.claimId, rows[0]?.id);
       assert.equal(deliveries[0]?.claimResults?.[0]?.status, "eligible");
+
+      const board = await getBoardBounty(bountyId, db);
+      assert.equal(board?.payout?.githubLogin, winnerLogin);
+      assert.equal(board?.payout?.hunterLabel, winnerLogin);
     } finally {
       await sql.end({ timeout: 5 });
     }

@@ -34,10 +34,13 @@ export type BoardBounty = {
   repoFullName: string;
   posterDisplayName: string;
   posterUserId: string;
+  /** Present when the poster has a `github_links` row. */
+  posterGithubLogin: string | null;
   fundedAt: Date | null;
   createdAt: Date;
   activeLock: {
     hunterLabel: string;
+    githubLogin: string | null;
     expiresAt: Date;
     hunterUserId: string;
     caption: string;
@@ -79,6 +82,7 @@ export async function listBoardBounties(
       repoFullName: repos.fullName,
       posterDisplayName: users.displayName,
       posterUserId: bounties.posterUserId,
+      posterGithubLogin: githubLinks.githubLogin,
       fundedAt: bounties.fundedAt,
       createdAt: bounties.createdAt,
       lockStatus: claimLocks.status,
@@ -90,6 +94,7 @@ export async function listBoardBounties(
     .from(bounties)
     .innerJoin(repos, eq(repos.id, bounties.repoId))
     .innerJoin(users, eq(users.id, bounties.posterUserId))
+    .leftJoin(githubLinks, eq(githubLinks.userId, bounties.posterUserId))
     .leftJoin(
       claimLocks,
       and(eq(claimLocks.bountyId, bounties.id), eq(claimLocks.status, "active")),
@@ -177,6 +182,7 @@ export async function getBoardBounty(
       repoFullName: repos.fullName,
       posterDisplayName: users.displayName,
       posterUserId: bounties.posterUserId,
+      posterGithubLogin: githubLinks.githubLogin,
       fundedAt: bounties.fundedAt,
       createdAt: bounties.createdAt,
       lockStatus: claimLocks.status,
@@ -188,6 +194,7 @@ export async function getBoardBounty(
     .from(bounties)
     .innerJoin(repos, eq(repos.id, bounties.repoId))
     .innerJoin(users, eq(users.id, bounties.posterUserId))
+    .leftJoin(githubLinks, eq(githubLinks.userId, bounties.posterUserId))
     .leftJoin(
       claimLocks,
       and(eq(claimLocks.bountyId, bounties.id), eq(claimLocks.status, "active")),
@@ -249,6 +256,7 @@ type ListRow = {
   repoFullName: string;
   posterDisplayName: string;
   posterUserId: string;
+  posterGithubLogin: string | null;
   fundedAt: Date | null;
   createdAt: Date;
   lockStatus: string | null;
@@ -286,12 +294,14 @@ function toBoardBounty(
     repoFullName: row.repoFullName,
     posterDisplayName: row.posterDisplayName,
     posterUserId: row.posterUserId,
+    posterGithubLogin: row.posterGithubLogin,
     fundedAt: row.fundedAt,
     createdAt: row.createdAt,
     activeLock:
       active && row.lockExpiresAt && row.lockHunterUserId
         ? {
             hunterLabel: label,
+            githubLogin: hunter?.githubLogin ?? null,
             expiresAt: row.lockExpiresAt,
             hunterUserId: row.lockHunterUserId,
             caption: claimedByUntilLabel({
