@@ -87,7 +87,7 @@ Case-insensitive; optional colon. Same-repo: `Fixes #42`. Cross-repo: `Fixes own
 
 **Winner** = `pull_request.user.login` (and `user.id` when present). V1-3 intersects `closedIssueNumbers` with **funded** (or `claim_locked`) bounties on a connected `repos` row and upserts `claims` with `status=eligible`.
 
-The hunter must already have a `github_links` row (`github_id` or `github_login`). Otherwise no `claims` row is written — `claims.hunter_user_id` is required. That skip is persisted on `webhook_deliveries.claim_results` (and returned as `claims` / `claimSkips` on the webhook HTTP body) so Ops can see `hunter_not_linked` without Cloud Logging. After the hunter Connects GitHub as the PR author login, **Redeliver** the same GUID (or wait for Connect GitHub backfill) to insert the eligible Claim.
+The hunter must already have a `github_links` row (`github_id` or `github_login`). Otherwise no `claims` row is written — `claims.hunter_user_id` is required. That skip is persisted on `webhook_deliveries.claim_results` (and returned as `claims` / `claimSkips` on the webhook HTTP body) so Ops can see `hunter_not_linked` without Cloud Logging. The board and bounty page show the PR author login and a Connect GitHub CTA. The claim-lock holder is **not** assigned the Claim. After the hunter Connects GitHub as the PR author login, **Redeliver** the same GUID (or wait for Connect GitHub backfill) to insert the eligible Claim.
 
 Known GitHub behavior we reproduce: `must NOT close #N` still matches. Do not rely on negation in PR bodies.
 

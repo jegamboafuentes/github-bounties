@@ -15,8 +15,9 @@ This is not Lightning Bounties / LB1. No custodial wallets. No dispute window. N
 | Any other signed-in user | **403** `not_hunter` |
 | Anonymous | **401** |
 | No eligible/paid claim | **403** `not_eligible` |
+| Merge recorded but PR author has no `github_links` row | **403** `hunter_not_linked` — Connect GitHub as that login. Claim-lock holder is not paid. |
 
-The hunter is the GitHub account that authored the merged PR. V1-3 linked that login to `users` via `github_links`.
+The hunter is the GitHub account that authored the merged PR. V1-3 linked that login to `users` via `github_links`. The exclusive claim-lock holder is **not** the winner.
 
 ## Amounts
 

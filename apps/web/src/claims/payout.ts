@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { bounties, claims, users } from "../db/schema";
+import { bounties, claims, repos, users } from "../db/schema";
 import { isEscrowError, settleEscrow, type SettleResult } from "../escrow";
 import type { CdpRail } from "../escrow/rail";
 import { INVALID_BASE_ADDRESS_MESSAGE, normalizeBaseAddress } from "../lib/address";
@@ -10,6 +10,7 @@ import {
   NOT_ELIGIBLE_MESSAGE,
   NOT_HUNTER_MESSAGE,
 } from "./errors";
+import { getPendingHunterLinkForBounty, pendingHunterLinkGuidance } from "./pending-link";
 
 export type ClaimPayoutInput = {
   payoutAddress: string;
@@ -53,7 +54,7 @@ export async function claimPayout(
     throw new ClaimError("bounty_not_found", "Bounty not found.");
   }
 
-  const claim = await loadClaimForPayout(opts.db, bountyId, input.claimId);
+  const claim = await loadClaimForPayout(opts.db, bountyId, input.claimId, bounty);
   if (claim.hunterUserId !== actorUserId) {
     throw new ClaimError("not_hunter", NOT_HUNTER_MESSAGE);
   }
@@ -115,7 +116,8 @@ export async function claimPayout(
 async function loadClaimForPayout(
   db: Database,
   bountyId: string,
-  claimId?: string,
+  claimId: string | undefined,
+  bounty: typeof bounties.$inferSelect,
 ): Promise<typeof claims.$inferSelect> {
   if (claimId) {
     const [row] = await db.select().from(claims).where(eq(claims.id, claimId)).limit(1);
@@ -141,6 +143,21 @@ async function loadClaimForPayout(
   const alreadyPaid = rows.find((row) => row.status === "paid");
   const row = eligible ?? alreadyPaid;
   if (!row) {
+    const [repo] = await db
+      .select({ fullName: repos.fullName })
+      .from(repos)
+      .where(eq(repos.id, bounty.repoId))
+      .limit(1);
+    if (repo) {
+      const pending = await getPendingHunterLinkForBounty(db, {
+        id: bounty.id,
+        githubIssueNumber: bounty.githubIssueNumber,
+        repoFullName: repo.fullName,
+      });
+      if (pending) {
+        throw new ClaimError("hunter_not_linked", pendingHunterLinkGuidance(pending.winnerLogin));
+      }
+    }
     throw new ClaimError("not_eligible", NOT_ELIGIBLE_MESSAGE);
   }
   return row;

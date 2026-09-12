@@ -45,7 +45,9 @@ export async function POST(
       const status =
         err.code === "unauthorized"
           ? 401
-          : err.code === "not_hunter" || err.code === "not_eligible"
+          : err.code === "not_hunter" ||
+              err.code === "not_eligible" ||
+              err.code === "hunter_not_linked"
             ? 403
             : err.code === "bounty_not_found" || err.code === "claim_not_found"
               ? 404

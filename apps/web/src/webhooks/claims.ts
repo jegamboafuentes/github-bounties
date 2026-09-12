@@ -254,6 +254,7 @@ export async function backfillUnlinkedClaimsForHunter(
   return written;
 }
 
+/** Winner = merged PR author. Never the claim-lock holder. */
 async function findHunter(
   db: Database,
   decision: EligibilityDecision,

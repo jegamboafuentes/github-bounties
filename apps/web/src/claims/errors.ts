@@ -4,6 +4,7 @@ export type ClaimErrorCode =
   | "claim_not_found"
   | "not_hunter"
   | "not_eligible"
+  | "hunter_not_linked"
   | "invalid_payout_address";
 
 export class ClaimError extends Error {

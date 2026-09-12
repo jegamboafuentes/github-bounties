@@ -7,6 +7,9 @@ import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
 import { createDb } from "../db/client";
 import { loadDotenvFiles } from "../db/load-dotenv";
+import { getBoardBounty } from "../bounties/list";
+import { ClaimError } from "../claims/errors";
+import { claimPayout } from "../claims/payout";
 import { bounties, claims, githubLinks, repos, users, webhookDeliveries } from "../db/schema";
 import { postgresClaimWriter } from "./claims";
 import { postgresDeliveryRecorder } from "./delivery-store";
@@ -216,6 +219,25 @@ describe("eligible Claim from merge+close funded #N", () => {
       assert.equal(delivery?.winnerLogin, winnerLogin);
       assert.equal(delivery?.claimResults?.[0]?.skip, "hunter_not_linked");
       assert.equal(delivery?.claimResults?.[0]?.bountyId, bountyId);
+
+      const board = await getBoardBounty(bountyId, db);
+      assert.equal(board?.payout, null);
+      assert.equal(board?.pendingHunterLink?.winnerLogin, winnerLogin);
+      assert.equal(board?.pendingHunterLink?.skip, "hunter_not_linked");
+
+      await assert.rejects(
+        () =>
+          claimPayout(
+            bountyId,
+            posterId,
+            { payoutAddress: "0x0000000000000000000000000000000000000001" },
+            { db },
+          ),
+        (err: unknown) =>
+          err instanceof ClaimError &&
+          err.code === "hunter_not_linked" &&
+          err.message.includes(winnerLogin),
+      );
     } finally {
       await sql.end({ timeout: 5 });
     }
