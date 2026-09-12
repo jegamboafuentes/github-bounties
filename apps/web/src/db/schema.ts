@@ -243,6 +243,9 @@ export const escrows = pgTable(
     escrowAddress: text("escrow_address"),
     funderAddress: text("funder_address"),
     idempotencyKey: text("idempotency_key"),
+    /** Last Lock/rail failure. Null after a successful fund lock. */
+    failCode: text("fail_code"),
+    failReason: text("fail_reason"),
     ...timestamps,
   },
   (table) => [

@@ -23,6 +23,14 @@ export function BountyCard({ bounty }: { bounty: BoardBounty }) {
           <p className="text-xs text-zinc-500">{bountyStatusLabel(bounty.status)}</p>
         </div>
       </div>
+      {bounty.escrowFail ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-950 dark:bg-red-950/40 dark:text-red-100">
+          Escrow fail · {bounty.escrowFail.code}
+          {bounty.escrowFail.reason ? (
+            <span className="mt-1 block text-xs opacity-90">{bounty.escrowFail.reason}</span>
+          ) : null}
+        </p>
+      ) : null}
       {bounty.payout ? (
         <p
           className={

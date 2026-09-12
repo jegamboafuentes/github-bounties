@@ -20,7 +20,7 @@ export {
 export { BountyError, isBountyError } from "./errors";
 export { expireClaimLocks, expireClaimLocksForBounty } from "./expire";
 export { fundBounty } from "./fund";
-export { getBoardBounty, listBoardBounties } from "./list";
+export { getBoardBounty, listBoardBounties, type BoardBounty } from "./list";
 export { acquireClaimLock, releaseClaimLock } from "./locks";
 export { CLAIM_LABEL, notifyIssueClaimed } from "./notify";
 export { parseGitHubIssueUrl } from "./parse-issue-url";

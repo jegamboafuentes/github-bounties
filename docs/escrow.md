@@ -94,6 +94,21 @@ CDP_NETWORK=base-sepolia          # default
 
 `GET /api/health` → `escrow.missing` lists unset CDP names (no values). `escrow.hosted_checkout.enabled` is always `false`.
 
+## Lock failures (fail_code / fail_reason)
+
+Rail/client Lock errors are computed on the CDP rail (`inbound_unconfirmed`, `cdp_sdk_missing`, `missing_cdp_env`, `mainnet_refused`, `rail_failed`, …) and **must not be swallowed**.
+
+| Surface | What you see |
+| --- | --- |
+| `POST /api/bounties/:id/fund` | **4xx** JSON: `error` + `message` (same values as `fail_code` / `fail_reason`). Never HTTP 200 on failure. |
+| `GET /api/bounties/:id` | `escrow.failCode`, `escrow.failReason`, `escrow.failLabel` |
+| `escrows` row | `fail_code` + `fail_reason` (last attempt). Status stays **`pending`** so Lock is retryable. |
+| Bounty detail + board | `pending · rail cdp · inbound_unconfirmed` plus the human reason |
+
+`escrows.status=failed` is only for **voided unfunded cancel/expiry**. A failed Lock does **not** flip the row to `failed` (that state is terminal and would block retry). If the poster then cancels, the row becomes `failed` but **keeps** the last Lock `fail_code` (e.g. `inbound_unconfirmed`). A cancel with no prior Lock failure stores `voided_unfunded`.
+
+The HTML **Lock in escrow** button is a Next.js server action that redirects with `?error=code: reason` (the navigation looks like 2xx). Persist + GET/detail are the durable diagnosis path. Use the JSON fund route when you need a real 4xx.
+
 ## Idempotency + recon
 
 - One deterministic UUID per `(bounty_id, kind)` (`FUND_IN`, `HUNTER_PAYOUT`, `FEE_OUT`, `REFUND_OUT`). Passed through as the CDP idempotency key when the live rail runs.
@@ -106,6 +121,8 @@ CDP_NETWORK=base-sepolia          # default
 | Method | Auth | Role |
 | --- | --- | --- |
 | Poster **Lock in escrow** on `/bounties/[id]` | Google | pending → funded + escrow lock |
+| `POST /api/bounties/:id/fund` | Google | same Lock; **4xx** + `fail_code`/`fail_reason` on rail/client failure |
+| `GET /api/bounties/:id` | public | bounty + escrow snapshot (includes last Lock fail) |
 | Poster **Cancel and refund** | Google | full-face refund or void if never funded |
 | `POST /api/bounties/:id/settle` | Google | minimal settle (poster or hunter) |
 | Hunter **Claim payout** on `/bounties/[id]` | Google | V1-6 hunter-only path; calls `settleEscrow` |

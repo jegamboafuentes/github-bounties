@@ -1,6 +1,12 @@
 import { getCurrentPublicUser } from "@/auth/protect";
 import { getRuntimeDb } from "@/db/runtime";
-import { isEscrowError, settleEscrow } from "@/escrow";
+import {
+  escrowErrorJson,
+  httpStatusForEscrowCode,
+  isEscrowError,
+  jsonForUnknown,
+  settleEscrow,
+} from "@/escrow";
 
 export const dynamic = "force-dynamic";
 
@@ -45,25 +51,10 @@ export async function POST(
     );
   } catch (err) {
     if (isEscrowError(err)) {
-      const status =
-        err.code === "unauthorized" || err.code === "not_settler"
-          ? 403
-          : err.code === "bounty_not_found"
-            ? 404
-            : 400;
-      return Response.json(
-        {
-          ok: false,
-          error: err.code,
-          message: err.message,
-          missing: err.missing,
-        },
-        { status },
-      );
+      return Response.json(escrowErrorJson(err), { status: httpStatusForEscrowCode(err.code) });
     }
-    return Response.json(
-      { ok: false, error: "unknown", message: err instanceof Error ? err.message : "settle failed" },
-      { status: 500 },
-    );
+    return Response.json(jsonForUnknown(err instanceof Error ? err.message : "settle failed"), {
+      status: 500,
+    });
   }
 }
