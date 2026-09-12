@@ -91,26 +91,6 @@ export function createMockRail(
   };
 }
 
-/**
- * Live CDP server-wallet client. Literal `import()` so Next standalone
- * file-tracing copies `@coinbase/cdp-sdk` into the Cloud Run image.
- * Mock-rail tests never construct CdpClient.
- */
-async function loadCdpSdk(): Promise<{
-  CdpClient: new () => {
-    evm: {
-      getOrCreateAccount: (args: { name: string }) => Promise<LiveAccount>;
-      requestFaucet?: (args: {
-        address: string;
-        network: string;
-        token: string;
-      }) => Promise<{ transactionHash?: string }>;
-    };
-  };
-}> {
-  return import("@coinbase/cdp-sdk");
-}
-
 type LiveAccount = {
   address: string;
   transfer?: (args: {
@@ -121,6 +101,31 @@ type LiveAccount = {
     idempotencyKey?: string;
   }) => Promise<{ transactionHash?: string }>;
 };
+
+type CdpSdkModule = {
+  CdpClient: new () => {
+    evm: {
+      getOrCreateAccount: (args: { name: string }) => Promise<LiveAccount>;
+      requestFaucet?: (args: {
+        address: string;
+        network: string;
+        token: string;
+      }) => Promise<{ transactionHash?: string }>;
+    };
+  };
+};
+
+/**
+ * Live CDP server-wallet client. Literal `import()` so Next standalone
+ * file-tracing copies `@coinbase/cdp-sdk` into the Cloud Run image.
+ * Mock-rail tests never construct CdpClient.
+ *
+ * Cast through `unknown` — the published SDK types are stricter (`0x${string}`
+ * addresses) than this rail's stringly `LiveAccount` surface.
+ */
+async function loadCdpSdk(): Promise<CdpSdkModule> {
+  return (await import("@coinbase/cdp-sdk")) as unknown as CdpSdkModule;
+}
 
 /**
  * Live CDP server-wallet rail. Dynamic-imports `@coinbase/cdp-sdk` (a
