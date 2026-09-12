@@ -66,11 +66,11 @@ CDP_NETWORK=base-sepolia          # default
 
 1. Confirm the three required secrets exist in Secret Manager (names above). Do not print values.
 2. Load them into the runtime env (Cloud Run secret refs, or a local shell via `gcloud secrets versions access` — keep that off git and off screenshots).
-3. Install the optional SDK in the workspace that will make live calls:
+3. `@coinbase/cdp-sdk` is a runtime dependency of `apps/web`. Cloud Build / Docker `npm ci` installs it into the Cloud Run image. Local live calls need the same install:
 
    ```bash
    cd apps/web
-   npm install @coinbase/cdp-sdk
+   npm ci
    ```
 
 4. Offline probe (always safe; exits 2 if secrets are missing):

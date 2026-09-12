@@ -91,35 +91,6 @@ export function createMockRail(
   };
 }
 
-/** Hidden from the bundler so `next build` does not require the optional SDK. */
-async function loadCdpSdk(): Promise<{
-  CdpClient: new () => {
-    evm: {
-      getOrCreateAccount: (args: { name: string }) => Promise<LiveAccount>;
-      requestFaucet?: (args: {
-        address: string;
-        network: string;
-        token: string;
-      }) => Promise<{ transactionHash?: string }>;
-    };
-  };
-}> {
-  const specifier = ["@coinbase", "cdp-sdk"].join("/");
-  const importer = new Function("s", "return import(s)") as (s: string) => Promise<{
-    CdpClient: new () => {
-      evm: {
-        getOrCreateAccount: (args: { name: string }) => Promise<LiveAccount>;
-        requestFaucet?: (args: {
-          address: string;
-          network: string;
-          token: string;
-        }) => Promise<{ transactionHash?: string }>;
-      };
-    };
-  }>;
-  return importer(specifier);
-}
-
 type LiveAccount = {
   address: string;
   transfer?: (args: {
@@ -131,9 +102,34 @@ type LiveAccount = {
   }) => Promise<{ transactionHash?: string }>;
 };
 
+type CdpSdkModule = {
+  CdpClient: new () => {
+    evm: {
+      getOrCreateAccount: (args: { name: string }) => Promise<LiveAccount>;
+      requestFaucet?: (args: {
+        address: string;
+        network: string;
+        token: string;
+      }) => Promise<{ transactionHash?: string }>;
+    };
+  };
+};
+
 /**
- * Live CDP server-wallet rail. Dynamic-imports `@coinbase/cdp-sdk` so CI
- * does not need the package. Secrets stay in env; never logged.
+ * Live CDP server-wallet client. Literal `import()` so Next standalone
+ * file-tracing copies `@coinbase/cdp-sdk` into the Cloud Run image.
+ * Mock-rail tests never construct CdpClient.
+ *
+ * Cast through `unknown` — the published SDK types are stricter (`0x${string}`
+ * addresses) than this rail's stringly `LiveAccount` surface.
+ */
+async function loadCdpSdk(): Promise<CdpSdkModule> {
+  return (await import("@coinbase/cdp-sdk")) as unknown as CdpSdkModule;
+}
+
+/**
+ * Live CDP server-wallet rail. Dynamic-imports `@coinbase/cdp-sdk` (a
+ * runtime dependency of apps/web). Secrets stay in env; never logged.
  */
 export function createCdpRail(env: EnvMap = process.env, probe = probeCdpEnv(env)): CdpRail {
   if (probe.unsafeNetwork && !isMainnetAllowed(env)) {
