@@ -66,12 +66,13 @@ export async function createBountyAction(
 
 export async function fundBountyAction(formData: FormData): Promise<void> {
   const bountyId = String(formData.get("bountyId") ?? "");
+  const fundTxHash = String(formData.get("fundTxHash") ?? "").trim() || undefined;
   const user = await getCurrentPublicUser();
   if (!user) {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
   }
   try {
-    const funded = await fundBounty(bountyId, user.id, getRuntimeDb());
+    const funded = await fundBounty(bountyId, user.id, getRuntimeDb(), new Date(), { fundTxHash });
     refreshBounty(bountyId);
     if (funded.rail === "mock" && funded.missingEnv?.length) {
       redirect(

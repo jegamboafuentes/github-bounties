@@ -179,16 +179,30 @@ export default async function BountyDetailPage({
 
         <div className="flex flex-col gap-3">
           {canFund ? (
-            <form action={fundBountyAction}>
+            <form action={fundBountyAction} className="flex flex-col gap-3">
               <input type="hidden" name="bountyId" value={bounty.id} />
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="font-medium">Fund tx hash</span>
+                <input
+                  name="fundTxHash"
+                  type="text"
+                  placeholder="0x…"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-950"
+                />
+              </label>
+              <p className="text-xs text-zinc-500">
+                After sending face USDC to gb-escrow, paste the tx hash here then Lock.
+              </p>
               <button
                 type="submit"
                 className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
               >
                 Lock in escrow
               </button>
-              <p className="mt-2 text-xs text-zinc-500">{FUND_LOCK_COPY}</p>
-              <p className="mt-1 text-xs text-zinc-500">{HOSTED_CHECKOUT_DISABLED_COPY}</p>
+              <p className="text-xs text-zinc-500">{FUND_LOCK_COPY}</p>
+              <p className="text-xs text-zinc-500">{HOSTED_CHECKOUT_DISABLED_COPY}</p>
             </form>
           ) : null}
 
