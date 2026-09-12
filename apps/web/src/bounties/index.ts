@@ -21,6 +21,10 @@ export { BountyError, isBountyError } from "./errors";
 export { expireClaimLocks, expireClaimLocksForBounty } from "./expire";
 export { fundBounty } from "./fund";
 export { getBoardBounty, listBoardBounties, type BoardBounty } from "./list";
+export {
+  pendingHunterLinkCaption,
+  type PendingHunterLink,
+} from "../claims/pending-link";
 export { acquireClaimLock, releaseClaimLock } from "./locks";
 export { CLAIM_LABEL, notifyIssueClaimed } from "./notify";
 export { parseGitHubIssueUrl } from "./parse-issue-url";

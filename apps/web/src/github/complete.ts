@@ -7,6 +7,7 @@ import {
   listInstallationRepos,
   type GitHubHttp,
 } from "./api";
+import { backfillUnlinkedClaimsForHunter } from "../webhooks/claims";
 import { upsertGithubLink, upsertInstallationRepos } from "./persist";
 import { githubAppOAuthUrl, githubCallbackUrl, publicAppOrigin } from "./urls";
 import { signGitHubConnectState, verifyGitHubConnectState } from "./state";
@@ -68,6 +69,21 @@ export async function completeGitHubAppReturn(
       const row = await upsertGithubLink(input.userId, identity, db);
       githubLogin = row.githubLogin;
       linked = true;
+      try {
+        await backfillUnlinkedClaimsForHunter(
+          {
+            userId: input.userId,
+            githubLogin: row.githubLogin,
+            githubId: row.githubId,
+          },
+          db,
+        );
+      } catch (err) {
+        console.error(
+          `[eligibility] github-link backfill failed user=${input.userId} login=${row.githubLogin}`,
+          err,
+        );
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "GitHub user OAuth failed";
       return { ok: false, error: "oauth_failed", message };

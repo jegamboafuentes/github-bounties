@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { bountyStatusLabel, formatUsdc, payoutCaption } from "@/bounties";
+import { bountyStatusLabel, formatUsdc, payoutCaption, pendingHunterLinkCaption } from "@/bounties";
 import type { BoardBounty } from "@/bounties/list";
 
 export function BountyCard({ bounty }: { bounty: BoardBounty }) {
@@ -29,6 +29,11 @@ export function BountyCard({ bounty }: { bounty: BoardBounty }) {
           {bounty.escrowFail.reason ? (
             <span className="mt-1 block text-xs opacity-90">{bounty.escrowFail.reason}</span>
           ) : null}
+        </p>
+      ) : null}
+      {bounty.pendingHunterLink ? (
+        <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/40 dark:text-sky-100">
+          {pendingHunterLinkCaption(bounty.pendingHunterLink.winnerLogin)}
         </p>
       ) : null}
       {bounty.payout ? (

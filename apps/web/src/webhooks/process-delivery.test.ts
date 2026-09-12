@@ -128,6 +128,69 @@ describe("processDelivery", () => {
     assert.equal(attempts, 2);
   });
 
+  it("persists skip reasons and retries when the hunter was not linked", async () => {
+    const logs: string[] = [];
+    const store = memoryDeliveryRecorder();
+    let linked = false;
+    const deps = {
+      store,
+      log: (line: string) => logs.push(line),
+      claims: {
+        async markEligible() {
+          if (!linked) {
+            return [
+              {
+                issueNumber: 42,
+                bountyId: "bounty-1",
+                skip: "hunter_not_linked",
+                winnerLogin: "enrique-lb",
+                prNumber: 15,
+              },
+            ];
+          }
+          return [{ issueNumber: 42, bountyId: "bounty-1", claimId: "claim-1", status: "eligible" }];
+        },
+      },
+    };
+
+    const first = await processDelivery({
+      deliveryId: fixture.deliveryId,
+      event: fixture.event,
+      payload: fixture.payload,
+      deps,
+    });
+    assert.equal(first.duplicate, false);
+    assert.equal(first.decision?.eligible, true);
+    assert.equal(first.claims?.[0]?.skip, "hunter_not_linked");
+    const stored = await store.get(fixture.deliveryId);
+    assert.equal(stored?.eligible, true);
+    assert.equal(stored?.claimResults?.[0]?.skip, "hunter_not_linked");
+    assert.equal(stored?.winnerLogin, "octocat");
+    assert.match(logs.join("\n"), /skip claim.*reason=hunter_not_linked/);
+
+    linked = true;
+    const retry = await processDelivery({
+      deliveryId: fixture.deliveryId,
+      event: fixture.event,
+      payload: fixture.payload,
+      deps,
+    });
+    assert.equal(retry.duplicate, true);
+    assert.equal(retry.replayed, true);
+    assert.equal(retry.claims?.[0]?.claimId, "claim-1");
+    assert.equal((await store.get(fixture.deliveryId))?.claimResults?.[0]?.claimId, "claim-1");
+
+    const replay = await processDelivery({
+      deliveryId: fixture.deliveryId,
+      event: fixture.event,
+      payload: fixture.payload,
+      deps,
+    });
+    assert.equal(replay.duplicate, true);
+    assert.equal(replay.replayed, undefined);
+    assert.equal(replay.claims?.[0]?.claimId, "claim-1");
+  });
+
   it("does not mark eligibility for a closed-but-unmerged PR", async () => {
     const logs: string[] = [];
     const payload: GitHubWebhookPayload = structuredClone(fixture.payload);
@@ -216,5 +279,32 @@ describe("handleGitHubWebhookRequest", () => {
     assert.equal(first.body.duplicate, false);
     assert.equal(first.body.eligible, true);
     assert.equal(second.body.duplicate, true);
+  });
+
+  it("returns claimSkips on the HTTP body when markEligible skips", async () => {
+    const store = memoryDeliveryRecorder();
+    const body = Buffer.from(JSON.stringify(fixture.payload), "utf8");
+    const result = await handleGitHubWebhookRequest({
+      rawBody: body,
+      signatureHeader: githubSignature256(body, SECRET),
+      secret: SECRET,
+      deliveryId: "http-skip-1",
+      event: fixture.event,
+      deps: {
+        store,
+        log: () => {},
+        claims: {
+          async markEligible() {
+            return [{ issueNumber: 42, skip: "no_funded_bounty", prNumber: 15 }];
+          },
+        },
+      },
+    });
+    assert.equal(result.status, 200);
+    assert.equal(result.body.eligible, true);
+    assert.deepEqual(result.body.claimSkips, ["no_funded_bounty"]);
+    assert.equal((result.body.claims as { skip?: string }[])[0]?.skip, "no_funded_bounty");
+    const stored = await store.get("http-skip-1");
+    assert.equal(stored?.claimResults?.[0]?.skip, "no_funded_bounty");
   });
 });

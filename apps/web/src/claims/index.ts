@@ -7,6 +7,13 @@ export {
 } from "./errors";
 export { claimPayout, type ClaimPayoutInput, type ClaimPayoutResult } from "./payout";
 export {
+  getPendingHunterLinkForBounty,
+  listPendingHunterLinksForBounties,
+  pendingHunterLinkCaption,
+  pendingHunterLinkGuidance,
+  type PendingHunterLink,
+} from "./pending-link";
+export {
   getPayoutClaimForBounty,
   listPayoutClaimsForBounties,
   type PayoutClaimView,

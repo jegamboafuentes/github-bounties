@@ -9,6 +9,10 @@ import {
   repos,
   users,
 } from "../db/schema";
+import {
+  listPendingHunterLinksForBounties,
+  type PendingHunterLink,
+} from "../claims/pending-link";
 import { listPayoutClaimsForBounties, type PayoutClaimView } from "../claims/read";
 import { formatEscrowFailLabel } from "../escrow/fail";
 import { claimedByUntilLabel, hunterLabel, isActiveClaimLock } from "./display";
@@ -39,6 +43,8 @@ export type BoardBounty = {
     caption: string;
   } | null;
   payout: PayoutClaimView | null;
+  /** Eligible merge recorded, but the PR author has no github_links row. */
+  pendingHunterLink: PendingHunterLink | null;
   escrowFail: { code: string; reason: string; label: string } | null;
 };
 
@@ -130,8 +136,26 @@ export async function listBoardBounties(
     db,
     rows.map((row) => row.id),
   );
+  const pendingByBounty = await listPendingHunterLinksForBounties(
+    db,
+    rows
+      .filter((row) => !payoutByBounty.has(row.id))
+      .map((row) => ({
+        id: row.id,
+        githubIssueNumber: row.githubIssueNumber,
+        repoFullName: row.repoFullName,
+      })),
+  );
 
-  return rows.map((row) => toBoardBounty(row, hunterById, now, payoutByBounty.get(row.id) ?? null));
+  return rows.map((row) =>
+    toBoardBounty(
+      row,
+      hunterById,
+      now,
+      payoutByBounty.get(row.id) ?? null,
+      payoutByBounty.has(row.id) ? null : (pendingByBounty.get(row.id) ?? null),
+    ),
+  );
 }
 
 export async function getBoardBounty(
@@ -195,7 +219,23 @@ export async function getBoardBounty(
   }
 
   const payoutByBounty = await listPayoutClaimsForBounties(db, [row.id]);
-  return toBoardBounty(row, hunterById, now, payoutByBounty.get(row.id) ?? null);
+  const payout = payoutByBounty.get(row.id) ?? null;
+  const pendingByBounty = payout
+    ? new Map()
+    : await listPendingHunterLinksForBounties(db, [
+        {
+          id: row.id,
+          githubIssueNumber: row.githubIssueNumber,
+          repoFullName: row.repoFullName,
+        },
+      ]);
+  return toBoardBounty(
+    row,
+    hunterById,
+    now,
+    payout,
+    payout ? null : (pendingByBounty.get(row.id) ?? null),
+  );
 }
 
 type ListRow = {
@@ -223,6 +263,7 @@ function toBoardBounty(
   hunterById: Map<string, { displayName: string; githubLogin: string | null }>,
   now: Date,
   payout: PayoutClaimView | null,
+  pendingHunterLink: PendingHunterLink | null,
 ): BoardBounty {
   const lock =
     row.lockStatus && row.lockExpiresAt
@@ -260,6 +301,7 @@ function toBoardBounty(
           }
         : null,
     payout,
+    pendingHunterLink,
     escrowFail: toEscrowFail(row.escrowFailCode, row.escrowFailReason),
   };
 }

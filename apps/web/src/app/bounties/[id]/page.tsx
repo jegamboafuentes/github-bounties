@@ -14,6 +14,7 @@ import {
   HOSTED_CHECKOUT_DISABLED_COPY,
   LOCK_NOT_MONEY_COPY,
   FUND_LOCK_COPY,
+  pendingHunterLinkCaption,
 } from "@/bounties";
 import { ClaimPayoutPanel } from "@/components/claim-payout-form";
 import { AppHeader } from "@/components/header";
@@ -98,6 +99,20 @@ export default async function BountyDetailPage({
         {bounty.activeLock ? (
           <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
             {bounty.activeLock.caption} ({CLAIM_LOCK_HOURS}h exclusive lock)
+          </p>
+        ) : null}
+
+        {bounty.pendingHunterLink ? (
+          <p className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
+            {pendingHunterLinkCaption(bounty.pendingHunterLink.winnerLogin)}{" "}
+            <Link href="/settings" className="underline underline-offset-4">
+              Connect GitHub
+            </Link>{" "}
+            as <code>{bounty.pendingHunterLink.winnerLogin}</code>
+            {bounty.pendingHunterLink.prNumber != null
+              ? ` (merged PR #${bounty.pendingHunterLink.prNumber})`
+              : ""}
+            . Claim-lock does not assign payout.
           </p>
         ) : null}
 

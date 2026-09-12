@@ -22,6 +22,13 @@
       "when": 1789182000000,
       "tag": "0002_escrow_fail_reason",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789182600000,
+      "tag": "0003_webhook_claim_results",
+      "breakpoints": true
     }
   ]
 }

@@ -193,7 +193,7 @@ Face `F`, fee `floor(F × 0.02)`, hunter `F − fee` (example: 100 / 2 / 98).
 | Deploy revisions | `gcloud run revisions list --service=github-bounties-web --region=us-central1` |
 | Migrate job | `github-bounties-migrate` job logs |
 | Webhook HMAC / replay | GitHub App → Advanced → Recent deliveries (red/green, delivery GUID) |
-| Eligibility / duplicate | Cloud Run log lines + table `webhook_deliveries.delivery_id` |
+| Eligibility / duplicate | Cloud Run log lines + `webhook_deliveries.delivery_id` + `claim_results` / `winner_login` |
 | Escrow | `escrows.*_tx_hash`, `fee_ledger.fee_bps=200`, health `escrow.rail` |
 | Sessions | Auth.js `__Secure-authjs.session-token` (httpOnly; do not dump cookies) |
 | SQL | Cloud SQL `github-bounties-staging` query insights; no passwords in screenshots |
