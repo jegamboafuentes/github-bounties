@@ -1,8 +1,8 @@
 import { and, eq, inArray, lte } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { bounties, claimLocks, claims, escrows, feeLedger, users } from "../db/schema";
-import { FEE_BPS } from "../lib/constants";
-import { splitFaceUsdc } from "../lib/money";
+import { FEE_BPS, POOL_BPS_OF_POST_FEE } from "../lib/constants";
+import { splitFaceUsdc, splitPostFeePool, type PostFeePoolSplit } from "../lib/money";
 import { EscrowError } from "./errors";
 import { probeCdpEnv } from "./env";
 import {
@@ -15,6 +15,23 @@ import {
 import { hostedCheckoutStatus } from "./hosted";
 import { resolveLockFundTxHash } from "./inbound";
 import { moneyIdempotencyKey } from "./idempotency";
+import {
+  confirmedOutflowsFromLegs,
+  ensurePendingLegs,
+  findLedgerRow,
+  legHasTxHash,
+  loadAllocationLegs,
+  loadFrozenSettleSet,
+  markLegConfirmed,
+  markLegFailed,
+  markLegSubmitted,
+  markPoolParticipantPaid,
+  markPoolParticipantSkip,
+  planSettleLegs,
+  resolvePoolMemberAddress,
+  voidPendingAllocationLegs,
+  type PlannedLeg,
+} from "./allocation";
 import { resolveRail, type CdpRail } from "./rail";
 import { walletConnectStatus } from "../wallet/env";
 import { x402ExactStatus } from "./x402";
@@ -51,7 +68,12 @@ async function loadEscrow(db: Database, bountyId: string) {
   return row ?? null;
 }
 
-function toRecon(bountyId: string, faceUsdc: string, escrow: typeof escrows.$inferSelect): EscrowReconRow {
+function toRecon(
+  bountyId: string,
+  faceUsdc: string,
+  escrow: typeof escrows.$inferSelect,
+  outflows?: { winnerAtomic: bigint; poolAtomic: bigint; feeAtomic: bigint },
+): EscrowReconRow {
   return {
     bountyId,
     faceUsdc,
@@ -60,6 +82,9 @@ function toRecon(bountyId: string, faceUsdc: string, escrow: typeof escrows.$inf
     payoutTxHash: escrow.payoutTxHash,
     feeTxHash: escrow.feeTxHash,
     refundTxHash: escrow.refundTxHash,
+    confirmedWinnerAtomic: outflows?.winnerAtomic,
+    confirmedPoolAtomic: outflows?.poolAtomic,
+    confirmedFeeAtomic: outflows?.feeAtomic,
   };
 }
 
@@ -198,6 +223,9 @@ export type SettleResult = {
   escrowStatus: EscrowStatus;
   bountyStatus: "settled" | "settled_partial";
   hunterUsdc: string;
+  winnerUsdc: string;
+  poolTotalUsdc: string;
+  poolPaidCount: number;
   feeUsdc: string;
   feeBps: number;
   payoutTxHash: string | null;
@@ -233,10 +261,12 @@ async function persistSettleRailFail(
 }
 
 /**
- * Release hunter net of 2% + FEE_OUT to gb-fee. Idempotent.
- * SettledPartial retries FEE_OUT only (ADR 0001).
- * Hunter-leg rail failure before a payout hash stays `settling` + fail_code
- * (retryable). Fee-leg failure writes fail fields and becomes settled_partial.
+ * Multi-payee settle (ADR 0003 / V2-3): FEE_OUT + WINNER_PAYOUT + POOL_PAYOUT×N.
+ * Empty pool is byte-for-byte the V1 winner amount (post_fee).
+ *
+ * Insert allocation rows before the first transfer. Retry remaining legs only.
+ * Winner-leg failure before a hash stays `settling` + fail_code (V1-5).
+ * Any confirmed intended leg + any unconfirmed intended leg → SettledPartial.
  */
 export async function settleEscrow(
   bountyId: string,
@@ -252,26 +282,42 @@ export async function settleEscrow(
   const rail = railOf(opts);
   const bounty = await loadBounty(opts.db, bountyId);
   const escrow = await loadEscrow(opts.db, bountyId);
-  const splitEarly = splitFaceUsdc(bounty.amountUsdc, FEE_BPS);
+  const freeze = await loadFrozenSettleSet(opts.db, bountyId);
+  const poolBps = bounty.participationPoolBps ?? POOL_BPS_OF_POST_FEE;
+  const split = splitPostFeePool(bounty.amountUsdc, freeze.eligibleCount, FEE_BPS, poolBps);
+  const unpaidPool = freeze.poolMembers.filter((row) => !row.payoutTxHash);
 
   if (
     (bounty.status === "settled" || escrow?.status === "settled") &&
     escrow?.payoutTxHash &&
-    (escrow.feeTxHash || splitEarly.feeAtomic === BigInt(0))
+    (escrow.feeTxHash || split.feeAtomic === BigInt(0)) &&
+    unpaidPool.length === 0
   ) {
     const wallets = await rail.ensureWallets();
-    return finishSettleResult(bountyId, bounty.amountUsdc, escrow, "settled", rail, wallets);
+    const legs = await loadAllocationLegs(opts.db, bountyId);
+    return finishSettleResult({
+      bountyId,
+      faceUsdc: bounty.amountUsdc,
+      escrow,
+      bountyStatus: "settled",
+      rail,
+      wallets,
+      split,
+      hunterAddress: "",
+      legs,
+    });
   }
 
-  if (
-    !SETTLEABLE_BOUNTY_STATUSES.includes(
+  const settleable =
+    SETTLEABLE_BOUNTY_STATUSES.includes(
       bounty.status as (typeof SETTLEABLE_BOUNTY_STATUSES)[number],
-    )
-  ) {
+    ) ||
+    (bounty.status === "settled" && unpaidPool.length > 0);
+  if (!settleable) {
     throw new EscrowError("not_settleable", `Bounty is ${bounty.status}, not settleable.`);
   }
 
-  if (!escrow || (escrow.status !== "funded" && escrow.status !== "settling" && escrow.status !== "settled_partial")) {
+  if (!escrow || (escrow.status !== "funded" && escrow.status !== "settling" && escrow.status !== "settled_partial" && escrow.status !== "settled")) {
     throw new EscrowError("not_settleable", "Escrow is not locked (funded) — cannot settle.");
   }
 
@@ -279,10 +325,6 @@ export async function settleEscrow(
   if (input.actorUserId && input.actorUserId !== bounty.posterUserId && input.actorUserId !== hunter.userId) {
     throw new EscrowError("not_settler", "Only the poster or the winning hunter can settle.");
   }
-
-  const split = splitEarly;
-  const hunterKey = moneyIdempotencyKey(bountyId, "HUNTER_PAYOUT");
-  const feeKey = moneyIdempotencyKey(bountyId, "FEE_OUT");
 
   const wallets = await rail.ensureWallets().catch((err: unknown) =>
     persistSettleRailFail(
@@ -298,7 +340,11 @@ export async function settleEscrow(
     assertEscrowTransition(escrow.status, "settling");
     await opts.db
       .update(bounties)
-      .set({ status: "settling", updatedAt: now })
+      .set({
+        status: "settling",
+        participationPoolUsdc: split.poolTotalUsdc,
+        updatedAt: now,
+      })
       .where(
         and(eq(bounties.id, bountyId), inArray(bounties.status, ["funded", "claim_locked"])),
       );
@@ -306,56 +352,127 @@ export async function settleEscrow(
       .update(escrows)
       .set({ status: "settling", escrowAddress: wallets.escrowAddress, updatedAt: now })
       .where(eq(escrows.id, escrow.id));
+  } else if (split.poolPaidAtomic >= BigInt(0)) {
+    await opts.db
+      .update(bounties)
+      .set({ participationPoolUsdc: split.poolTotalUsdc, updatedAt: now })
+      .where(eq(bounties.id, bountyId));
   }
+
+  const poolResolved = await Promise.all(
+    freeze.poolMembers.map(async (member) => ({
+      id: member.id,
+      userId: member.userId,
+      toAddress: await resolvePoolMemberAddress(opts.db, member),
+    })),
+  );
+
+  const planned = planSettleLegs({
+    bountyId,
+    split,
+    winnerAddress: hunter.address,
+    winnerParticipantId: freeze.winner?.id ?? null,
+    feeAddress: wallets.feeAddress,
+    poolMembers: poolResolved,
+  });
+
+  let ledgerRows = await ensurePendingLegs(opts.db, bountyId, planned);
+  ledgerRows = await syncEscrowHashesOntoLedger(opts.db, planned, ledgerRows, escrow, now);
 
   let payoutTxHash = escrow.payoutTxHash;
   let feeTxHash = escrow.feeTxHash;
-  let feeFailed = false;
-  let feeFail: { code: string; reason: string } | null = null;
+  let lastFail: { code: string; reason: string } | null = null;
 
-  if (!payoutTxHash) {
-    try {
-      const sent = await rail.transferUsdc({
-        to: hunter.address,
-        amountAtomic: split.hunterAtomic,
-        idempotencyKey: hunterKey,
-        purpose: "hunter",
-        kind: "HUNTER_PAYOUT",
-      });
-      payoutTxHash = sent.txHash;
-      await opts.db
-        .update(escrows)
-        .set({ payoutTxHash, updatedAt: now })
-        .where(eq(escrows.id, escrow.id));
-    } catch (err) {
-      await persistSettleRailFail(
-        opts.db,
-        bountyId,
-        err,
-        now,
-        "Hunter payout transfer failed.",
-      );
+  for (const leg of planned) {
+    const row = findLedgerRow(ledgerRows, leg.kind, leg.participantId);
+    const existingHash =
+      row?.txHash?.trim() ||
+      (leg.kind === "WINNER_PAYOUT" ? payoutTxHash : null) ||
+      (leg.kind === "FEE_OUT" ? feeTxHash : null);
+    if (existingHash) {
+      if (leg.kind === "WINNER_PAYOUT") payoutTxHash = existingHash;
+      if (leg.kind === "FEE_OUT") feeTxHash = existingHash;
+      continue;
     }
-  }
 
-  if (!feeTxHash && split.feeAtomic > BigInt(0)) {
+    if (leg.deferReason) {
+      if (leg.participantId) {
+        await markPoolParticipantSkip(opts.db, leg.participantId, leg.deferReason, now);
+      }
+      lastFail = {
+        code: leg.deferReason,
+        reason:
+          leg.deferReason === "hunter_not_linked"
+            ? "Pool member GitHub identity is not linked. Connect GitHub, then retry settle — do not redistribute."
+            : "Pool member has no BYO Base payout address. Set users.wallet_address, then retry — do not redistribute.",
+      };
+      continue;
+    }
+
+    if (!row || !leg.toAddress) {
+      continue;
+    }
+
+    await markLegSubmitted(opts.db, row.id, now);
+    const idempotencyKey = row.idempotencyKey || leg.idempotencyKey;
     try {
       const sent = await rail.transferUsdc({
-        to: wallets.feeAddress,
-        amountAtomic: split.feeAtomic,
-        idempotencyKey: feeKey,
-        purpose: "fee",
-        kind: "FEE_OUT",
+        to: leg.toAddress,
+        amountAtomic: leg.amountAtomic,
+        idempotencyKey,
+        purpose: leg.purpose,
+        kind: leg.railKind,
       });
-      feeTxHash = sent.txHash;
-      await opts.db
-        .update(escrows)
-        .set({ feeTxHash, updatedAt: now })
-        .where(eq(escrows.id, escrow.id));
+      await markLegConfirmed(opts.db, {
+        ledgerId: row.id,
+        txHash: sent.txHash,
+        toAddress: leg.toAddress,
+        now,
+      });
+      if (leg.kind === "WINNER_PAYOUT") {
+        payoutTxHash = sent.txHash;
+        await opts.db
+          .update(escrows)
+          .set({ payoutTxHash, updatedAt: now })
+          .where(eq(escrows.id, escrow.id));
+        if (leg.participantId) {
+          await markPoolParticipantPaid(opts.db, {
+            participantId: leg.participantId,
+            payoutAddress: leg.toAddress,
+            payoutTxHash: sent.txHash,
+            now,
+          });
+        }
+      } else if (leg.kind === "FEE_OUT") {
+        feeTxHash = sent.txHash;
+        await opts.db
+          .update(escrows)
+          .set({ feeTxHash, updatedAt: now })
+          .where(eq(escrows.id, escrow.id));
+      } else if (leg.kind === "POOL_PAYOUT" && leg.participantId) {
+        await markPoolParticipantPaid(opts.db, {
+          participantId: leg.participantId,
+          payoutAddress: leg.toAddress,
+          payoutTxHash: sent.txHash,
+          now,
+        });
+      }
     } catch (err) {
-      feeFailed = true;
-      const failure = toPersistedRailFailure(err, "Fee transfer failed.");
-      feeFail = { code: failure.code, reason: failure.reason };
+      await markLegFailed(opts.db, row.id, now);
+      if (leg.kind === "WINNER_PAYOUT") {
+        await persistSettleRailFail(
+          opts.db,
+          bountyId,
+          err,
+          now,
+          "Hunter payout transfer failed.",
+        );
+      }
+      const failure = toPersistedRailFailure(
+        err,
+        leg.kind === "FEE_OUT" ? "Fee transfer failed." : "Pool payout transfer failed.",
+      );
+      lastFail = { code: failure.code, reason: failure.reason };
       await persistEscrowFail(opts.db, bountyId, {
         code: failure.code,
         reason: failure.reason,
@@ -364,9 +481,27 @@ export async function settleEscrow(
     }
   }
 
-  const terminal: "settled" | "settled_partial" =
-    payoutTxHash && (feeTxHash || split.feeAtomic === BigInt(0)) && !feeFailed
-      ? "settled"
+  ledgerRows = await loadAllocationLegs(opts.db, bountyId);
+  const intendedConfirmed = planned.every((leg) => {
+    const row = findLedgerRow(ledgerRows, leg.kind, leg.participantId);
+    if (legHasTxHash(row)) return true;
+    if (leg.kind === "WINNER_PAYOUT" && payoutTxHash) return true;
+    if (leg.kind === "FEE_OUT" && (feeTxHash || split.feeAtomic === BigInt(0))) return true;
+    return false;
+  });
+  const anyConfirmed = planned.some((leg) => {
+    const row = findLedgerRow(ledgerRows, leg.kind, leg.participantId);
+    return (
+      legHasTxHash(row) ||
+      (leg.kind === "WINNER_PAYOUT" && Boolean(payoutTxHash)) ||
+      (leg.kind === "FEE_OUT" && Boolean(feeTxHash))
+    );
+  });
+
+  const terminal: "settled" | "settled_partial" = intendedConfirmed
+    ? "settled"
+    : anyConfirmed
+      ? "settled_partial"
       : "settled_partial";
 
   await opts.db.transaction(async (tx) => {
@@ -377,14 +512,18 @@ export async function settleEscrow(
         payoutTxHash,
         feeTxHash,
         escrowAddress: wallets.escrowAddress,
-        failCode: terminal === "settled" ? null : feeFail?.code ?? escrow.failCode,
-        failReason: terminal === "settled" ? null : feeFail?.reason ?? escrow.failReason,
+        failCode: terminal === "settled" ? null : lastFail?.code ?? escrow.failCode,
+        failReason: terminal === "settled" ? null : lastFail?.reason ?? escrow.failReason,
         updatedAt: now,
       })
       .where(eq(escrows.id, escrow.id));
     await tx
       .update(bounties)
-      .set({ status: terminal, updatedAt: now })
+      .set({
+        status: terminal,
+        participationPoolUsdc: split.poolTotalUsdc,
+        updatedAt: now,
+      })
       .where(eq(bounties.id, bountyId));
 
     if (terminal === "settled") {
@@ -413,7 +552,7 @@ export async function settleEscrow(
           .set({
             status: "paid",
             payoutAddress: hunter.address,
-            payoutUsdc: split.hunterUsdc,
+            payoutUsdc: split.winnerUsdc,
             payoutTxHash,
             paidAt: now,
             updatedAt: now,
@@ -430,36 +569,78 @@ export async function settleEscrow(
 
   const latest = await loadEscrow(opts.db, bountyId);
   if (!latest) throw new EscrowError("bounty_not_found", "Escrow missing after settle.");
-  const result = finishSettleResult(bountyId, bounty.amountUsdc, latest, terminal, rail, wallets);
-  result.hunterAddress = hunter.address;
+  const result = finishSettleResult({
+    bountyId,
+    faceUsdc: bounty.amountUsdc,
+    escrow: latest,
+    bountyStatus: terminal,
+    rail,
+    wallets,
+    split,
+    hunterAddress: hunter.address,
+    legs: ledgerRows,
+  });
   return result;
 }
 
-function finishSettleResult(
-  bountyId: string,
-  faceUsdc: string,
+async function syncEscrowHashesOntoLedger(
+  db: Database,
+  planned: readonly PlannedLeg[],
+  rows: Awaited<ReturnType<typeof loadAllocationLegs>>,
   escrow: typeof escrows.$inferSelect,
-  bountyStatus: "settled" | "settled_partial",
-  rail: CdpRail,
-  wallets: { escrowAddress: string; feeAddress: string },
-): SettleResult {
-  const split = splitFaceUsdc(faceUsdc);
+  now: Date,
+): Promise<Awaited<ReturnType<typeof loadAllocationLegs>>> {
+  for (const leg of planned) {
+    const row = findLedgerRow(rows, leg.kind, leg.participantId);
+    if (!row || row.txHash) continue;
+    const hash =
+      leg.kind === "WINNER_PAYOUT"
+        ? escrow.payoutTxHash
+        : leg.kind === "FEE_OUT"
+          ? escrow.feeTxHash
+          : null;
+    if (!hash) continue;
+    await markLegConfirmed(db, {
+      ledgerId: row.id,
+      txHash: hash,
+      toAddress: leg.toAddress,
+      now,
+    });
+  }
+  return loadAllocationLegs(db, escrow.bountyId);
+}
+
+function finishSettleResult(args: {
+  bountyId: string;
+  faceUsdc: string;
+  escrow: typeof escrows.$inferSelect;
+  bountyStatus: "settled" | "settled_partial";
+  rail: CdpRail;
+  wallets: { escrowAddress: string; feeAddress: string };
+  split: PostFeePoolSplit;
+  hunterAddress: string;
+  legs: Awaited<ReturnType<typeof loadAllocationLegs>>;
+}): SettleResult {
+  const out = confirmedOutflowsFromLegs(args.legs);
   return {
-    bountyId,
-    escrowStatus: escrow.status,
-    bountyStatus,
-    hunterUsdc: split.hunterUsdc,
-    feeUsdc: split.feeUsdc,
-    feeBps: split.feeBps,
-    payoutTxHash: escrow.payoutTxHash,
-    feeTxHash: escrow.feeTxHash,
-    hunterAddress: "",
-    feeAddress: wallets.feeAddress,
-    rail: rail.mode,
-    network: rail.network,
-    missingEnv: rail.missingEnv,
+    bountyId: args.bountyId,
+    escrowStatus: args.escrow.status,
+    bountyStatus: args.bountyStatus,
+    hunterUsdc: args.split.winnerUsdc,
+    winnerUsdc: args.split.winnerUsdc,
+    poolTotalUsdc: args.split.poolTotalUsdc,
+    poolPaidCount: args.split.paidCount,
+    feeUsdc: args.split.feeUsdc,
+    feeBps: args.split.feeBps,
+    payoutTxHash: args.escrow.payoutTxHash,
+    feeTxHash: args.escrow.feeTxHash,
+    hunterAddress: args.hunterAddress,
+    feeAddress: args.wallets.feeAddress,
+    rail: args.rail.mode,
+    network: args.rail.network,
+    missingEnv: args.rail.missingEnv,
     hostedCheckout: hostedCheckoutStatus(),
-    reconcile: reconcileBountyNotes(toRecon(bountyId, faceUsdc, escrow)),
+    reconcile: reconcileBountyNotes(toRecon(args.bountyId, args.faceUsdc, args.escrow, out)),
   };
 }
 
@@ -698,6 +879,7 @@ export async function refundEscrow(
       .update(claimLocks)
       .set({ status: "released", updatedAt: now })
       .where(and(eq(claimLocks.bountyId, bountyId), eq(claimLocks.status, "active")));
+    await voidPendingAllocationLegs(tx as unknown as Database, bountyId, now);
   });
 
   const latest = await loadEscrow(opts.db, bountyId);
@@ -764,7 +946,7 @@ export function escrowHealth(env = process.env) {
   const probe = probeCdpEnv(env);
   return {
     wired: true,
-    ticket: "V1-5",
+    ticket: "V2-3",
     network: probe.network,
     rail: probe.mode,
     missing: probe.missing,

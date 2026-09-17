@@ -23,7 +23,7 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 | `work_signals` | V2-1 non-exclusive “working on this”. Many rows per bounty / `(bounty_id, user_id)`. **No** exclusive unique index. Not a money row. |
 | `webhook_deliveries` | GitHub `X-GitHub-Delivery` GUID primary key (V1-3 idempotency); `claim_results` JSON + winner/PR/repo for skip reasons |
 
-`bounties.participation_pool_bps` default **1500 = 15% of post-fee**, not of face (ADR 0003 / V2-1). `participation_pool_usdc` stays nullable until settle knows `N`. `escrows.payout_tx_hash` remains the **winner** hash for V1 readers; pool hashes live on `allocation_ledger` / `pool_participants`.
+`bounties.participation_pool_bps` default **1500 = 15% of post-fee**, not of face (ADR 0003 / V2-1). `participation_pool_usdc` is filled at V2-3 settle when `N` is known. `escrows.payout_tx_hash` remains the **winner** hash for V1 readers; pool hashes live on `allocation_ledger` / `pool_participants`.
 
 ## Status enums (ADR 0001 mapping)
 

@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { eq } from "drizzle-orm";
 import { createDb } from "../db/client";
 import { loadDotenvFiles } from "../db/load-dotenv";
-import { bounties, claims, escrows, feeLedger, repos, users } from "../db/schema";
+import { bounties, claims, escrows, feeLedger, allocationLedger, poolParticipants, repos, users } from "../db/schema";
 import { createBountyFromIssueUrl } from "../bounties/create";
 import { fundBounty } from "../bounties/fund";
 import { EscrowError } from "./errors";
@@ -417,3 +417,460 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
     }
   });
 });
+
+const ALICE_ADDRESS = "0x00000000000000000000000000000000a11ce0";
+const BOB_ADDRESS = "0x0000000000000000000000000000000000b0b0";
+
+function githubId(): bigint {
+  return BigInt(`0x${randomUUID().replace(/-/g, "").slice(0, 12)}`);
+}
+
+async function insertFreeze(
+  db: ReturnType<typeof createDb>["db"],
+  args: {
+    bountyId: string;
+    winner: { userId: string; login: string; address: string; shareUsdc: string };
+    pool: {
+      userId: string | null;
+      login: string;
+      githubId?: bigint;
+      address: string | null;
+      shareUsdc: string;
+    }[];
+    overflow?: number;
+  },
+) {
+  const frozenAt = new Date("2026-09-17T12:00:00.000Z");
+  await db.insert(poolParticipants).values({
+    bountyId: args.bountyId,
+    githubId: githubId(),
+    githubLogin: args.winner.login,
+    userId: args.winner.userId,
+    role: "winner",
+    frozenAt,
+    shareUsdc: args.winner.shareUsdc,
+    payoutAddress: args.winner.address,
+  });
+  for (const member of args.pool) {
+    await db.insert(poolParticipants).values({
+      bountyId: args.bountyId,
+      githubId: member.githubId ?? githubId(),
+      githubLogin: member.login,
+      userId: member.userId,
+      role: "pool",
+      frozenAt,
+      shareUsdc: member.shareUsdc,
+      payoutAddress: member.address,
+      skipReason: member.userId ? null : "hunter_not_linked",
+    });
+  }
+  for (let i = 0; i < (args.overflow ?? 0); i += 1) {
+    await db.insert(poolParticipants).values({
+      bountyId: args.bountyId,
+      githubId: githubId(),
+      githubLogin: `overflow${i}`,
+      role: "overflow",
+      frozenAt,
+      shareUsdc: "0",
+      skipReason: "overflow",
+    });
+  }
+}
+
+describe("V2-3 escrow multi-payee settle (mock rail)", () => {
+  it("empty-pool regression: |E|=0 freeze pays V1 post_fee; no POOL_PAYOUT rows", async () => {
+    const { db, sql, posterId, hunterId, fullName, rail } = await fixture();
+    try {
+      const created = await postBounty(db, posterId, fullName, 61);
+      await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await insertFreeze(db, {
+        bountyId: created.id,
+        winner: {
+          userId: hunterId,
+          login: "winner",
+          address: HUNTER_ADDRESS,
+          shareUsdc: "98.000000",
+        },
+        pool: [],
+      });
+
+      const settled = await settleEscrow(
+        created.id,
+        {
+          actorUserId: posterId,
+          hunterUserId: hunterId,
+          hunterPayoutAddress: HUNTER_ADDRESS,
+        },
+        { db, rail },
+      );
+      assert.equal(settled.bountyStatus, "settled");
+      assert.equal(settled.hunterUsdc, "98.000000");
+      assert.equal(settled.winnerUsdc, "98.000000");
+      assert.equal(settled.feeUsdc, "2.000000");
+      assert.equal(settled.poolTotalUsdc, "0.000000");
+      assert.equal(settled.poolPaidCount, 0);
+      assert.ok(settled.payoutTxHash?.startsWith("mock:"));
+      assert.ok(settled.feeTxHash?.startsWith("mock:"));
+      assert.ok(settled.missingEnv.includes("CDP_API_KEY_ID"));
+      assert.equal(settled.hostedCheckout.enabled, false);
+
+      const legs = await db
+        .select()
+        .from(allocationLedger)
+        .where(eq(allocationLedger.bountyId, created.id));
+      assert.equal(legs.filter((row) => row.kind === "POOL_PAYOUT").length, 0);
+      assert.equal(legs.filter((row) => row.kind === "WINNER_PAYOUT").length, 1);
+      assert.equal(legs.filter((row) => row.kind === "FEE_OUT").length, 1);
+      assert.equal(legs.find((row) => row.kind === "WINNER_PAYOUT")?.amountUsdc, "98.000000");
+      assert.equal(legs.find((row) => row.kind === "FEE_OUT")?.amountUsdc, "2.000000");
+      assert.ok(legs.every((row) => row.status === "confirmed"));
+
+      const retry = await settleEscrow(
+        created.id,
+        {
+          actorUserId: posterId,
+          hunterUserId: hunterId,
+          hunterPayoutAddress: HUNTER_ADDRESS,
+        },
+        { db, rail },
+      );
+      assert.equal(retry.payoutTxHash, settled.payoutTxHash);
+      assert.equal(retry.feeTxHash, settled.feeTxHash);
+      const legsAfter = await db
+        .select()
+        .from(allocationLedger)
+        .where(eq(allocationLedger.bountyId, created.id));
+      assert.equal(legsAfter.length, legs.length);
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("pays gb-fee + winner 83.30 + two pool members 7.35 (not 0.15 × F)", async () => {
+    const { db, sql, posterId, hunterId, suffix, fullName, rail } = await fixture();
+    const aliceId = randomUUID();
+    const bobId = randomUUID();
+    await db.insert(users).values([
+      {
+        id: aliceId,
+        googleSub: `alice-${suffix}`,
+        email: `alice-${suffix}@example.com`,
+        displayName: "Alice",
+        walletAddress: ALICE_ADDRESS,
+      },
+      {
+        id: bobId,
+        googleSub: `bob-${suffix}`,
+        email: `bob-${suffix}@example.com`,
+        displayName: "Bob",
+        walletAddress: BOB_ADDRESS,
+      },
+    ]);
+    try {
+      const created = await postBounty(db, posterId, fullName, 62);
+      await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await insertFreeze(db, {
+        bountyId: created.id,
+        winner: {
+          userId: hunterId,
+          login: "winner",
+          address: HUNTER_ADDRESS,
+          shareUsdc: "83.300000",
+        },
+        pool: [
+          {
+            userId: aliceId,
+            login: "alice",
+            address: ALICE_ADDRESS,
+            shareUsdc: "7.350000",
+          },
+          {
+            userId: bobId,
+            login: "bob",
+            address: BOB_ADDRESS,
+            shareUsdc: "7.350000",
+          },
+        ],
+      });
+
+      let transfers = 0;
+      const orig = rail.transferUsdc.bind(rail);
+      rail.transferUsdc = async (input) => {
+        transfers += 1;
+        return orig(input);
+      };
+
+      const settled = await settleEscrow(
+        created.id,
+        {
+          actorUserId: posterId,
+          hunterUserId: hunterId,
+          hunterPayoutAddress: HUNTER_ADDRESS,
+        },
+        { db, rail },
+      );
+      assert.equal(settled.bountyStatus, "settled");
+      assert.equal(settled.winnerUsdc, "83.300000");
+      assert.equal(settled.hunterUsdc, "83.300000");
+      assert.equal(settled.feeUsdc, "2.000000");
+      assert.equal(settled.poolTotalUsdc, "14.700000");
+      assert.equal(settled.poolPaidCount, 2);
+      assert.equal(transfers, 4);
+
+      const legs = await db
+        .select()
+        .from(allocationLedger)
+        .where(eq(allocationLedger.bountyId, created.id));
+      assert.equal(legs.filter((row) => row.kind === "FEE_OUT").length, 1);
+      assert.equal(legs.filter((row) => row.kind === "WINNER_PAYOUT").length, 1);
+      assert.equal(legs.filter((row) => row.kind === "POOL_PAYOUT").length, 2);
+      assert.ok(legs.every((row) => row.status === "confirmed" && row.txHash));
+      const keys = new Set(legs.map((row) => row.idempotencyKey));
+      assert.equal(keys.size, 4);
+
+      const poolRows = await db
+        .select()
+        .from(poolParticipants)
+        .where(eq(poolParticipants.bountyId, created.id));
+      const alice = poolRows.find((row) => row.githubLogin === "alice");
+      const bob = poolRows.find((row) => row.githubLogin === "bob");
+      assert.equal(alice?.payoutTxHash, legs.find((row) => row.participantId === alice?.id)?.txHash);
+      assert.equal(bob?.payoutTxHash, legs.find((row) => row.participantId === bob?.id)?.txHash);
+      assert.notEqual(alice?.payoutTxHash, settled.payoutTxHash);
+
+      const [bounty] = await db.select().from(bounties).where(eq(bounties.id, created.id));
+      assert.equal(bounty?.participationPoolUsdc, "14.700000");
+
+      const beforeRetry = transfers;
+      const retry = await settleEscrow(
+        created.id,
+        {
+          actorUserId: posterId,
+          hunterUserId: hunterId,
+          hunterPayoutAddress: HUNTER_ADDRESS,
+        },
+        { db, rail },
+      );
+      assert.equal(retry.payoutTxHash, settled.payoutTxHash);
+      assert.equal(retry.feeTxHash, settled.feeTxHash);
+      assert.equal(transfers, beforeRetry);
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("SettledPartial retries remaining pool/fee legs only; never reverses a confirmed hash", async () => {
+    const { db, sql, posterId, hunterId, suffix, fullName } = await fixture();
+    const aliceId = randomUUID();
+    const bobId = randomUUID();
+    await db.insert(users).values([
+      {
+        id: aliceId,
+        googleSub: `alice-${suffix}`,
+        email: `alice-${suffix}@example.com`,
+        displayName: "Alice",
+        walletAddress: ALICE_ADDRESS,
+      },
+      {
+        id: bobId,
+        googleSub: `bob-${suffix}`,
+        email: `bob-${suffix}@example.com`,
+        displayName: "Bob",
+        walletAddress: BOB_ADDRESS,
+      },
+    ]);
+    const rail = createMockRail(probeCdpEnv({}));
+    let poolCalls = 0;
+    const orig = rail.transferUsdc.bind(rail);
+    rail.transferUsdc = async (input) => {
+      if (input.purpose === "pool") {
+        poolCalls += 1;
+        if (poolCalls === 1) {
+          throw new Error("simulated pool drop");
+        }
+      }
+      return orig(input);
+    };
+    try {
+      const created = await postBounty(db, posterId, fullName, 63);
+      await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await insertFreeze(db, {
+        bountyId: created.id,
+        winner: {
+          userId: hunterId,
+          login: "winner",
+          address: HUNTER_ADDRESS,
+          shareUsdc: "83.300000",
+        },
+        pool: [
+          { userId: aliceId, login: "alice", address: ALICE_ADDRESS, shareUsdc: "7.350000" },
+          { userId: bobId, login: "bob", address: BOB_ADDRESS, shareUsdc: "7.350000" },
+        ],
+      });
+
+      const partial = await settleEscrow(
+        created.id,
+        {
+          actorUserId: posterId,
+          hunterUserId: hunterId,
+          hunterPayoutAddress: HUNTER_ADDRESS,
+        },
+        { db, rail },
+      );
+      assert.equal(partial.bountyStatus, "settled_partial");
+      assert.ok(partial.payoutTxHash);
+      assert.ok(partial.feeTxHash);
+
+      const legs = await db
+        .select()
+        .from(allocationLedger)
+        .where(eq(allocationLedger.bountyId, created.id));
+      const poolLegs = legs.filter((row) => row.kind === "POOL_PAYOUT");
+      assert.equal(poolLegs.filter((row) => row.txHash).length, 1);
+      assert.equal(poolLegs.filter((row) => !row.txHash).length, 1);
+      const winnerHash = legs.find((row) => row.kind === "WINNER_PAYOUT")?.txHash;
+
+      const retried = await settleEscrow(
+        created.id,
+        {
+          actorUserId: posterId,
+          hunterUserId: hunterId,
+          hunterPayoutAddress: HUNTER_ADDRESS,
+        },
+        { db, rail },
+      );
+      assert.equal(retried.bountyStatus, "settled");
+      assert.equal(retried.payoutTxHash, partial.payoutTxHash);
+      assert.equal(retried.feeTxHash, partial.feeTxHash);
+      const after = await db
+        .select()
+        .from(allocationLedger)
+        .where(eq(allocationLedger.bountyId, created.id));
+      assert.equal(after.find((row) => row.kind === "WINNER_PAYOUT")?.txHash, winnerHash);
+      assert.equal(after.filter((row) => row.kind === "POOL_PAYOUT" && row.txHash).length, 2);
+      assert.ok(after.every((row) => row.status === "confirmed"));
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("keeps an unlinked pool member retryable and does not redistribute", async () => {
+    const { db, sql, posterId, hunterId, suffix, fullName, rail } = await fixture();
+    const aliceId = randomUUID();
+    await db.insert(users).values({
+      id: aliceId,
+      googleSub: `alice-${suffix}`,
+      email: `alice-${suffix}@example.com`,
+      displayName: "Alice",
+      walletAddress: ALICE_ADDRESS,
+    });
+    try {
+      const created = await postBounty(db, posterId, fullName, 64);
+      await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await insertFreeze(db, {
+        bountyId: created.id,
+        winner: {
+          userId: hunterId,
+          login: "winner",
+          address: HUNTER_ADDRESS,
+          shareUsdc: "83.300000",
+        },
+        pool: [
+          { userId: aliceId, login: "alice", address: ALICE_ADDRESS, shareUsdc: "7.350000" },
+          {
+            userId: null,
+            login: "unlinked",
+            address: null,
+            shareUsdc: "7.350000",
+          },
+        ],
+      });
+
+      const partial = await settleEscrow(
+        created.id,
+        {
+          actorUserId: posterId,
+          hunterUserId: hunterId,
+          hunterPayoutAddress: HUNTER_ADDRESS,
+        },
+        { db, rail },
+      );
+      assert.equal(partial.bountyStatus, "settled_partial");
+      assert.equal(partial.winnerUsdc, "83.300000");
+      assert.notEqual(partial.winnerUsdc, "98.000000");
+      assert.ok(partial.payoutTxHash);
+      assert.ok(partial.feeTxHash);
+
+      const legs = await db
+        .select()
+        .from(allocationLedger)
+        .where(eq(allocationLedger.bountyId, created.id));
+      const unlinked = legs.find(
+        (row) => row.kind === "POOL_PAYOUT" && !row.txHash,
+      );
+      assert.ok(unlinked);
+      assert.equal(unlinked?.status, "pending");
+      assert.equal(unlinked?.amountUsdc, "7.350000");
+      assert.equal(legs.filter((row) => row.kind === "POOL_PAYOUT" && row.txHash).length, 1);
+
+      const snap = await getEscrowSnapshot(created.id, db);
+      assert.equal(snap?.status, "settled_partial");
+      assert.ok(snap?.reconcile.some((note) => note.includes("pool_confirmed_atomic=7350000")));
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("refunds full F before settle with zero fee/pool/winner and voids pending legs", async () => {
+    const { db, sql, posterId, hunterId, fullName, rail } = await fixture();
+    try {
+      const created = await postBounty(db, posterId, fullName, 65, "40");
+      await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await insertFreeze(db, {
+        bountyId: created.id,
+        winner: {
+          userId: hunterId,
+          login: "winner",
+          address: HUNTER_ADDRESS,
+          shareUsdc: "33.320000",
+        },
+        pool: [
+          {
+            userId: hunterId,
+            login: "alice",
+            address: ALICE_ADDRESS,
+            shareUsdc: "5.880000",
+          },
+        ],
+      });
+      await db.insert(allocationLedger).values({
+        bountyId: created.id,
+        participantId: null,
+        kind: "FEE_OUT",
+        amountUsdc: "0.800000",
+        idempotencyKey: `test-void-fee-${created.id}`,
+        status: "pending",
+      });
+
+      const cancelled = await refundEscrow(
+        created.id,
+        { actorUserId: posterId, reason: "cancel" },
+        { db, rail },
+      );
+      assert.equal(cancelled.bountyStatus, "cancelled");
+      assert.equal(cancelled.escrowStatus, "refunded");
+      assert.ok(cancelled.refundTxHash?.startsWith("mock:"));
+      const fees = await db.select().from(feeLedger).where(eq(feeLedger.bountyId, created.id));
+      assert.equal(fees.length, 0);
+      const legs = await db
+        .select()
+        .from(allocationLedger)
+        .where(eq(allocationLedger.bountyId, created.id));
+      assert.ok(legs.every((row) => row.txHash == null));
+      assert.ok(legs.every((row) => row.status === "failed"));
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+});
+

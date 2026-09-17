@@ -35,6 +35,11 @@ export {
 } from "./x402";
 export { isMockTxHash, moneyIdempotencyKey } from "./idempotency";
 export {
+  allocationIdempotencyKey,
+  confirmedOutflowsFromLegs,
+  planSettleLegs,
+} from "./allocation";
+export {
   createCdpRail,
   createMockRail,
   MOCK_ESCROW_ADDRESS,

@@ -73,6 +73,20 @@ describe("CDP env + mainnet refuse", () => {
       refundTxHash: null,
     });
     assert.equal(settled, 0n);
+    const leftover = attributedAtomic({
+      bountyId: "b",
+      faceUsdc: "100.000000",
+      escrowStatus: "settled_partial",
+      fundTxHash: "mock:1",
+      payoutTxHash: "mock:h",
+      feeTxHash: "mock:f",
+      refundTxHash: null,
+      confirmedWinnerAtomic: 83_300_000n,
+      confirmedPoolAtomic: 7_350_000n,
+      confirmedFeeAtomic: 2_000_000n,
+    });
+    assert.equal(leftover, 7_350_000n);
+
     const notes = reconcileBountyNotes({
       bountyId: "b",
       faceUsdc: "100.000000",

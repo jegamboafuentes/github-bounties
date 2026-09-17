@@ -4,7 +4,7 @@ Official name: **GitHub Bounties**. Money path follows [ADR 0001](adr/0001-cdp-x
 
 `gb-escrow` (CDP server wallet) holds face **F**. On merge/settle, hunter gets `F − floor(F × 0.02)` and `gb-fee` gets the 2%. On poster cancel or bounty `expires_at` (unmerged), the funder gets **full F**. Claim-lock is still coordination only and **does not** refund.
 
-This is not Lightning Bounties / LB1. V2 participation pool is out of scope for V1-5 ([ADR 0003](adr/0003-v2-multi-hunter-pool.md) / [v2-tickets.md](v2-tickets.md); plan only). Hosted Coinbase Business checkout stays **disabled**. DEV fund without a pasted hash uses x402 `exact` to `gb-escrow` ([ADR 0002](adr/0002-x402-exact-dev-fund.md)).
+This is not Lightning Bounties / LB1. V2 participation pool settle is V2-3 ([ADR 0003](adr/0003-v2-multi-hunter-pool.md) / [v2-tickets.md](v2-tickets.md)): `settleEscrow` pays `gb-fee` + winner + N frozen pool members. Empty pool is the V1 winner amount (`post_fee`). Hosted Coinbase Business checkout stays **disabled**. DEV fund without a pasted hash uses x402 `exact` to `gb-escrow` ([ADR 0002](adr/0002-x402-exact-dev-fund.md)).
 
 ## Status mapping
 
@@ -134,12 +134,39 @@ Ops must still faucet ETH on `gb-escrow` (gas is platform opex, ADR 0001). This 
 | `GET /api/bounties/:id` | `escrow.failCode`, `escrow.failReason`, `escrow.failLabel` |
 | Bounty detail + Claim UI + board | Same Lock banner: `Escrow fail · rail_failed` plus the human reason |
 
+## V2-3 multi-payee settle
+
+Math is ADR 0003: `fee = 2% × F`, then **15% of post-fee** to the frozen pool (not `0.15 × F`). `|E|=0` is the empty-pool regression: winner gets `post_fee` (V1 98%), fee 2%, **no** `POOL_PAYOUT` rows.
+
+Legs (each with its own idempotency key; winner/fee reuse the V1-5 keys so in-flight retries cannot double-pay):
+
+| Kind | Amount | To |
+| --- | --- | --- |
+| `FEE_OUT` | `floor(F × 200 / 10_000)` | `gb-fee` |
+| `WINNER_PAYOUT` | `winner_atomic + dust` (`post_fee` when empty) | winner BYO Base address |
+| `POOL_PAYOUT` × N | equal `floor(pool / N)` | each frozen `role=pool` member with a wallet |
+
+`allocation_ledger` rows are inserted `pending` before the first transfer. `escrows.payout_tx_hash` remains the **winner** hash. Pool hashes live on the ledger / `pool_participants`.
+
+| Failure | Status | Retry |
+| --- | --- | --- |
+| Winner transfer fails **before** a payout hash | Stay **`settling`** + `fail_code` | Winner leg first; fee/pool not sent yet |
+| Any intended leg confirmed and another not | **`settled_partial`** | Remaining legs only. Never reverse a confirmed transfer |
+| Unlinked / missing wallet pool member | **`settled_partial`** | That pool leg stays pending. **Do not redistribute** |
+| Refund/cancel before settle | Full `F` to funder | No fee / pool / winner. Pending allocation rows are voided |
+
+Recon: attributed escrow = `F − confirmed winner − confirmed pool − confirmed fee − refund`. Terminal Settled / Refunded = 0.
+
+Inbound fund / x402 Lock is unchanged. Hosted checkout stays disabled. Mock rail still lists missing `CDP_*`. Live DEV is Base Sepolia. Mainnet refused without `CDP_ALLOW_MAINNET=1`.
+
+UI breakdown is V2-4. Claim-lock sunset is V2-4.
+
 ## Idempotency + recon
 
-- One deterministic UUID per `(bounty_id, kind)` (`FUND_IN`, `HUNTER_PAYOUT`, `FEE_OUT`, `REFUND_OUT`). Passed through as the CDP idempotency key when the live rail runs.
-- Our rows (not CDP’s 24h window) are the long-lived store. Hashes live on `escrows.fund_tx_hash` / `payout_tx_hash` / `fee_tx_hash` / `refund_tx_hash`.
-- SettledPartial: retry **FEE_OUT only** with the same fee key. Never reverse a confirmed hunter payout.
-- Recon hook (`reconcileBountyNotes`): attributed escrow = face − confirmed payout − confirmed fee − refund. Open bounties must equal face; `settled` / `refunded` must equal 0. Nightly: `sum(open attributed) == gb-escrow` on-chain USDC (allow in-flight). This ticket ships the notes; it does not run a chain indexer.
+- One deterministic UUID per `(bounty_id, kind)` for V1 (`FUND_IN`, `HUNTER_PAYOUT` / `WINNER_PAYOUT`, `FEE_OUT`, `REFUND_OUT`). V2-3 adds a distinct key per `POOL_PAYOUT` participant. Passed through as the CDP idempotency key when the live rail runs.
+- Our rows (not CDP’s 24h window) are the long-lived store. Winner/fee hashes also live on `escrows.payout_tx_hash` / `fee_tx_hash`; pool hashes on `allocation_ledger`.
+- SettledPartial: retry **remaining legs only** with the same per-leg keys. Never reverse a confirmed transfer.
+- Recon hook (`reconcileBountyNotes`): attributed escrow = face − confirmed winner − confirmed pool − confirmed fee − refund. Open bounties must equal face; `settled` / `refunded` must equal 0. Nightly: `sum(open attributed) == gb-escrow` on-chain USDC (allow in-flight). This ticket ships the notes; it does not run a chain indexer.
 
 ## APIs
 
@@ -168,7 +195,7 @@ ADR 0001 open Q: Coinbase Business Checkouts `settlement.feeAmount` may skim a m
 
 ## Out of scope
 
-- V2 participation pool
+- V2-4 UI: pool roster / payout breakdown / claim-lock sunset
 - V1-6 claim payout UI ([claims.md](claims.md))
 - Multi-rail / Lightning / Solana
 - Production user funds / mainnet USDC

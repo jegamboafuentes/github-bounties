@@ -18,7 +18,7 @@ import type { MoneyKind } from "./state";
 
 export type { CdpRailMode };
 
-export type RailTransferPurpose = "fund" | "hunter" | "fee" | "refund";
+export type RailTransferPurpose = "fund" | "hunter" | "fee" | "pool" | "refund";
 
 export type RailTransferInput = {
   to: string;

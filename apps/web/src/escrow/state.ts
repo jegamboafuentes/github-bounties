@@ -36,7 +36,14 @@ export function assertEscrowTransition(from: EscrowStatus, to: EscrowStatus): vo
   }
 }
 
-export type MoneyKind = "FUND_IN" | "SWEEP_IN" | "HUNTER_PAYOUT" | "FEE_OUT" | "REFUND_OUT";
+export type MoneyKind =
+  | "FUND_IN"
+  | "SWEEP_IN"
+  | "HUNTER_PAYOUT"
+  | "WINNER_PAYOUT"
+  | "POOL_PAYOUT"
+  | "FEE_OUT"
+  | "REFUND_OUT";
 
 /** Bounty statuses that still hold face F in escrow (open or claim-locked). */
 export const OPEN_MONEY_BOUNTY_STATUSES = ["funded", "claim_locked"] as const;

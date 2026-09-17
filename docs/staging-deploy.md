@@ -91,7 +91,7 @@ Uses Secret Manager `DATABASE_URL`. **Never** print or paste the value.
 ./infra/gcloud/migrate-staging.sh --apply --job   # Cloud Run Job one-shot
 ```
 
-V2-1 (after merge): applies additive `0004_v2_pool_participants` (`pool_participants`, `allocation_ledger`, `work_signals`, `bounties.participation_pool_bps` default **1500** of post-fee). V1 exclusive `claim_locks` index is unchanged.
+V2-1 (after merge): applies additive `0004_v2_pool_participants` (`pool_participants`, `allocation_ledger`, `work_signals`, `bounties.participation_pool_bps` default **1500** of post-fee). V1 exclusive `claim_locks` index is unchanged. **V2-3 settle adds no migration** — it writes the existing ledger.
 
 ### B. Exact laptop + Auth Proxy commands
 

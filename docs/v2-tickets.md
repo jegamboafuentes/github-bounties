@@ -4,7 +4,8 @@
 - **Product rules:** frozen by LB PM (Enrique delegated). Tickets must match the freeze exactly.
 - **V2-0:** implemented (fixtures + `splitPostFeePool`).
 - **V2-1:** implemented (schema + seed fixtures).
-- **V2-2:** implemented (merge-time freeze + optional live roster). **Do not start V2-3+ here.**
+- **V2-2:** implemented (merge-time freeze + optional live roster).
+- **V2-3:** implemented (multi-payee settle). **Do not start V2-4+ here.**
 - **Not blocking:** V1.5 WalletConnect + amount chips is parallel polish after x402
   [#29](https://github.com/jegamboafuentes/github-bounties/pull/29). It does not
   gate this spec or V2-0…V2-5.
@@ -12,7 +13,7 @@
 Official name: **GitHub Bounties**. This is not Lightning Bounties / LB1.
 
 V1 today: single winner (merged PR author), 2% face fee, exclusive 72h claim-lock,
-`settleEscrow` = `HUNTER_PAYOUT` + `FEE_OUT`. V2-1 persists pool rows; settle still V1 until V2-3.
+`settleEscrow` = `FEE_OUT` + `WINNER_PAYOUT` + `POOL_PAYOUT` × N (empty pool = V1 post-fee). V2-4 is UI.
 
 ## Frozen rules → ticket map
 
@@ -170,23 +171,23 @@ byte-for-byte the V1 winner amount (`post_fee`).
 
 ### Acceptance criteria
 
-- [ ] Math uses ADR 0003 (`2%` face, then `85/15` of remainder). Not `0.15 × F`.
-- [ ] Legs: `FEE_OUT`, `WINNER_PAYOUT` (`winner_atomic + dust`), `POOL_PAYOUT` × N.
-- [ ] `|E|=0`: **no** `POOL_PAYOUT` rows; winner receives `post_fee`; fee `2%`.
+- [x] Math uses ADR 0003 (`2%` face, then `85/15` of remainder). Not `0.15 × F`.
+- [x] Legs: `FEE_OUT`, `WINNER_PAYOUT` (`winner_atomic + dust`), `POOL_PAYOUT` × N.
+- [x] `|E|=0`: **no** `POOL_PAYOUT` rows; winner receives `post_fee`; fee `2%`.
       Automated test name this **empty-pool regression**.
-- [ ] Each leg has its own idempotency key. Retry / double Claim / redelivered
+- [x] Each leg has its own idempotency key. Retry / double Claim / redelivered
       merge does not double-pay a confirmed `tx_hash`.
-- [ ] `SettledPartial` when any intended leg is confirmed and another is not.
+- [x] `SettledPartial` when any intended leg is confirmed and another is not.
       Retry **remaining legs only**. Never reverse a confirmed transfer.
-- [ ] Missing wallet / unlinked pool member: that leg stays retryable; **do not
+- [x] Missing wallet / unlinked pool member: that leg stays retryable; **do not
       redistribute**. Winner + fee + other members may still confirm.
-- [ ] Winner-leg failure before a hash: stay `settling` + `fail_code` (V1-5).
-- [ ] Refund/cancel before settle: full `F` to funder; zero fee/pool/winner.
-- [ ] Recon: attributed escrow = F − confirmed winner − confirmed pool −
+- [x] Winner-leg failure before a hash: stay `settling` + `fail_code` (V1-5).
+- [x] Refund/cancel before settle: full `F` to funder; zero fee/pool/winner.
+- [x] Recon: attributed escrow = F − confirmed winner − confirmed pool −
       confirmed fee − refund; `Settled`/`Refunded` = 0.
-- [ ] Mock rail still lists missing `CDP_*` names. Live DEV uses Base Sepolia.
+- [x] Mock rail still lists missing `CDP_*` names. Live DEV uses Base Sepolia.
       Mainnet still refused without `CDP_ALLOW_MAINNET=1`.
-- [ ] Hosted checkout stays disabled.
+- [x] Hosted checkout stays disabled.
 
 ### Out of scope
 

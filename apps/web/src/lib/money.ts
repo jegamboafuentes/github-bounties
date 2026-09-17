@@ -95,7 +95,8 @@ export function feeFromFaceUsdc(faceUsdc: string, feeBps: number = FEE_BPS): str
 }
 
 /**
- * ADR 0003 / V2-0 post-fee 85/15 split. **Not wired to settleEscrow.**
+ * ADR 0003 / V2-3 post-fee 85/15 split. `settleEscrow` uses this for fee +
+ * winner + N pool legs. `|E|=0` is the empty-pool regression (V1 post_fee).
  *
  * ```
  * fee_atomic    = floor(F × 200 / 10_000)                 // unchanged from V1
