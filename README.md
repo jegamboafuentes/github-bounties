@@ -30,7 +30,7 @@ This is not Lightning Bounties, LB1, or “Lightning Bounties 2”.
 | Escrow | Platform CDP wallet `gb-escrow` holds face value |
 | Fee | **2% of bounty face** at **settlement**: `fee = floor(face * 0.02)`, hunter gets the remainder |
 | Claim-lock | V1 exclusive **72h** coordination lock — **does not move money** |
-| V2 | Multi-hunter pool (ADR 0003 **Accepted**): 15% of **post-fee**, max 10. **V2-0** fixtures + math landed; product wire is V2-1…V2-5. Exclusive 72h claim-lock still V1 until V2-4. [tickets](docs/v2-tickets.md) |
+| V2 | Multi-hunter pool (ADR 0003 **Accepted**): 15% of **post-fee**, max 10. **V2-0** math + **V2-1** schema landed; product wire is V2-2…V2-5. Exclusive 72h claim-lock still V1 until V2-4. [tickets](docs/v2-tickets.md) |
 
 Read the decision, sequences, failure modes, and GCP Secret Manager names in:
 

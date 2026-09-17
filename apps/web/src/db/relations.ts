@@ -1,13 +1,16 @@
 import { relations } from "drizzle-orm";
 import {
+  allocationLedger,
   bounties,
   claimLocks,
   claims,
   escrows,
   feeLedger,
   githubLinks,
+  poolParticipants,
   repos,
   users,
+  workSignals,
 } from "./schema";
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -16,6 +19,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   postedBounties: many(bounties),
   claimLocks: many(claimLocks),
   claims: many(claims),
+  poolParticipants: many(poolParticipants),
+  workSignals: many(workSignals),
 }));
 
 export const githubLinksRelations = relations(githubLinks, ({ one }) => ({
@@ -46,6 +51,9 @@ export const bountiesRelations = relations(bounties, ({ one, many }) => ({
   feeLedger: one(feeLedger),
   claimLocks: many(claimLocks),
   claims: many(claims),
+  poolParticipants: many(poolParticipants),
+  allocationLedger: many(allocationLedger),
+  workSignals: many(workSignals),
 }));
 
 export const claimLocksRelations = relations(claimLocks, ({ one }) => ({
@@ -81,5 +89,42 @@ export const feeLedgerRelations = relations(feeLedger, ({ one }) => ({
   bounty: one(bounties, {
     fields: [feeLedger.bountyId],
     references: [bounties.id],
+  }),
+}));
+
+export const poolParticipantsRelations = relations(
+  poolParticipants,
+  ({ one, many }) => ({
+    bounty: one(bounties, {
+      fields: [poolParticipants.bountyId],
+      references: [bounties.id],
+    }),
+    user: one(users, {
+      fields: [poolParticipants.userId],
+      references: [users.id],
+    }),
+    allocations: many(allocationLedger),
+  }),
+);
+
+export const allocationLedgerRelations = relations(allocationLedger, ({ one }) => ({
+  bounty: one(bounties, {
+    fields: [allocationLedger.bountyId],
+    references: [bounties.id],
+  }),
+  participant: one(poolParticipants, {
+    fields: [allocationLedger.participantId],
+    references: [poolParticipants.id],
+  }),
+}));
+
+export const workSignalsRelations = relations(workSignals, ({ one }) => ({
+  bounty: one(bounties, {
+    fields: [workSignals.bountyId],
+    references: [bounties.id],
+  }),
+  user: one(users, {
+    fields: [workSignals.userId],
+    references: [users.id],
   }),
 }));

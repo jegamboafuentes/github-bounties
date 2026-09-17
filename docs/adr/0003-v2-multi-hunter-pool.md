@@ -1,17 +1,18 @@
 # ADR 0003: V2 multi-hunter participation pool
 
-- **Status:** Accepted — V2-0 spike (eligibility fixtures + post-fee 85/15 math). Product rules frozen by LB PM (Enrique delegated).
+- **Status:** Accepted — V2-0 spike + V2-1 schema. Product rules frozen by LB PM (Enrique delegated).
 - **Date:** 2026-09-12 (Accepted 2026-09-17)
 - **Product:** GitHub Bounties (not Lightning Bounties / LB1 / “Lightning Bounties 2”)
 - **Tickets:** [docs/v2-tickets.md](../v2-tickets.md) (V2-0…V2-5)
 - **Follows:** [ADR 0001](./0001-cdp-x402-wallets.md) (fee/custody), [ADR 0002](./0002-x402-exact-dev-fund.md) (DEV x402 `exact` Lock)
 - **Supersedes:** ADR 0001 V2 sketch (`pool ≈ 0.15 × F`). Frozen math is **15% of post-fee**, not 15% of face.
-- **V2-0 (this impl PR):** fixtures + `splitPostFeePool` only. No schema, webhooks, settle, or UI. Exclusive 72h claim-lock is **unchanged** (sunset is V2-1 / V2-4).
+- **V2-1 (this impl PR):** `pool_participants` + `allocation_ledger` + `work_signals`. No webhook writer, no `settleEscrow` multi-payee, no UI. Exclusive 72h claim-lock index is **unchanged** (sunset is V2-4).
 
 > **Accepted** — freeze below is locked. V2-0 landed the predicate fixtures and
-> integer math. V2-1…V2-5 (schema, webhooks, multi-payee settle, UI, DEV dogfood)
-> are still unimplemented. V1.5 WalletConnect + amount chips is parallel polish
-> after x402 [#29](https://github.com/jegamboafuentes/github-bounties/pull/29)
+> integer math. V2-1 lands the additive schema (`pool_participants`,
+> `allocation_ledger`, `work_signals`). V2-2…V2-5 (webhooks, multi-payee settle,
+> UI, DEV dogfood) are still unimplemented. V1.5 WalletConnect + amount chips is
+> parallel polish after x402 [#29](https://github.com/jegamboafuentes/github-bounties/pull/29)
 > and **does not block** this spec.
 
 ## Context
@@ -321,7 +322,7 @@ stateDiagram-v2
 `claim_locked` rows drain to `funded` on deploy, then the exclusive path is
 removed from UI.
 
-## Schema sketch (implement in V2-1, not this PR)
+## Schema (V2-1)
 
 V1 already has nullable `bounties.participation_pool_bps` /
 `participation_pool_usdc`. V2 fills those at fund (bps = 1500 of post-fee;
@@ -398,7 +399,7 @@ Nightly recon unchanged in spirit: `sum(open attributed) == gb-escrow` USDC
 ## Non-goals (V2-0 spike and V2-adjacent polish)
 
 - Schema, `settleEscrow` rewrite, webhook writer, or UI in V2-0
-- Sunsetting exclusive 72h claim-lock in V2-0 (that is V2-1 / V2-4)
+- Sunsetting exclusive 72h claim-lock in V2-1 (that is V2-4)
 - V1.5 **WalletConnect + amount chips** — parallel polish after x402 [#29](https://github.com/jegamboafuentes/github-bounties/pull/29); **not blocking** this spec
 - Hosted Coinbase Business checkout
 - Mainnet USDC / production user funds
