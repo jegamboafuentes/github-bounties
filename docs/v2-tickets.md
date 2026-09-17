@@ -1,8 +1,8 @@
 # V2 multi-hunter pool — eng tickets / spike plan
 
-- **ADR:** [0003 — V2 multi-hunter participation pool](adr/0003-v2-multi-hunter-pool.md) (**Proposed**)
+- **ADR:** [0003 — V2 multi-hunter participation pool](adr/0003-v2-multi-hunter-pool.md) (**Accepted**)
 - **Product rules:** frozen by LB PM (Enrique delegated). Tickets must match the freeze exactly.
-- **This PR:** plan and docs only. **Do not implement V2 here.**
+- **V2-0:** implemented (fixtures + `splitPostFeePool`). **Do not start V2-1+ here.**
 - **Not blocking:** V1.5 WalletConnect + amount chips is parallel polish after x402
   [#29](https://github.com/jegamboafuentes/github-bounties/pull/29). It does not
   gate this spec or V2-0…V2-5.
@@ -48,21 +48,22 @@ rewrite V2 math or eligibility.
 **Goal:** Lock the predicate and the integer math in tests **before** schema or
 CDP transfers. No product UI, no migration.
 
-**Where (when implemented):** extend `fixtures/` + `src/` / `apps/web/src/lib/money.ts`
-style unit tests. This planning PR adds the fixture **spec only** (table below).
+**Where:** `fixtures/pool-eligibility-cases.json`, `fixtures/pool-split-vectors.json`,
+`apps/web/src/lib/money.ts` (`splitPostFeePool`), `apps/web/src/lib/pool-eligibility.ts`.
+Unit tests: `apps/web/src/lib/money.test.ts`, `apps/web/src/lib/pool-eligibility.test.ts`.
 
 ### Acceptance criteria
 
-- [ ] Fixture file (e.g. `fixtures/pool-eligibility-cases.json`) asserts every
+- [x] Fixture file (e.g. `fixtures/pool-eligibility-cases.json`) asserts every
       row in [Pool eligibility fixtures](#pool-eligibility-fixtures).
-- [ ] `splitPostFeePool(face, |E|)` (name indicative) matches [Math vectors](#math-vectors).
-- [ ] `fee_atomic = floor(F × 200 / 10_000)` unchanged from ADR 0001 / V1-5.
-- [ ] `|E|=0` ⇒ `pool_atomic=0`, `winner_atomic=post_fee` (empty-pool regression).
-- [ ] `|E|>0` ⇒ `pool_atomic=floor(post_fee × 1500 / 10_000)`, equal `floor(pool/N)`,
+- [x] `splitPostFeePool(face, |E|)` (name indicative) matches [Math vectors](#math-vectors).
+- [x] `fee_atomic = floor(F × 200 / 10_000)` unchanged from ADR 0001 / V1-5.
+- [x] `|E|=0` ⇒ `pool_atomic=0`, `winner_atomic=post_fee` (empty-pool regression).
+- [x] `|E|>0` ⇒ `pool_atomic=floor(post_fee × 1500 / 10_000)`, equal `floor(pool/N)`,
       dust → winner.
-- [ ] Cap: given 12 eligible timestamps, paid set is the 10 earliest `created_at`
+- [x] Cap: given 12 eligible timestamps, paid set is the 10 earliest `created_at`
       (tie-break `pr_number`, then `github_id`).
-- [ ] No CDP calls, no Drizzle migration, no UI in the spike PR.
+- [x] No CDP calls, no Drizzle migration, no UI in the spike PR.
 
 ### Out of scope
 

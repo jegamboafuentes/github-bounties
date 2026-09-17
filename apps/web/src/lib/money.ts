@@ -1,4 +1,9 @@
-import { FEE_BPS, USDC_DECIMALS } from "./constants";
+import {
+  FEE_BPS,
+  POOL_BPS_OF_POST_FEE,
+  POOL_MAX_PAID,
+  USDC_DECIMALS,
+} from "./constants";
 
 const ZERO = BigInt(0);
 const TEN = BigInt(10);
@@ -87,6 +92,113 @@ export function splitFaceUsdc(faceUsdc: string, feeBps: number = FEE_BPS): FaceS
 
 export function feeFromFaceUsdc(faceUsdc: string, feeBps: number = FEE_BPS): string {
   return splitFaceUsdc(faceUsdc, feeBps).feeUsdc;
+}
+
+/**
+ * ADR 0003 / V2-0 post-fee 85/15 split. **Not wired to settleEscrow.**
+ *
+ * ```
+ * fee_atomic    = floor(F × 200 / 10_000)                 // unchanged from V1
+ * post_fee      = F − fee_atomic
+ * pool_atomic   = |E| = 0 ? 0 : floor(post_fee × 1500 / 10_000)  // 15% of 98%
+ * N             = min(|E|, 10)
+ * share_atomic  = N = 0 ? 0 : floor(pool_atomic / N)
+ * dust_atomic   = pool_atomic − share × N                 // → winner
+ * winner_atomic = post_fee − N × share                    // 85% of 98%, plus dust
+ * ```
+ *
+ * `poolTotal` / `poolPaidAtomic` is what actually leaves escrow to the pool
+ * (`N × share`). The winner column includes dust so `fee + winner + N×each = F`.
+ */
+export type PostFeePoolSplit = {
+  faceAtomic: bigint;
+  feeAtomic: bigint;
+  postFeeAtomic: bigint;
+  /** 15% of post-fee when |E|>0, else 0. Before equal-split dust. */
+  poolAtomic: bigint;
+  /** What actually leaves escrow to the pool: N × share. */
+  poolPaidAtomic: bigint;
+  /** Winner receives post-fee − poolPaid (includes dust). */
+  winnerAtomic: bigint;
+  shareAtomic: bigint;
+  dustAtomic: bigint;
+  eligibleCount: number;
+  paidCount: number;
+  feeBps: number;
+  poolBpsOfPostFee: number;
+  faceUsdc: string;
+  feeUsdc: string;
+  winnerUsdc: string;
+  poolTotalUsdc: string;
+  eachUsdc: string | null;
+  dustUsdc: string;
+};
+
+export function splitPostFeePoolAtomic(
+  faceAtomic: bigint,
+  eligibleCount: number,
+  feeBps: number = FEE_BPS,
+  poolBpsOfPostFee: number = POOL_BPS_OF_POST_FEE,
+  maxPaid: number = POOL_MAX_PAID,
+): PostFeePoolSplit {
+  if (!Number.isInteger(eligibleCount) || eligibleCount < 0) {
+    throw new RangeError("eligibleCount must be a non-negative integer");
+  }
+  if (!Number.isInteger(poolBpsOfPostFee) || poolBpsOfPostFee < 0) {
+    throw new RangeError("poolBpsOfPostFee must be a non-negative integer");
+  }
+  if (!Number.isInteger(maxPaid) || maxPaid < 0) {
+    throw new RangeError("maxPaid must be a non-negative integer");
+  }
+
+  const face = splitFaceAtomic(faceAtomic, feeBps);
+  const postFeeAtomic = face.hunterAtomic;
+  const poolAtomic =
+    eligibleCount === 0
+      ? ZERO
+      : (postFeeAtomic * BigInt(poolBpsOfPostFee)) / BPS_DENOMINATOR;
+  const paidCount = Math.min(eligibleCount, maxPaid);
+  const shareAtomic = paidCount === 0 ? ZERO : poolAtomic / BigInt(paidCount);
+  const poolPaidAtomic = shareAtomic * BigInt(paidCount);
+  const dustAtomic = poolAtomic - poolPaidAtomic;
+  const winnerAtomic = postFeeAtomic - poolPaidAtomic;
+
+  return {
+    faceAtomic: face.faceAtomic,
+    feeAtomic: face.feeAtomic,
+    postFeeAtomic,
+    poolAtomic,
+    poolPaidAtomic,
+    winnerAtomic,
+    shareAtomic,
+    dustAtomic,
+    eligibleCount,
+    paidCount,
+    feeBps: face.feeBps,
+    poolBpsOfPostFee,
+    faceUsdc: face.faceUsdc,
+    feeUsdc: face.feeUsdc,
+    winnerUsdc: atomicToUsdc(winnerAtomic),
+    poolTotalUsdc: atomicToUsdc(poolPaidAtomic),
+    eachUsdc: paidCount === 0 ? null : atomicToUsdc(shareAtomic),
+    dustUsdc: atomicToUsdc(dustAtomic),
+  };
+}
+
+export function splitPostFeePool(
+  faceUsdc: string,
+  eligibleCount: number,
+  feeBps: number = FEE_BPS,
+  poolBpsOfPostFee: number = POOL_BPS_OF_POST_FEE,
+  maxPaid: number = POOL_MAX_PAID,
+): PostFeePoolSplit {
+  return splitPostFeePoolAtomic(
+    usdcToAtomic(faceUsdc),
+    eligibleCount,
+    feeBps,
+    poolBpsOfPostFee,
+    maxPaid,
+  );
 }
 
 export function claimLockExpiresAt(lockedAt: Date, hours = 72): Date {

@@ -5,11 +5,14 @@ import { bountiesModule } from "../modules/bounties";
 import { claimsModule } from "../modules/claims";
 import { escrowModule } from "../modules/escrow";
 import { webhooksModule } from "../modules/webhooks";
+import { HOSTED_CHECKOUT_ENABLED } from "../escrow/hosted";
 import {
   CLAIM_LOCK_HOURS,
   DEFAULT_CHAIN,
   DEFAULT_CURRENCY,
   FEE_BPS,
+  POOL_BPS_OF_POST_FEE,
+  POOL_MAX_PAID,
   PRODUCT_NAME,
 } from "./constants";
 import { claimLockExpiresAt, feeFromFaceUsdc } from "./money";
@@ -19,6 +22,9 @@ describe("product locks", () => {
     assert.equal(PRODUCT_NAME, "GitHub Bounties");
     assert.equal(FEE_BPS, 200);
     assert.equal(CLAIM_LOCK_HOURS, 72);
+    assert.equal(POOL_BPS_OF_POST_FEE, 1500);
+    assert.equal(POOL_MAX_PAID, 10);
+    assert.equal(HOSTED_CHECKOUT_ENABLED, false);
     assert.equal(DEFAULT_CURRENCY, "USDC");
     assert.equal(DEFAULT_CHAIN, "base");
     assert.equal(authModule.wired, true);

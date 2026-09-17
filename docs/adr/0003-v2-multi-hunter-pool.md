@@ -1,16 +1,17 @@
 # ADR 0003: V2 multi-hunter participation pool
 
-- **Status:** Proposed — product rules frozen by LB PM (Enrique delegated). Engineering acceptance on this PR promotes the ADR to **Accepted**.
-- **Date:** 2026-09-12
+- **Status:** Accepted — V2-0 spike (eligibility fixtures + post-fee 85/15 math). Product rules frozen by LB PM (Enrique delegated).
+- **Date:** 2026-09-12 (Accepted 2026-09-17)
 - **Product:** GitHub Bounties (not Lightning Bounties / LB1 / “Lightning Bounties 2”)
 - **Tickets:** [docs/v2-tickets.md](../v2-tickets.md) (V2-0…V2-5)
 - **Follows:** [ADR 0001](./0001-cdp-x402-wallets.md) (fee/custody), [ADR 0002](./0002-x402-exact-dev-fund.md) (DEV x402 `exact` Lock)
 - **Supersedes:** ADR 0001 V2 sketch (`pool ≈ 0.15 × F`). Frozen math is **15% of post-fee**, not 15% of face.
-- **This PR:** plan and docs only. **Do not implement V2 here.**
+- **V2-0 (this impl PR):** fixtures + `splitPostFeePool` only. No schema, webhooks, settle, or UI. Exclusive 72h claim-lock is **unchanged** (sunset is V2-1 / V2-4).
 
-> **Proposed** — rules below are the PM freeze. No schema migration, webhook worker,
-> multi-payee settle, or UI ships in this PR. V1.5 WalletConnect + amount chips is
-> parallel polish after x402 [#29](https://github.com/jegamboafuentes/github-bounties/pull/29)
+> **Accepted** — freeze below is locked. V2-0 landed the predicate fixtures and
+> integer math. V2-1…V2-5 (schema, webhooks, multi-payee settle, UI, DEV dogfood)
+> are still unimplemented. V1.5 WalletConnect + amount chips is parallel polish
+> after x402 [#29](https://github.com/jegamboafuentes/github-bounties/pull/29)
 > and **does not block** this spec.
 
 ## Context
@@ -86,9 +87,11 @@ Let `E` be the eligible set after exclusions.
 Ties on `created_at`: `pr_number ASC`, then `github_id ASC`. Deterministic; no
 lottery.
 
-### 3. Claim-lock sunset (frozen)
+### 3. Claim-lock sunset (frozen; **not** V2-0)
 
-**Drop exclusive 72h claim-lock in V2.** Hunters work in parallel.
+**Drop exclusive 72h claim-lock in V2** (tickets **V2-1** / **V2-4**, not this spike).
+V2-0 does **not** change `CLAIM_LOCK_HOURS` or stop acquiring V1 locks. Hunters
+still serialize on DEV until those tickets land.
 
 - Do not acquire a new exclusive `claim_locks` row for V2 bounties.
 - Board must not show “Claimed by X until …” as an exclusive lock.
@@ -390,11 +393,12 @@ Nightly recon unchanged in spirit: `sum(open attributed) == gb-escrow` USDC
 | Require ready-for-review (no drafts) | **Rejected** unless PM reopens. Freeze says opened PR. |
 | Pay co-authors of the winning PR | **Rejected.** Own qualifying PR required. |
 | Smart-contract split / Merkle drop | Out of scope. Same CDP `transferUsdc` rail, N+2 times. |
-| Implement V2 in this PR | **Rejected.** Plan/docs only. |
+| Implement schema/settle/UI in the V2-0 spike | **Rejected.** V2-0 is fixtures + math only. |
 
-## Non-goals (this PR and V2-adjacent polish)
+## Non-goals (V2-0 spike and V2-adjacent polish)
 
-- **Any V2 implementation code** (schema, settle, webhooks, UI) in this PR
+- Schema, `settleEscrow` rewrite, webhook writer, or UI in V2-0
+- Sunsetting exclusive 72h claim-lock in V2-0 (that is V2-1 / V2-4)
 - V1.5 **WalletConnect + amount chips** — parallel polish after x402 [#29](https://github.com/jegamboafuentes/github-bounties/pull/29); **not blocking** this spec
 - Hosted Coinbase Business checkout
 - Mainnet USDC / production user funds

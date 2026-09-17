@@ -1,0 +1,62 @@
+{
+  "fee_bps": 200,
+  "pool_bps_of_post_fee": 1500,
+  "max_paid": 10,
+  "notes": "docs/v2-tickets.md Math vectors. Amounts are USDC strings (6 dp). pool total is N × each (post-dust). Winner includes dust. Conservation: fee + winner + N × each = face.",
+  "vectors": [
+    {
+      "face": "100.000000",
+      "eligibleCount": 0,
+      "fee": "2.000000",
+      "winner": "98.000000",
+      "poolTotal": "0.000000",
+      "each": null,
+      "dust": "0.000000"
+    },
+    {
+      "face": "100.000000",
+      "eligibleCount": 2,
+      "fee": "2.000000",
+      "winner": "83.300000",
+      "poolTotal": "14.700000",
+      "each": "7.350000",
+      "dust": "0.000000"
+    },
+    {
+      "face": "100.000000",
+      "eligibleCount": 10,
+      "fee": "2.000000",
+      "winner": "83.300000",
+      "poolTotal": "14.700000",
+      "each": "1.470000",
+      "dust": "0.000000"
+    },
+    {
+      "face": "1.000000",
+      "eligibleCount": 0,
+      "fee": "0.020000",
+      "winner": "0.980000",
+      "poolTotal": "0.000000",
+      "each": null,
+      "dust": "0.000000"
+    },
+    {
+      "face": "1.000000",
+      "eligibleCount": 3,
+      "fee": "0.020000",
+      "winner": "0.833000",
+      "poolTotal": "0.147000",
+      "each": "0.049000",
+      "dust": "0.000000"
+    },
+    {
+      "face": "0.010000",
+      "eligibleCount": 4,
+      "fee": "0.000200",
+      "winner": "0.008332",
+      "poolTotal": "0.001468",
+      "each": "0.000367",
+      "dust": "0.000002"
+    }
+  ]
+}
