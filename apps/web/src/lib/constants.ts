@@ -2,11 +2,23 @@
 
 export const PRODUCT_NAME = "GitHub Bounties";
 
-/** Platform fee: 2% of bounty face. ADR 0001. */
+/** Platform fee: 2% of bounty face. ADR 0001 / V1-5. Unchanged in V2. */
 export const FEE_BPS = 200;
 
-/** Exclusive coordination lock. Does not move USDC. */
+/**
+ * Exclusive V1 coordination lock. Does not move USDC.
+ * V2-0 does **not** sunset this — drop is V2-1 / V2-4.
+ */
 export const CLAIM_LOCK_HOURS = 72;
+
+/**
+ * V2 pool share: **1500 bps of post-fee** (not of face). ADR 0003.
+ * `pool_atomic = |E|=0 ? 0 : floor(post_fee × 1500 / 10_000)`.
+ */
+export const POOL_BPS_OF_POST_FEE = 1500;
+
+/** Equal split among at most 10 earliest eligible hunters. ADR 0003. */
+export const POOL_MAX_PAID = 10;
 
 export const DEFAULT_CURRENCY = "USDC";
 

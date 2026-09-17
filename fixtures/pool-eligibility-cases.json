@@ -1,0 +1,503 @@
+{
+  "meta": {
+    "source": "docs/v2-tickets.md Pool eligibility fixtures",
+    "bountyIssueNumber": 42,
+    "repositoryFullName": "bounty/repo",
+    "bountyStatus": "funded",
+    "mergedAt": "2026-09-17T12:00:00.000Z",
+    "poster": { "login": "poster", "githubId": 1 },
+    "winner": { "login": "winner", "githubId": 2 },
+    "winningPr": {
+      "number": 100,
+      "title": "Close funded issue",
+      "body": "Fixes #42",
+      "authorLogin": "winner",
+      "authorId": 2,
+      "authorType": "User",
+      "createdAt": "2026-09-17T10:00:00.000Z",
+      "draft": false,
+      "merged": true,
+      "closed": true,
+      "baseRepositoryFullName": "bounty/repo",
+      "headRepositoryFullName": "winner/repo",
+      "commitAuthorsAtFreeze": [{ "login": "winner", "githubId": 2 }],
+      "commitMessages": ["Fixes #42"]
+    }
+  },
+  "ticketIds": [
+    "qualifying-basic",
+    "qualifying-draft",
+    "qualifying-fork",
+    "qualifying-closed-unmerged",
+    "qualifying-title-hash",
+    "winner-excluded",
+    "poster-excluded",
+    "late-pr",
+    "no-own-commit",
+    "force-push-lost-commits",
+    "force-push-after-freeze",
+    "cross-repo",
+    "bot-excluded",
+    "coauthor-on-winner-only",
+    "late-commit-on-old-pr",
+    "cap-11th",
+    "tie-created-at",
+    "empty-pool",
+    "not-funded",
+    "refs-only-vs-close"
+  ],
+  "cases": [
+    {
+      "id": "qualifying-basic",
+      "description": "alice opened PR #10 at T1-1h, body Refs #42, 1 commit by alice",
+      "expectedInE": ["alice"],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 10,
+          "title": "Hunt",
+          "body": "Refs #42",
+          "authorLogin": "alice",
+          "authorId": 10,
+          "authorType": "User",
+          "createdAt": "2026-09-17T11:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "alice/repo",
+          "commitAuthorsAtFreeze": [{ "login": "alice", "githubId": 10 }],
+          "commitMessages": ["wip"]
+        }
+      ]
+    },
+    {
+      "id": "qualifying-draft",
+      "description": "same as basic, draft: true",
+      "expectedInE": ["alice"],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 10,
+          "title": "Hunt",
+          "body": "Refs #42",
+          "authorLogin": "alice",
+          "authorId": 10,
+          "authorType": "User",
+          "createdAt": "2026-09-17T11:00:00.000Z",
+          "draft": true,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "alice/repo",
+          "commitAuthorsAtFreeze": [{ "login": "alice", "githubId": 10 }],
+          "commitMessages": ["wip"]
+        }
+      ]
+    },
+    {
+      "id": "qualifying-fork",
+      "description": "bob PR from a fork, base = bounty repo, Fixes #42, own commit",
+      "expectedInE": ["bob"],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 14,
+          "title": "Fork hunt",
+          "body": "Fixes #42",
+          "authorLogin": "bob",
+          "authorId": 11,
+          "authorType": "User",
+          "createdAt": "2026-09-17T11:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "bob/bounty-repo",
+          "commitAuthorsAtFreeze": [{ "login": "bob", "githubId": 11 }],
+          "commitMessages": ["Fixes #42"]
+        }
+      ]
+    },
+    {
+      "id": "qualifying-closed-unmerged",
+      "description": "cara PR closed unmerged before T1, Related to #42, own commit",
+      "expectedInE": ["cara"],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 15,
+          "title": "Attempt",
+          "body": "Related to #42",
+          "authorLogin": "cara",
+          "authorId": 12,
+          "authorType": "User",
+          "createdAt": "2026-09-17T09:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": true,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "cara/repo",
+          "commitAuthorsAtFreeze": [{ "login": "cara", "githubId": 12 }],
+          "commitMessages": ["notes"]
+        }
+      ]
+    },
+    {
+      "id": "qualifying-title-hash",
+      "description": "dan PR title #42 hunt, body empty, own commit",
+      "expectedInE": ["dan"],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 16,
+          "title": "#42 hunt",
+          "body": "",
+          "authorLogin": "dan",
+          "authorId": 13,
+          "authorType": "User",
+          "createdAt": "2026-09-17T11:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "dan/repo",
+          "commitAuthorsAtFreeze": [{ "login": "dan", "githubId": 13 }],
+          "commitMessages": ["wip"]
+        }
+      ]
+    },
+    {
+      "id": "winner-excluded",
+      "description": "winner also opened #9 earlier with Fixes #42",
+      "expectedInE": [],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 9,
+          "title": "Earlier attempt",
+          "body": "Fixes #42",
+          "authorLogin": "winner",
+          "authorId": 2,
+          "authorType": "User",
+          "createdAt": "2026-09-17T08:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": true,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "winner/repo",
+          "commitAuthorsAtFreeze": [{ "login": "winner", "githubId": 2 }],
+          "commitMessages": ["Fixes #42"]
+        }
+      ]
+    },
+    {
+      "id": "poster-excluded",
+      "description": "poster opened #8 Refs #42 with own commit",
+      "expectedInE": [],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 8,
+          "title": "Poster PR",
+          "body": "Refs #42",
+          "authorLogin": "poster",
+          "authorId": 1,
+          "authorType": "User",
+          "createdAt": "2026-09-17T08:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "poster/repo",
+          "commitAuthorsAtFreeze": [{ "login": "poster", "githubId": 1 }],
+          "commitMessages": ["wip"]
+        }
+      ]
+    },
+    {
+      "id": "late-pr",
+      "description": "erin opened #101 at T1+1s Fixes #42, own commit",
+      "expectedInE": [],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 101,
+          "title": "Too late",
+          "body": "Fixes #42",
+          "authorLogin": "erin",
+          "authorId": 14,
+          "authorType": "User",
+          "createdAt": "2026-09-17T12:00:01.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "erin/repo",
+          "commitAuthorsAtFreeze": [{ "login": "erin", "githubId": 14 }],
+          "commitMessages": ["Fixes #42"]
+        }
+      ]
+    },
+    {
+      "id": "no-own-commit",
+      "description": "frank opened #11 Refs #42, commits only by other",
+      "expectedInE": [],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 11,
+          "title": "Empty of self",
+          "body": "Refs #42",
+          "authorLogin": "frank",
+          "authorId": 15,
+          "authorType": "User",
+          "createdAt": "2026-09-17T11:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "frank/repo",
+          "commitAuthorsAtFreeze": [{ "login": "other", "githubId": 99 }],
+          "commitMessages": ["other did the work"]
+        }
+      ]
+    },
+    {
+      "id": "force-push-lost-commits",
+      "description": "gina force-pushed before T1; freeze commit list has none of hers",
+      "expectedInE": [],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 17,
+          "title": "Force-push lost",
+          "body": "Refs #42",
+          "authorLogin": "gina",
+          "authorId": 16,
+          "authorType": "User",
+          "createdAt": "2026-09-17T11:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "gina/repo",
+          "commitAuthorsAtFreeze": [],
+          "commitMessages": []
+        }
+      ]
+    },
+    {
+      "id": "force-push-after-freeze",
+      "description": "gina had a commit at T1, force-push after settle — snapshot still counts",
+      "expectedInE": ["gina"],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 18,
+          "title": "Snapshot kept",
+          "body": "Refs #42",
+          "authorLogin": "gina",
+          "authorId": 16,
+          "authorType": "User",
+          "createdAt": "2026-09-17T11:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "gina/repo",
+          "commitAuthorsAtFreeze": [{ "login": "gina", "githubId": 16 }],
+          "commitMessages": ["wip"],
+          "postFreezeHeadCommitAuthors": []
+        }
+      ]
+    },
+    {
+      "id": "cross-repo",
+      "description": "hank PR on other/repo Fixes bounty/repo#42",
+      "expectedInE": [],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 19,
+          "title": "Wrong repo",
+          "body": "Fixes bounty/repo#42",
+          "authorLogin": "hank",
+          "authorId": 17,
+          "authorType": "User",
+          "createdAt": "2026-09-17T11:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "other/repo",
+          "headRepositoryFullName": "hank/other-repo",
+          "commitAuthorsAtFreeze": [{ "login": "hank", "githubId": 17 }],
+          "commitMessages": ["Fixes bounty/repo#42"]
+        }
+      ]
+    },
+    {
+      "id": "bot-excluded",
+      "description": "dependabot opened a PR referencing #42",
+      "expectedInE": [],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 20,
+          "title": "Bump deps",
+          "body": "Refs #42",
+          "authorLogin": "dependabot[bot]",
+          "authorId": 49699333,
+          "authorType": "Bot",
+          "createdAt": "2026-09-17T11:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "bounty/repo",
+          "commitAuthorsAtFreeze": [{ "login": "dependabot[bot]", "githubId": 49699333 }],
+          "commitMessages": ["chore"]
+        }
+      ]
+    },
+    {
+      "id": "coauthor-on-winner-only",
+      "description": "ivy Co-authored-by on winning #100, no own PR",
+      "expectedInE": [],
+      "expectedOverflow": [],
+      "winningPrOverrides": {
+        "commitAuthorsAtFreeze": [
+          { "login": "winner", "githubId": 2 },
+          { "login": "ivy", "githubId": 18 }
+        ],
+        "commitMessages": [
+          "Fixes #42\n\nCo-authored-by: ivy <ivy@users.noreply.github.com>"
+        ]
+      },
+      "pullRequests": []
+    },
+    {
+      "id": "late-commit-on-old-pr",
+      "description": "jake opened #12 at T1-1d with only other's commits; jake's commit pushed after T1",
+      "expectedInE": [],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 12,
+          "title": "Old PR",
+          "body": "Refs #42",
+          "authorLogin": "jake",
+          "authorId": 19,
+          "authorType": "User",
+          "createdAt": "2026-09-16T12:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "jake/repo",
+          "commitAuthorsAtFreeze": [{ "login": "other", "githubId": 99 }],
+          "commitMessages": ["other"],
+          "postFreezeHeadCommitAuthors": [
+            { "login": "other", "githubId": 99 },
+            { "login": "jake", "githubId": 19 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cap-11th",
+      "description": "11 hunters otherwise qualifying; #11 has latest created_at",
+      "expectedInE": ["h01", "h02", "h03", "h04", "h05", "h06", "h07", "h08", "h09", "h10"],
+      "expectedOverflow": ["h11"],
+      "qualifyingHunters": [
+        { "login": "h01", "githubId": 101, "prNumber": 1, "createdAt": "2026-09-16T01:00:00.000Z" },
+        { "login": "h02", "githubId": 102, "prNumber": 2, "createdAt": "2026-09-16T02:00:00.000Z" },
+        { "login": "h03", "githubId": 103, "prNumber": 3, "createdAt": "2026-09-16T03:00:00.000Z" },
+        { "login": "h04", "githubId": 104, "prNumber": 4, "createdAt": "2026-09-16T04:00:00.000Z" },
+        { "login": "h05", "githubId": 105, "prNumber": 5, "createdAt": "2026-09-16T05:00:00.000Z" },
+        { "login": "h06", "githubId": 106, "prNumber": 6, "createdAt": "2026-09-16T06:00:00.000Z" },
+        { "login": "h07", "githubId": 107, "prNumber": 7, "createdAt": "2026-09-16T07:00:00.000Z" },
+        { "login": "h08", "githubId": 108, "prNumber": 8, "createdAt": "2026-09-16T08:00:00.000Z" },
+        { "login": "h09", "githubId": 109, "prNumber": 9, "createdAt": "2026-09-16T09:00:00.000Z" },
+        { "login": "h10", "githubId": 110, "prNumber": 10, "createdAt": "2026-09-16T10:00:00.000Z" },
+        { "login": "h11", "githubId": 111, "prNumber": 11, "createdAt": "2026-09-16T11:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "tie-created-at",
+      "description": "two PRs same created_at; lower pr_number wins the cap slot",
+      "expectedInE": ["h01", "h02", "h03", "h04", "h05", "h06", "h07", "h08", "h09", "tie-low"],
+      "expectedOverflow": ["tie-high"],
+      "qualifyingHunters": [
+        { "login": "h01", "githubId": 101, "prNumber": 1, "createdAt": "2026-09-16T01:00:00.000Z" },
+        { "login": "h02", "githubId": 102, "prNumber": 2, "createdAt": "2026-09-16T02:00:00.000Z" },
+        { "login": "h03", "githubId": 103, "prNumber": 3, "createdAt": "2026-09-16T03:00:00.000Z" },
+        { "login": "h04", "githubId": 104, "prNumber": 4, "createdAt": "2026-09-16T04:00:00.000Z" },
+        { "login": "h05", "githubId": 105, "prNumber": 5, "createdAt": "2026-09-16T05:00:00.000Z" },
+        { "login": "h06", "githubId": 106, "prNumber": 6, "createdAt": "2026-09-16T06:00:00.000Z" },
+        { "login": "h07", "githubId": 107, "prNumber": 7, "createdAt": "2026-09-16T07:00:00.000Z" },
+        { "login": "h08", "githubId": 108, "prNumber": 8, "createdAt": "2026-09-16T08:00:00.000Z" },
+        { "login": "h09", "githubId": 109, "prNumber": 9, "createdAt": "2026-09-16T09:00:00.000Z" },
+        { "login": "tie-low", "githubId": 210, "prNumber": 20, "createdAt": "2026-09-16T10:00:00.000Z" },
+        { "login": "tie-high", "githubId": 200, "prNumber": 21, "createdAt": "2026-09-16T10:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "empty-pool",
+      "description": "only winning PR exists",
+      "expectedInE": [],
+      "expectedOverflow": [],
+      "pullRequests": []
+    },
+    {
+      "id": "not-funded",
+      "description": "bounty pending_fund — no winner claim, no pool",
+      "bountyStatus": "pending_fund",
+      "expectedInE": [],
+      "expectedOverflow": [],
+      "pullRequests": [
+        {
+          "number": 10,
+          "title": "Hunt",
+          "body": "Refs #42",
+          "authorLogin": "alice",
+          "authorId": 10,
+          "authorType": "User",
+          "createdAt": "2026-09-17T11:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "alice/repo",
+          "commitAuthorsAtFreeze": [{ "login": "alice", "githubId": 10 }],
+          "commitMessages": ["wip"]
+        }
+      ]
+    },
+    {
+      "id": "refs-only-vs-close",
+      "description": "Refs #42 (not a closer) on a non-winner PR — yes for pool, not sufficient to be the winner",
+      "expectedInE": ["alice"],
+      "expectedOverflow": [],
+      "assertNotV1WinnerCloser": true,
+      "pullRequests": [
+        {
+          "number": 21,
+          "title": "Notes",
+          "body": "Refs #42",
+          "authorLogin": "alice",
+          "authorId": 10,
+          "authorType": "User",
+          "createdAt": "2026-09-17T11:00:00.000Z",
+          "draft": false,
+          "merged": false,
+          "closed": false,
+          "baseRepositoryFullName": "bounty/repo",
+          "headRepositoryFullName": "alice/repo",
+          "commitAuthorsAtFreeze": [{ "login": "alice", "githubId": 10 }],
+          "commitMessages": ["wip"]
+        }
+      ]
+    }
+  ]
+}
