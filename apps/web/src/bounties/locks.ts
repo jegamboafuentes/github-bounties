@@ -41,6 +41,7 @@ export async function acquireClaimLock(
 ): Promise<AcquiredLock> {
   void bountyId;
   void hunterUserId;
+  void _opts;
   throw new BountyError(
     "lock_sunset",
     "Exclusive 72h claim-lock is retired. Use Working on this — it is not exclusive and does not move money.",
