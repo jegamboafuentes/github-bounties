@@ -99,6 +99,7 @@ describe("CDP env + mainnet refuse", () => {
     assert.ok(notes.some((n) => n.includes("rail=mock")));
     assert.ok(notes.some((n) => n.includes("Hosted checkout")));
     const health = escrowHealth({});
+    assert.equal(health.ticket, "V2-5");
     assert.equal(health.hosted_checkout.enabled, false);
     assert.equal(health.x402_exact.scheme, "exact");
     assert.equal(health.x402_exact.hostedCheckout, "disabled");

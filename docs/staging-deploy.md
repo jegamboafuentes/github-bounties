@@ -323,6 +323,7 @@ CDP secrets attached, `escrow.rail` should be `cdp` and `missing` empty:
   "claim_lock_sunset": true,
   "escrow": {
     "wired": true,
+    "ticket": "V2-5",
     "rail": "cdp",
     "network": "base-sepolia",
     "missing": [],
@@ -342,5 +343,6 @@ Hello canary (separate service): `GET /` and `GET /api/health` →
 ## Out of scope
 
 - This PR does **not** run `gcloud --apply` against staging.
-- Production marketing, V2 pool, load tests.
+- Production marketing, load tests.
 - Secret values in git or PR text.
+- V2-5 live multi-browser dogfood (Enrique; see [staging-e2e.md](staging-e2e.md)).

@@ -946,7 +946,7 @@ export function escrowHealth(env = process.env) {
   const probe = probeCdpEnv(env);
   return {
     wired: true,
-    ticket: "V2-3",
+    ticket: "V2-5",
     network: probe.network,
     rail: probe.mode,
     missing: probe.missing,

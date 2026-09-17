@@ -48,7 +48,7 @@ Hunter payout after merge: [claims.md](claims.md). Pool roster + split: ADR 0003
 
 - WalletConnect + amount chips redesign (V1.5 polish)
 - Hosted checkout (blocked — ADR 0001 fee-skim open Q)
-- V2-5 DEV dogfood script (next ticket)
+- V2-5 live multi-browser dogfood (Enrique; runbook in [staging-e2e.md](staging-e2e.md))
 
 ## Secrets
 

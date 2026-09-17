@@ -6,7 +6,9 @@
 - **V2-1:** implemented (schema + seed fixtures).
 - **V2-2:** implemented (merge-time freeze + optional live roster).
 - **V2-3:** implemented (multi-payee settle).
-- **V2-4:** implemented (signals, roster, payout breakdown, claim-lock sunset). **Do not start V2-5 here.**
+- **V2-4:** implemented (signals, roster, payout breakdown, claim-lock sunset).
+- **V2-5:** checklist ready / live pending Enrique (runbook in
+  [staging-e2e.md](staging-e2e.md); do not wait on the live dogfood in Eng).
 - **Not blocking:** V1.5 WalletConnect + amount chips is parallel polish after x402
   [#29](https://github.com/jegamboafuentes/github-bounties/pull/29). It does not
   gate this spec or V2-0…V2-5.
@@ -14,7 +16,7 @@
 Official name: **GitHub Bounties**. This is not Lightning Bounties / LB1.
 
 V1 today: single winner (merged PR author), 2% face fee, parallel hunt (exclusive 72h claim-lock retired in V2-4),
-`settleEscrow` = `FEE_OUT` + `WINNER_PAYOUT` + `POOL_PAYOUT` × N (empty pool = V1 post-fee). V2-5 is DEV dogfood.
+`settleEscrow` = `FEE_OUT` + `WINNER_PAYOUT` + `POOL_PAYOUT` × N (empty pool = V1 post-fee). V2-5 is DEV dogfood (checklist ready; live pending Enrique).
 
 ## Frozen rules → ticket map
 
@@ -27,8 +29,10 @@ PM reviews this table first. Every rule has an acceptance-criteria owner.
 | 3 | Drop exclusive 72h lock; parallel hunt; optional non-blocking “working on this” only | **V2-1** `work_signals` + **V2-4** UI | No new exclusive lock; many signals; board has no “Claimed by X until” |
 | 4 | Fee = 2%×face → `gb-fee`; of remaining 98%: winner 85% / pool 15% (≈0.833F / 0.147F). Winner = merged PR author closing `#N` | **V2-0** math + **V2-3** settle | `100` USDC → fee `2` + winner `83.30` + pool `14.70` |
 
-**Product done (after V2-5, not this PR):** ≥2 hunters dogfood on DEV; pool
-payouts on-chain; empty-pool regression = full post-fee to winner.
+**Product done (after Enrique live dogfood):** ≥2 hunters on DEV; pool
+payouts on-chain; empty-pool regression = full post-fee to winner. Eng
+runbook: [staging-e2e.md](staging-e2e.md) § V2-5. Live execution is not an
+Eng blocker.
 
 ## Workstream order
 
@@ -242,27 +246,43 @@ exclusive 72h claim-lock.
 
 **Goal:** Meet the product done bar on `https://dev.githubbounties.xyz`.
 
-**Depends on:** V2-1…V2-4. Ops: CDP secrets already used for V1-5 Sepolia. V2-4 UI is on `main` after this ticket; this runbook is the remaining product-done bar.
+**Depends on:** V2-1…V2-4. Ops: CDP secrets already used for V1-5 Sepolia.
+
+**Status:** **Checklist ready / live pending Enrique.** Runbook is
+[staging-e2e.md](staging-e2e.md) § V2-5. Live multi-browser dogfood is
+deferred to Enrique (poster `jegamboafuentes`; hunters `enrique-lb` /
+`enrique-mp`). Eng does not wait on that run. DEV remount at runbook
+write-up: `github-bounties-web-00037-ckz`, tip `cfd7021`, migrate `0004`
+applied, `claim_lock_sunset=true`.
 
 ### Acceptance criteria
 
-- [ ] **≥ 2 hunters** (distinct GitHub identities, neither is the poster) each
-      open a qualifying PR on a funded DEV issue **before** the winning merge;
-      each PR has ≥1 commit of theirs.
-- [ ] Winning merge closes `#N`; roster shows winner + both pool members;
-      exclusive lock was not required.
-- [ ] Settle on DEV (Base Sepolia): confirmed txs for fee, winner, and **each**
-      pool member; amounts match ADR 0003; explorer links on the bounty page.
-- [ ] Second funded bounty with **no** other qualifying hunters: winner
-      receives **100% of post-fee**; no pool transfers. Record this as the
-      empty-pool regression in [staging-e2e.md](staging-e2e.md).
-- [ ] Signal (“working on this”) exercised by at least one hunter; a second
-      hunter can still open a PR and be paid from the pool.
-- [ ] Runbook steps added to `docs/staging-e2e.md` (DEV, not prod). No
-      mainnet, no production user funds.
+- [x] Runbook steps added to `docs/staging-e2e.md` (DEV, not prod). No
+      mainnet, no production user funds. Named actors + current remount
+      recorded. Empty-pool regression **template** is in that file (live
+      hashes filled by Enrique).
+- [ ] **Checklist ready / live pending Enrique.** **≥ 2 hunters** (distinct
+      GitHub identities, neither is the poster) each open a qualifying PR on
+      a funded DEV issue **before** the winning merge; each PR has ≥1 commit
+      of theirs.
+- [ ] **Checklist ready / live pending Enrique.** Winning merge closes `#N`;
+      roster shows winner + both pool members; exclusive lock was not
+      required (`claim_lock_sunset`).
+- [ ] **Checklist ready / live pending Enrique.** Settle on DEV (Base
+      Sepolia): confirmed txs for fee, winner, and **each** pool member;
+      amounts match ADR 0003; explorer links / `sepolia.basescan.org` hashes
+      on the bounty page.
+- [ ] **Checklist ready / live pending Enrique.** Second funded bounty with
+      **no** other qualifying hunters: winner receives **100% of post-fee**;
+      no pool transfers. Record hashes in [staging-e2e.md](staging-e2e.md)
+      § V2-5 live log (empty-pool regression).
+- [ ] **Checklist ready / live pending Enrique.** Signal (“working on this”)
+      exercised by at least one hunter; a second hunter can still open a PR
+      and be paid from the pool.
 
 ### Out of scope
 
+- Actually executing the live multi-browser dogfood (Enrique)
 - Production marketing
 - Load tests
 - V1.5 WalletConnect polish
