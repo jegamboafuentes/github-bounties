@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { escrows } from "../db/schema";
+import { confirmedOutflowsFromLegs, loadAllocationLegs } from "./allocation";
 import { probeCdpEnv, type CdpRailMode } from "./env";
 import { formatEscrowFailLabel } from "./fail";
 import { hostedCheckoutStatus } from "./hosted";
@@ -68,6 +69,8 @@ export async function getEscrowSnapshot(
   const origin = publicOrigin();
   const resourcePath = X402_RESOURCE_PATH(row.bountyId);
   const inboundRecorded = inboundIsRecorded(row);
+  const legs = await loadAllocationLegs(db, bountyId);
+  const out = legs.length > 0 ? confirmedOutflowsFromLegs(legs) : null;
   return {
     id: row.id,
     bountyId: row.bountyId,
@@ -103,6 +106,9 @@ export async function getEscrowSnapshot(
       payoutTxHash: row.payoutTxHash,
       feeTxHash: row.feeTxHash,
       refundTxHash: row.refundTxHash,
+      confirmedWinnerAtomic: out?.winnerAtomic,
+      confirmedPoolAtomic: out?.poolAtomic,
+      confirmedFeeAtomic: out?.feeAtomic,
     }),
   };
 }

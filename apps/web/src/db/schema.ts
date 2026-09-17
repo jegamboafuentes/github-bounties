@@ -91,8 +91,8 @@ export const poolParticipantRoleEnum = pgEnum("pool_participant_role", [
 ]);
 
 /**
- * V2 settlement legs only (ADR 0003). Not V1 `HUNTER_PAYOUT` /
- * `FUND_IN` / `REFUND_OUT` — those stay on the escrow row until V2-3.
+ * V2 settlement legs (ADR 0003 / V2-3). `FUND_IN` / `REFUND_OUT` stay on
+ * the escrow row. Winner hash is also copied to `escrows.payout_tx_hash`.
  */
 export const allocationLedgerKindEnum = pgEnum("allocation_ledger_kind", [
   "FEE_OUT",
