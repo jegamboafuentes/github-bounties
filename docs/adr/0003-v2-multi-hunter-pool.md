@@ -1,19 +1,20 @@
 # ADR 0003: V2 multi-hunter participation pool
 
-- **Status:** Accepted — V2-0 spike + V2-1 schema + V2-2 webhooks + V2-3 multi-payee settle + V2-4 UI (claim-lock sunset). Product rules frozen by LB PM (Enrique delegated).
+- **Status:** Accepted — V2-0 spike + V2-1 schema + V2-2 webhooks + V2-3 multi-payee settle + V2-4 UI (claim-lock sunset). V2-5 runbook checklist ready; live dogfood pending Enrique.
 - **Date:** 2026-09-12 (Accepted 2026-09-17)
 - **Product:** GitHub Bounties (not Lightning Bounties / LB1 / “Lightning Bounties 2”)
 - **Tickets:** [docs/v2-tickets.md](../v2-tickets.md) (V2-0…V2-5)
 - **Follows:** [ADR 0001](./0001-cdp-x402-wallets.md) (fee/custody), [ADR 0002](./0002-x402-exact-dev-fund.md) (DEV x402 `exact` Lock)
 - **Supersedes:** ADR 0001 V2 sketch (`pool ≈ 0.15 × F`). Frozen math is **15% of post-fee**, not 15% of face.
-- **V2-4 (this impl PR):** `/board` + `/bounties/[id]` parallel hunt UI. Optional non-exclusive `work_signals`. Pool roster + payout breakdown. Exclusive 72h claim-lock is not acquired; residual V1 locks drain on read. V2-5 is DEV dogfood.
+- **V2-5 (this docs PR):** DEV dogfood runbook in [staging-e2e.md](../staging-e2e.md). Live multi-browser execution is deferred to Enrique (poster `jegamboafuentes`; hunters `enrique-lb` / `enrique-mp`). No product-code change required for the Eng epic closeout.
 
 > **Accepted** — freeze below is locked. V2-0 landed the predicate fixtures and
 > integer math. V2-1 lands the additive schema (`pool_participants`,
 > `allocation_ledger`, `work_signals`). V2-2 freezes `E` on winning merge.
 > V2-3 wires `settleEscrow` to fee + winner + N pool legs. V2-4 is the UI
-> (signals, roster, breakdown, claim-lock sunset). V2-5 (DEV dogfood) is still
-> unimplemented. V1.5 WalletConnect + amount chips is
+> (signals, roster, breakdown, claim-lock sunset). V2-5 DEV dogfood **runbook**
+> is in [staging-e2e.md](../staging-e2e.md); live multi-browser execution is
+> deferred to Enrique. V1.5 WalletConnect + amount chips is
 > parallel polish after x402 [#29](https://github.com/jegamboafuentes/github-bounties/pull/29)
 > and **does not block** this spec.
 
@@ -426,7 +427,11 @@ Nightly recon unchanged in spirit: `sum(open attributed) == gb-escrow` USDC
 - Unlinked eligible hunters leave USDC in escrow until they Connect + set a wallet.
 - Residual V1 claim-lock UI/cron must be retired without breaking in-flight DEV bounties.
 
-## Done criteria (product, after implementation tickets — not this PR)
+## Done criteria (product — V2-5 runbook ready; live pending Enrique)
+
+Eng checklist: [staging-e2e.md](../staging-e2e.md) § V2-5. Live multi-browser
+dogfood is deferred to Enrique (poster `jegamboafuentes`; hunters `enrique-lb`
+/ `enrique-mp`). Not an Eng code-path blocker.
 
 1. **≥ 2 hunters dogfood on DEV** (`https://dev.githubbounties.xyz`): parallel
    qualifying PRs, one winning merge, both see the pool roster.

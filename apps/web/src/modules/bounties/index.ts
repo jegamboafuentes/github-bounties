@@ -7,7 +7,7 @@ export const bountiesModule = {
   wired: true,
   nextTicket: "V2-5",
   notes:
-    "Create from GitHub issue URL, board + filters, escrow fund-lock, Working on this signals, pool roster + payout breakdown, hunter claim payout. Signals ≠ money.",
+    "Create from GitHub issue URL, board + filters, escrow fund-lock, Working on this signals, pool roster + payout breakdown, hunter claim payout. Signals ≠ money. Live V2-5 dogfood is pending Enrique (docs/staging-e2e.md).",
 };
 
 export type BountiesModule = typeof bountiesModule;
