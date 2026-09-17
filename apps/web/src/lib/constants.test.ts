@@ -8,6 +8,7 @@ import { webhooksModule } from "../modules/webhooks";
 import { HOSTED_CHECKOUT_ENABLED } from "../escrow/hosted";
 import {
   CLAIM_LOCK_HOURS,
+  CLAIM_LOCK_SUNSET,
   DEFAULT_CHAIN,
   DEFAULT_CURRENCY,
   FEE_BPS,
@@ -18,10 +19,11 @@ import {
 import { claimLockExpiresAt, feeFromFaceUsdc } from "./money";
 
 describe("product locks", () => {
-  it("is GitHub Bounties with a 2% fee and 72h claim-lock", () => {
+  it("is GitHub Bounties with a 2% fee and claim-lock sunset", () => {
     assert.equal(PRODUCT_NAME, "GitHub Bounties");
     assert.equal(FEE_BPS, 200);
     assert.equal(CLAIM_LOCK_HOURS, 72);
+    assert.equal(CLAIM_LOCK_SUNSET, true);
     assert.equal(POOL_BPS_OF_POST_FEE, 1500);
     assert.equal(POOL_MAX_PAID, 10);
     assert.equal(HOSTED_CHECKOUT_ENABLED, false);

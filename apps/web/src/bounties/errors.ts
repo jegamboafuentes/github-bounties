@@ -12,7 +12,8 @@ export type BountyErrorCode =
   | "not_refundable"
   | "not_claimable"
   | "already_locked"
-  | "lock_not_active";
+  | "lock_not_active"
+  | "lock_sunset";
 
 export class BountyError extends Error {
   readonly code: BountyErrorCode;

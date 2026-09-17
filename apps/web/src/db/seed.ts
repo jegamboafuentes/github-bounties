@@ -115,16 +115,16 @@ async function main() {
         amountUsdc: "100.000000",
         currency: "USDC",
         chain: "base",
-        status: "claim_locked",
-        title: "Seed: claim-locked bounty on #42",
-        descriptionSnapshot: "Fixes welcome. Winner = merged PR author that closes #42.",
+        status: "funded",
+        title: "Seed: funded bounty on #42",
+        descriptionSnapshot: "Fixes welcome. Winner = merged PR author that closes #42. Parallel hunt.",
         fundedAt,
       })
       .onConflictDoUpdate({
         target: bounties.id,
         set: {
-          status: "claim_locked",
-          title: "Seed: claim-locked bounty on #42",
+          status: "funded",
+          title: "Seed: funded bounty on #42",
           fundedAt,
           updatedAt: fundedAt,
         },
@@ -143,7 +143,7 @@ async function main() {
         chain: "base",
         status: "funded",
         title: "Seed: open funded bounty on #43",
-        descriptionSnapshot: "Unlocked. Hunters can take the 72h claim-lock.",
+        descriptionSnapshot: "Open. Hunters can signal Working on this (not exclusive).",
         fundedAt,
       })
       .onConflictDoNothing();
@@ -201,7 +201,7 @@ async function main() {
         hunterUserId: SEED.hunterId,
         lockedAt,
         expiresAt: lockExpires,
-        status: "active",
+        status: "released",
       })
       .onConflictDoUpdate({
         target: claimLocks.id,
@@ -209,7 +209,7 @@ async function main() {
           hunterUserId: SEED.hunterId,
           lockedAt,
           expiresAt: lockExpires,
-          status: "active",
+          status: "released",
           updatedAt: lockedAt,
         },
       });
@@ -298,6 +298,7 @@ async function main() {
       .select({
         expiresAt: claimLocks.expiresAt,
         lockedAt: claimLocks.lockedAt,
+        status: claimLocks.status,
       })
       .from(claimLocks)
       .where(eq(claimLocks.id, SEED.lockId))
@@ -322,9 +323,7 @@ async function main() {
       `  bounty funded: ${funded?.id ?? SEED.fundedBountyId} status=${funded?.status} amount_usdc=${funded?.amountUsdc}`,
     );
     if (lock?.lockedAt && lock.expiresAt) {
-      const hours =
-        (lock.expiresAt.getTime() - lock.lockedAt.getTime()) / 3_600_000;
-      console.log(`  claim-lock: ${hours}h (expected ${CLAIM_LOCK_HOURS})`);
+      console.log(`  residual claim-lock seed row: ${lock.status} (exclusive lock sunset)`);
     }
     console.log(
       `  fee_ledger: fee_bps=${fee?.feeBps} fee_usdc=${fee?.feeUsdc} (2% of 100)`,

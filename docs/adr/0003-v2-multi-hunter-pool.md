@@ -1,17 +1,19 @@
 # ADR 0003: V2 multi-hunter participation pool
 
-- **Status:** Accepted — V2-0 spike + V2-1 schema + V2-2 webhooks + V2-3 multi-payee settle. Product rules frozen by LB PM (Enrique delegated).
+- **Status:** Accepted — V2-0 spike + V2-1 schema + V2-2 webhooks + V2-3 multi-payee settle + V2-4 UI (claim-lock sunset). Product rules frozen by LB PM (Enrique delegated).
 - **Date:** 2026-09-12 (Accepted 2026-09-17)
 - **Product:** GitHub Bounties (not Lightning Bounties / LB1 / “Lightning Bounties 2”)
 - **Tickets:** [docs/v2-tickets.md](../v2-tickets.md) (V2-0…V2-5)
 - **Follows:** [ADR 0001](./0001-cdp-x402-wallets.md) (fee/custody), [ADR 0002](./0002-x402-exact-dev-fund.md) (DEV x402 `exact` Lock)
 - **Supersedes:** ADR 0001 V2 sketch (`pool ≈ 0.15 × F`). Frozen math is **15% of post-fee**, not 15% of face.
-- **V2-3 (this impl PR):** `settleEscrow` pays `gb-fee` + winner + N frozen pool members. Empty pool is the V1 post-fee winner amount. No UI, no exclusive claim-lock sunset.
+- **V2-4 (this impl PR):** `/board` + `/bounties/[id]` parallel hunt UI. Optional non-exclusive `work_signals`. Pool roster + payout breakdown. Exclusive 72h claim-lock is not acquired; residual V1 locks drain on read. V2-5 is DEV dogfood.
 
 > **Accepted** — freeze below is locked. V2-0 landed the predicate fixtures and
 > integer math. V2-1 lands the additive schema (`pool_participants`,
 > `allocation_ledger`, `work_signals`). V2-2 freezes `E` on winning merge.
-> V2-3 wires `settleEscrow` to fee + winner + N pool legs. V2-4…V2-5 (UI, DEV dogfood) are still unimplemented. V1.5 WalletConnect + amount chips is
+> V2-3 wires `settleEscrow` to fee + winner + N pool legs. V2-4 is the UI
+> (signals, roster, breakdown, claim-lock sunset). V2-5 (DEV dogfood) is still
+> unimplemented. V1.5 WalletConnect + amount chips is
 > parallel polish after x402 [#29](https://github.com/jegamboafuentes/github-bounties/pull/29)
 > and **does not block** this spec.
 

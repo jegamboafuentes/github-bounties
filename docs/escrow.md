@@ -159,7 +159,7 @@ Recon: attributed escrow = `F − confirmed winner − confirmed pool − confir
 
 Inbound fund / x402 Lock is unchanged. Hosted checkout stays disabled. Mock rail still lists missing `CDP_*`. Live DEV is Base Sepolia. Mainnet refused without `CDP_ALLOW_MAINNET=1`.
 
-UI breakdown is V2-4. Claim-lock sunset is V2-4.
+UI breakdown (roster + face/fee/winner/pool/tx) is V2-4. Exclusive claim-lock is retired (V2-4); residual locks drain on read.
 
 ## Idempotency + recon
 
@@ -175,15 +175,15 @@ UI breakdown is V2-4. Claim-lock sunset is V2-4.
 | Poster **Lock in escrow** on `/bounties/[id]` | Google | pending → funded + escrow lock (uses recorded x402 inbound if present) |
 | `POST /api/bounties/:id/fund` | Google | same Lock; **4xx** + `fail_code`/`fail_reason` on rail/client failure |
 | `GET\|POST /api/bounties/:id/x402` | public (payment is the auth) | x402 `exact` seller; unpaid **402**; settle records inbound |
-| `GET /api/bounties/:id` | public | bounty + escrow snapshot (includes last Lock fail + x402 resource) |
+| `GET /api/bounties/:id` | public | bounty + escrow snapshot + pool roster (includes last Lock fail + x402 resource) |
 | Poster **Cancel and refund** | Google | full-face refund or void if never funded |
 | `POST /api/bounties/:id/settle` | Google | minimal settle (poster or hunter) |
 | Hunter **Claim payout** on `/bounties/[id]` | Google | V1-6 hunter-only path; calls `settleEscrow` |
 | `POST /api/bounties/:id/claim` | Google | same hunter-only claim (BYO Base address) |
 | `POST /api/bounties/:id/refund` | Google | same as cancel |
-| `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` | claim-lock expiry **and** `bounties.expires_at` refunds |
+| `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` | residual exclusive-lock drain **and** `bounties.expires_at` refunds |
 
-There is **no default bounty TTL**. `expires_at` is honored when set. Claim-lock timeout restores `funded`; it does not move USDC.
+There is **no default bounty TTL**. `expires_at` is honored when set. Residual claim-lock drain restores `funded`; it does not move USDC. Cron does **not** advertise exclusive 72h lock.
 
 ## Hosted checkout disabled
 
@@ -195,7 +195,7 @@ ADR 0001 open Q: Coinbase Business Checkouts `settlement.feeAmount` may skim a m
 
 ## Out of scope
 
-- V2-4 UI: pool roster / payout breakdown / claim-lock sunset
+- V2-4 UI: shipped (pool roster / payout breakdown / claim-lock sunset)
 - V1-6 claim payout UI ([claims.md](claims.md))
 - Multi-rail / Lightning / Solana
 - Production user funds / mainnet USDC

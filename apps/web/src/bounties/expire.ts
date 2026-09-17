@@ -1,45 +1,66 @@
-import { and, eq, lte } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { bounties, claimLocks } from "../db/schema";
 
 export type ExpireClaimLocksResult = {
   expiredLockIds: string[];
+  releasedLockIds: string[];
   restoredBountyIds: string[];
 };
 
 /**
- * Cron-friendly: expire active locks whose deadline has passed.
+ * V2-4 claim-lock sunset. Drain every residual exclusive `claim_locks` row
+ * with `status=active` (overdue → `expired`, still-unexpired → `released`).
  * If the bounty is still `claim_locked`, restore it to `funded` (open).
- * Does not touch money rows. Safe to call on every board/claim request.
+ * Does not touch money rows or `bounties.expires_at` refunds.
+ * Safe to call on every board/detail read and from the expiry cron.
  */
 export async function expireClaimLocks(
   db: Database,
   now: Date = new Date(),
 ): Promise<ExpireClaimLocksResult> {
+  return drainExclusiveClaimLocks(db, now);
+}
+
+/** Force-release / expire residual V1 exclusive locks. Alias of expireClaimLocks. */
+export async function drainExclusiveClaimLocks(
+  db: Database,
+  now: Date = new Date(),
+  bountyId?: string,
+): Promise<ExpireClaimLocksResult> {
   const expiredLockIds: string[] = [];
+  const releasedLockIds: string[] = [];
   const restoredBountyIds: string[] = [];
 
-  const overdue = await db
+  const active = await db
     .select({
       id: claimLocks.id,
       bountyId: claimLocks.bountyId,
+      expiresAt: claimLocks.expiresAt,
     })
     .from(claimLocks)
-    .where(and(eq(claimLocks.status, "active"), lte(claimLocks.expiresAt, now)));
+    .where(
+      bountyId
+        ? and(eq(claimLocks.status, "active"), eq(claimLocks.bountyId, bountyId))
+        : eq(claimLocks.status, "active"),
+    );
 
-  if (overdue.length === 0) {
-    return { expiredLockIds, restoredBountyIds };
+  if (active.length === 0) {
+    return { expiredLockIds, releasedLockIds, restoredBountyIds };
   }
 
   await db.transaction(async (tx) => {
-    for (const lock of overdue) {
+    for (const lock of active) {
+      const nextStatus =
+        lock.expiresAt.getTime() <= now.getTime() ? "expired" : "released";
       const [updated] = await tx
         .update(claimLocks)
-        .set({ status: "expired", updatedAt: now })
+        .set({ status: nextStatus, updatedAt: now })
         .where(and(eq(claimLocks.id, lock.id), eq(claimLocks.status, "active")))
         .returning({ id: claimLocks.id });
       if (!updated) continue;
-      expiredLockIds.push(updated.id);
+      if (nextStatus === "expired") expiredLockIds.push(updated.id);
+      else releasedLockIds.push(updated.id);
 
       const [restored] = await tx
         .update(bounties)
@@ -50,29 +71,14 @@ export async function expireClaimLocks(
     }
   });
 
-  return { expiredLockIds, restoredBountyIds };
+  return { expiredLockIds, releasedLockIds, restoredBountyIds };
 }
 
-/** Expire overdue locks for one bounty (acquire/list hot path). */
+/** Drain residual exclusive locks for one bounty (board/detail hot path). */
 export async function expireClaimLocksForBounty(
   bountyId: string,
   db: Database,
   now: Date = new Date(),
 ): Promise<ExpireClaimLocksResult> {
-  const [lock] = await db
-    .select({
-      id: claimLocks.id,
-      bountyId: claimLocks.bountyId,
-      expiresAt: claimLocks.expiresAt,
-      status: claimLocks.status,
-    })
-    .from(claimLocks)
-    .where(and(eq(claimLocks.bountyId, bountyId), eq(claimLocks.status, "active")))
-    .limit(1);
-
-  if (!lock || lock.expiresAt.getTime() > now.getTime()) {
-    return { expiredLockIds: [], restoredBountyIds: [] };
-  }
-
-  return expireClaimLocks(db, now);
+  return drainExclusiveClaimLocks(db, now, bountyId);
 }

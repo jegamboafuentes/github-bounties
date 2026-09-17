@@ -1,53 +1,54 @@
-# Bounty post, board, and 72h claim-lock (V1-4)
+# Bounty post, board, and parallel hunt (V1-4 / V2-4)
 
-Official name: **GitHub Bounties**. Poster creates a bounty from a GitHub issue URL. The board lists bounties. Hunters take an exclusive **72-hour** claim-lock with a visible expiry.
+Official name: **GitHub Bounties**. Poster creates a bounty from a GitHub issue URL. The board lists bounties. Hunters hunt in **parallel**. Optional **Working on this** is a non-exclusive signal (many hunters per bounty). Exclusive 72h claim-lock is **retired** (V2-4). Residual V1 `claim_locks` drain on board/detail read and via `GET|POST /api/jobs/expire-claim-locks`.
 
-**Claim-lock is coordination only. It does not move money.** Merge is still truth: the winner is the author of the merged pull request that closes funded issue `#N` (V1-3 `claims.status=eligible`).
+**Working on this does not move money.** Merge is still truth: the winner is the author of the merged pull request that closes funded issue `#N` (V1-3 `claims.status=eligible`). Pool members are frozen at that merge (ADR 0003).
 
-This is not Lightning Bounties / LB1. Escrow lock / 2% settlement is V1-5 ([docs/escrow.md](escrow.md)). Claim-lock still does not move USDC.
+This is not Lightning Bounties / LB1. Escrow lock / 2% settlement is V1-5 ([docs/escrow.md](escrow.md)). Signals still do not move USDC.
 
 ## Product locks
 
 | Item | Value |
 | --- | --- |
-| Claim-lock | exclusive **72h** (`CLAIM_LOCK_HOURS`) |
-| Active locks | one per bounty (unique index on `claim_locks` where `status=active`) |
+| Hunt | parallel; optional non-exclusive `work_signals` |
+| Exclusive claim-lock | **sunset** (V2-4). Do not acquire new `claim_locks`. |
 | Fund | escrow lock `pending_fund` → `funded` (CDP or documented mock) |
-| Auth | Google session for post / fund-lock / claim / release / cancel |
+| Auth | Google session for post / fund-lock / signal / claim / cancel |
 | Repo | must be App-connected (`repos.is_active`) |
 
 ## Status flow
 
 The create form is the **draft**. Schema has no `draft` status. Submit writes `pending_fund`, then:
 
-`pending_fund` → **escrow lock** → `funded` → **claim-lock** → `claim_locked` → release or lock-expiry → `funded`
+`pending_fund` → **escrow lock** → `funded` → (optional signals; no exclusive lock) → winning merge → settle
 
-Money: `funded` → eligible hunter claims → `settled` / `settled_partial` (board: **Completed (paid)**), or cancel / `expires_at` → `refunded` (bounty `cancelled` / `expired`). See [escrow.md](escrow.md) and [claims.md](claims.md).
+Residual `claim_locked` rows drain to `funded` on read. Money: `funded` → eligible winner claims → `settled` / `settled_partial` (board: **Completed (paid)**), or cancel / `expires_at` → `refunded` (bounty `cancelled` / `expired`). See [escrow.md](escrow.md) and [claims.md](claims.md).
 
 ## Surfaces
 
 | URL | Auth | Role |
 | --- | --- | --- |
-| `/board` | public | List + filter by repo / status. Shows **Claimed by X until …** when a lock is active. Poster and claimed/paid hunter GitHub avatars when a login is present (`avatars.githubusercontent.com/{login}`) |
-| `/settings` | Google session | Linked GitHub avatar + username. Payout wallet: WalletConnect (same Reown project id as fund) or Advanced paste |
+| `/board` | public | List + filter by repo / status. Shows **Working on this** hunters (not “Claimed by X until …”). Poster and paid hunter GitHub avatars when a login is present (`avatars.githubusercontent.com/{login}`) |
+| `/settings` | Google session | Linked GitHub avatar + username. Payout wallet: WalletConnect (same Reown project id as fund) or Advanced paste. Pool members are paid to this wallet when settle runs. |
 | `/bounties/new` | Google session | Create from issue URL. Face chips `$1 / $5 / $10 / $50 / $100` + custom |
-| `/bounties/[id]` | public read; Google for actions | Escrow lock (WalletConnect / Pay face + Advanced paste-hash), claim-lock, hunter payout claim, early release, poster force-release, cancel/refund |
-| `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` | Cron-friendly expiry |
+| `/bounties/[id]` | public read; Google for actions | Escrow lock (WalletConnect / Pay face + Advanced paste-hash), Working on this, pool roster, payout breakdown, winner Claim (BYO Base), cancel/refund |
+| `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` | Drains residual exclusive locks **and** `expires_at` bounty refunds |
 
 CLI (same function): `cd apps/web && npm run expire-locks`
 
-Expiry sets overdue `claim_locks.status=expired` and restores `claim_locked` bounties to `funded` when that is still appropriate. Board and claim paths also run expiry so captions stay current.
+Expiry **does not advertise** exclusive lock. It force-releases / expires leftover `claim_locks.status=active` and restores `claim_locked` bounties to `funded`. `bounties.expires_at` refunds are unchanged. Board and detail also drain on read.
 
 ## GitHub comment / label
 
-After a successful lock, the app **best-effort** comments on the issue and adds label `bounty-claimed` when an installation token is available. Missing App env or GitHub errors do **not** roll back the lock.
+V1 best-effort `bounty-claimed` after exclusive lock is not started from V2-4 UI. Signals do not add an exclusive label.
 
-Hunter payout after merge: [claims.md](claims.md).
+Hunter payout after merge: [claims.md](claims.md). Pool roster + split: ADR 0003 / V2-4 UI.
 
 ## Out of scope
 
-- Participation pool (V2) — spec in [ADR 0003](adr/0003-v2-multi-hunter-pool.md); do not implement in V1-4
+- WalletConnect + amount chips redesign (V1.5 polish)
 - Hosted checkout (blocked — ADR 0001 fee-skim open Q)
+- V2-5 DEV dogfood script (next ticket)
 
 ## Secrets
 

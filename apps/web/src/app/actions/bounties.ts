@@ -5,10 +5,12 @@ import { redirect } from "next/navigation";
 import { getCurrentPublicUser } from "@/auth/protect";
 import {
   acquireClaimLock,
+  clearWorkSignal,
   createBountyFromIssueUrl,
   isBountyError,
   releaseClaimLock,
   fundBounty,
+  signalWorkingOnThis,
 } from "@/bounties";
 import { claimPayout, isClaimError } from "@/claims";
 import { getRuntimeDb } from "@/db/runtime";
@@ -176,6 +178,34 @@ export async function releaseClaimLockAction(formData: FormData): Promise<void> 
   }
   try {
     await releaseClaimLock(bountyId, user.id, getRuntimeDb());
+    refreshBounty(bountyId);
+  } catch (err) {
+    redirectBountyError(bountyId, err);
+  }
+}
+
+export async function signalWorkingOnThisAction(formData: FormData): Promise<void> {
+  const bountyId = String(formData.get("bountyId") ?? "");
+  const user = await getCurrentPublicUser();
+  if (!user) {
+    redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
+  }
+  try {
+    await signalWorkingOnThis(bountyId, user.id, getRuntimeDb());
+    refreshBounty(bountyId);
+  } catch (err) {
+    redirectBountyError(bountyId, err);
+  }
+}
+
+export async function clearWorkSignalAction(formData: FormData): Promise<void> {
+  const bountyId = String(formData.get("bountyId") ?? "");
+  const user = await getCurrentPublicUser();
+  if (!user) {
+    redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
+  }
+  try {
+    await clearWorkSignal(bountyId, user.id, getRuntimeDb());
     refreshBounty(bountyId);
   } catch (err) {
     redirectBountyError(bountyId, err);

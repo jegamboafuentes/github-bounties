@@ -24,9 +24,8 @@ import { POOL_BPS_OF_POST_FEE } from "../lib/constants";
  * Status names map to ADR 0001 money/coordination states where those exist.
  *
  * Winner: author of the merged PR that closes funded issue #N.
- * Claim-lock is exclusive 72h coordination only — it does not move USDC.
- * V2-1 does not drop `claim_locks_one_active_per_bounty_uidx` (sunset is V2-4)
- * and does not acquire new exclusive locks; `work_signals` is non-exclusive.
+ * Exclusive 72h claim-lock is retired (V2-4). Residual `claim_locks` drain
+ * on board/detail read. Use non-exclusive `work_signals`.
  * FeeLedger.fee_bps defaults to 200 (2% of face) at settlement.
  * `bounties.participation_pool_bps` default 1500 = 15% of **post-fee**, not of face.
  */
@@ -448,8 +447,8 @@ export const allocationLedger = pgTable(
  * Optional non-blocking “working on this” signal (ADR 0003).
  *
  * Many rows per bounty and per `(bounty_id, user_id)`. **No exclusive unique
- * index** — this is not a claim-lock and not a money row. V2 code paths must
- * not insert `claim_locks`.
+ * index** — this is not a claim-lock and not a money row. V2-4 UI writes these
+ * instead of `claim_locks`.
  */
 export const workSignals = pgTable(
   "work_signals",

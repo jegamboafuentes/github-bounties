@@ -6,11 +6,14 @@ export const PRODUCT_NAME = "GitHub Bounties";
 export const FEE_BPS = 200;
 
 /**
- * Exclusive V1 coordination lock. Does not move USDC.
- * V2-1 does **not** sunset this — drop is V2-4. V2 paths must not acquire
- * new exclusive `claim_locks`; use non-exclusive `work_signals`.
+ * Historical V1 exclusive coordination lock (hours). Does not move USDC.
+ * V2-4 sunsets exclusive `claim_locks`: do not acquire new rows; drain
+ * residuals on read. Use non-exclusive `work_signals`.
  */
 export const CLAIM_LOCK_HOURS = 72;
+
+/** Product flag: exclusive 72h claim-lock is retired (ADR 0003 / V2-4). */
+export const CLAIM_LOCK_SUNSET = true;
 
 /**
  * V2 pool share: **1500 bps of post-fee** (not of face). ADR 0003.

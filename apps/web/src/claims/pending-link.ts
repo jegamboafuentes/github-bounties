@@ -16,11 +16,11 @@ export type PendingHunterLinkTarget = {
 };
 
 export function pendingHunterLinkCaption(winnerLogin: string): string {
-  return `Merged PR author ${winnerLogin} must Connect GitHub as that login before payout. The claim-lock holder is not the winner.`;
+  return `Merged PR author ${winnerLogin} must Connect GitHub as that login before payout. Working on this is not the winner.`;
 }
 
 export function pendingHunterLinkGuidance(winnerLogin: string): string {
-  return `This bounty has no eligible claim because GitHub user ${winnerLogin} (the merged pull request author) is not linked. Sign in and Connect GitHub as ${winnerLogin}, then Ops can redeliver the merge webhook (or Connect GitHub backfill writes the claim). Do not pay the claim-lock holder.`;
+  return `This bounty has no eligible claim because GitHub user ${winnerLogin} (the merged pull request author) is not linked. Sign in and Connect GitHub as ${winnerLogin}, then Ops can redeliver the merge webhook (or Connect GitHub backfill writes the claim). Do not pay anyone who only signaled Working on this.`;
 }
 
 export function pendingHunterLinkFromDelivery(

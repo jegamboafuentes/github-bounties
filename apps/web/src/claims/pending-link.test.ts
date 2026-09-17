@@ -75,11 +75,11 @@ describe("pending hunter GitHub link", () => {
     );
   });
 
-  it("tells the PR author to Connect GitHub and not the lock holder", () => {
+  it("tells the PR author to Connect GitHub and not treat a signal as the winner", () => {
     assert.match(pendingHunterLinkCaption("enrique-lb"), /enrique-lb/);
     assert.match(pendingHunterLinkCaption("enrique-lb"), /Connect GitHub/);
-    assert.match(pendingHunterLinkCaption("enrique-lb"), /claim-lock holder is not the winner/i);
+    assert.match(pendingHunterLinkCaption("enrique-lb"), /Working on this is not the winner/i);
     assert.match(pendingHunterLinkGuidance("enrique-lb"), /enrique-lb/);
-    assert.match(pendingHunterLinkGuidance("enrique-lb"), /Do not pay the claim-lock holder/);
+    assert.match(pendingHunterLinkGuidance("enrique-lb"), /Working on this/);
   });
 });
