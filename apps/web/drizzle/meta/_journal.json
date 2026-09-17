@@ -29,6 +29,13 @@
       "when": 1789182600000,
       "tag": "0003_webhook_claim_results",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789637493943,
+      "tag": "0004_v2_pool_participants",
+      "breakpoints": true
     }
   ]
 }

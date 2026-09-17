@@ -16,11 +16,14 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 | `bounties` | Issue bounty; `amount_usdc`, `currency` default USDC, `chain` default `base` |
 | `claim_locks` | Exclusive lock; `expires_at` defaults to `now() + 72 hours`; one `active` row per bounty |
 | `escrows` | 1:1 with bounty; fund / payout / fee / refund tx hashes + idempotency key (V1-5); last Lock/settle `fail_code` / `fail_reason` |
-| `claims` | `eligible` \| `paid` \| `rejected` \| `disputed`; PR + merge + payout fields |
+| `claims` | Winner-only `eligible` \| `paid` \| `rejected` \| `disputed`; PR + merge + payout fields. Pool members are **not** claims rows. |
 | `fee_ledger` | `face_usdc`, `fee_usdc`, `fee_bps` default **200**, `settled_at` |
+| `pool_participants` | V2-1 frozen roster. Unique `(bounty_id, github_id)`. `role` ∈ `winner \| pool \| overflow \| excluded_poster \| excluded_bot`. Nullable `user_id`. Equal `share_usdc` (0 for overflow/excluded). |
+| `allocation_ledger` | V2-1 one row per intended chain movement. `kind` ∈ `FEE_OUT \| WINNER_PAYOUT \| POOL_PAYOUT`. Unique `(bounty_id, kind, participant_id)` (`NULLS NOT DISTINCT`) and unique `idempotency_key`. |
+| `work_signals` | V2-1 non-exclusive “working on this”. Many rows per bounty / `(bounty_id, user_id)`. **No** exclusive unique index. Not a money row. |
 | `webhook_deliveries` | GitHub `X-GitHub-Delivery` GUID primary key (V1-3 idempotency); `claim_results` JSON + winner/PR/repo for skip reasons |
 
-`bounties.participation_pool_bps` / `participation_pool_usdc` are **nullable stubs** for V2. Do not implement the pool in V1. Frozen meaning (ADR 0003): **1500 bps of post-fee**, not of face. Tickets: [v2-tickets.md](v2-tickets.md).
+`bounties.participation_pool_bps` default **1500 = 15% of post-fee**, not of face (ADR 0003 / V2-1). `participation_pool_usdc` stays nullable until settle knows `N`. `escrows.payout_tx_hash` remains the **winner** hash for V1 readers; pool hashes live on `allocation_ledger` / `pool_participants`.
 
 ## Status enums (ADR 0001 mapping)
 
@@ -44,7 +47,10 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 ## Indexes / invariants
 
 - Unique **one active bounty** per `(repo_id, github_issue_number)` while status is `pending_fund`, `funded`, `claim_locked`, `settling`, `settled_partial`, or `refunding`.
-- Unique **one active claim-lock** per `bounty_id`.
+- Unique **one active claim-lock** per `bounty_id` (V1 exclusive index stays until V2-4; V2 does not acquire new locks).
+- Unique `(bounty_id, github_id)` on `pool_participants`.
+- Unique `(bounty_id, kind, participant_id)` (`NULLS NOT DISTINCT` unique constraint) and unique `idempotency_key` on `allocation_ledger`.
+- `work_signals` has **no** exclusive unique index.
 - Unique escrow per `bounty_id` (1:1).
 - Unique `(bounty_id, pr_number)` on claims when `pr_number` is present (idempotent merge).
 - Unique `fee_ledger.bounty_id`.

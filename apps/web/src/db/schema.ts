@@ -11,19 +11,24 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+import { POOL_BPS_OF_POST_FEE } from "../lib/constants";
 
 /**
- * V1 domain schema — contract for V1-2…V1-6.
+ * V1 domain schema plus additive V2-1 pool tables.
  *
  * ORM: Drizzle (SQL-first, typed migrations, no runtime query engine).
  * Status names map to ADR 0001 money/coordination states where those exist.
  *
- * Winner (later tickets): author of the merged PR that closes funded issue #N.
+ * Winner: author of the merged PR that closes funded issue #N.
  * Claim-lock is exclusive 72h coordination only — it does not move USDC.
+ * V2-1 does not drop `claim_locks_one_active_per_bounty_uidx` (sunset is V2-4)
+ * and does not acquire new exclusive locks; `work_signals` is non-exclusive.
  * FeeLedger.fee_bps defaults to 200 (2% of face) at settlement.
+ * `bounties.participation_pool_bps` default 1500 = 15% of **post-fee**, not of face.
  */
 
 const timestamps = {
@@ -74,6 +79,32 @@ export const claimStatusEnum = pgEnum("claim_status", [
   "paid",
   "rejected",
   "disputed",
+]);
+
+/** Frozen roster role. Winner is excluded from E; overflow is recorded, not paid. */
+export const poolParticipantRoleEnum = pgEnum("pool_participant_role", [
+  "winner",
+  "pool",
+  "overflow",
+  "excluded_poster",
+  "excluded_bot",
+]);
+
+/**
+ * V2 settlement legs only (ADR 0003). Not V1 `HUNTER_PAYOUT` /
+ * `FUND_IN` / `REFUND_OUT` — those stay on the escrow row until V2-3.
+ */
+export const allocationLedgerKindEnum = pgEnum("allocation_ledger_kind", [
+  "FEE_OUT",
+  "WINNER_PAYOUT",
+  "POOL_PAYOUT",
+]);
+
+export const allocationLedgerStatusEnum = pgEnum("allocation_ledger_status", [
+  "pending",
+  "submitted",
+  "confirmed",
+  "failed",
 ]);
 
 export const users = pgTable(
@@ -171,8 +202,14 @@ export const bounties = pgTable(
     descriptionSnapshot: text("description_snapshot"),
     fundedAt: timestamp("funded_at", { withTimezone: true, mode: "date" }),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
-    /** V2 participation pool — nullable stubs only. */
-    participationPoolBps: integer("participation_pool_bps"),
+    /**
+     * ADR 0003 / V2-1: **1500 = 15% of post-fee** (not 15% of face).
+     * `pool_atomic = |E|=0 ? 0 : floor(post_fee × 1500 / 10_000)`.
+     * Nullable so pre-V2 rows stay valid; new inserts default 1500.
+     */
+    participationPoolBps: integer("participation_pool_bps").default(
+      POOL_BPS_OF_POST_FEE,
+    ),
     participationPoolUsdc: numeric("participation_pool_usdc", {
       precision: 20,
       scale: 6,
@@ -239,6 +276,7 @@ export const escrows = pgTable(
     checkoutId: text("checkout_id"),
     fundTxHash: text("fund_tx_hash"),
     sweepTxHash: text("sweep_tx_hash"),
+    /** Winner hash for V1 readers. Pool hashes live on allocation_ledger / pool_participants. */
     payoutTxHash: text("payout_tx_hash"),
     feeTxHash: text("fee_tx_hash"),
     refundTxHash: text("refund_tx_hash"),
@@ -273,7 +311,7 @@ export const claims = pgTable(
     status: claimStatusEnum("status").notNull().default("eligible"),
     prNumber: integer("pr_number"),
     prUrl: text("pr_url"),
-    /** Winner later: merged PR author (login) that closes #N. */
+    /** Winner: merged PR author (login) that closes #N. Pool members are not claims rows. */
     prAuthorLogin: text("pr_author_login"),
     mergedAt: timestamp("merged_at", { withTimezone: true, mode: "date" }),
     mergeCommitSha: text("merge_commit_sha"),
@@ -319,6 +357,123 @@ export const feeLedger = pgTable(
   ],
 );
 
+/**
+ * Frozen eligible set + equal shares (ADR 0003 / V2-1).
+ *
+ * Unique `(bounty_id, github_id)`. `user_id` is null until `github_links`.
+ * Overflow / excluded rows have `share_usdc = 0`. Pool members are **not**
+ * `claims` rows — `claims` stays winner-only.
+ */
+export const poolParticipants = pgTable(
+  "pool_participants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bountyId: uuid("bounty_id")
+      .notNull()
+      .references(() => bounties.id, { onDelete: "restrict" }),
+    githubId: bigint("github_id", { mode: "bigint" }).notNull(),
+    githubLogin: text("github_login").notNull(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "restrict" }),
+    role: poolParticipantRoleEnum("role").notNull(),
+    qualifyingPrNumber: integer("qualifying_pr_number"),
+    qualifyingPrCreatedAt: timestamp("qualifying_pr_created_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+    qualifyingPrUrl: text("qualifying_pr_url"),
+    /** One commit of theirs on the qualifying PR at freeze. No reflog. */
+    commitSha: text("commit_sha"),
+    frozenAt: timestamp("frozen_at", { withTimezone: true, mode: "date" }),
+    shareUsdc: numeric("share_usdc", { precision: 20, scale: 6 })
+      .notNull()
+      .default("0"),
+    payoutAddress: text("payout_address"),
+    payoutTxHash: text("payout_tx_hash"),
+    paidAt: timestamp("paid_at", { withTimezone: true, mode: "date" }),
+    skipReason: text("skip_reason"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("pool_participants_bounty_github_uidx").on(
+      table.bountyId,
+      table.githubId,
+    ),
+    index("pool_participants_bounty_id_idx").on(table.bountyId),
+    index("pool_participants_user_id_idx").on(table.userId),
+    index("pool_participants_role_idx").on(table.role),
+    check("pool_participants_share_nonnegative", sql`${table.shareUsdc} >= 0`),
+  ],
+);
+
+/**
+ * One ledger row per intended V2 chain movement (fee, winner, each pool member).
+ *
+ * Unique `(bounty_id, kind, participant_id)` with `NULLS NOT DISTINCT` so a
+ * single `FEE_OUT` (null participant) is allowed per bounty.
+ * Unique `idempotency_key` for CDP retries (V2-3). Empty pool: no `POOL_PAYOUT`.
+ */
+export const allocationLedger = pgTable(
+  "allocation_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bountyId: uuid("bounty_id")
+      .notNull()
+      .references(() => bounties.id, { onDelete: "restrict" }),
+    participantId: uuid("participant_id").references(() => poolParticipants.id, {
+      onDelete: "restrict",
+    }),
+    kind: allocationLedgerKindEnum("kind").notNull(),
+    amountUsdc: numeric("amount_usdc", { precision: 20, scale: 6 }).notNull(),
+    toAddress: text("to_address"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    txHash: text("tx_hash"),
+    status: allocationLedgerStatusEnum("status").notNull().default("pending"),
+    ...timestamps,
+  },
+  (table) => [
+    unique("allocation_ledger_bounty_kind_participant_uidx")
+      .on(table.bountyId, table.kind, table.participantId)
+      .nullsNotDistinct(),
+    uniqueIndex("allocation_ledger_idempotency_key_uidx").on(
+      table.idempotencyKey,
+    ),
+    index("allocation_ledger_bounty_id_idx").on(table.bountyId),
+    index("allocation_ledger_participant_id_idx").on(table.participantId),
+    index("allocation_ledger_status_idx").on(table.status),
+    check("allocation_ledger_amount_positive", sql`${table.amountUsdc} > 0`),
+  ],
+);
+
+/**
+ * Optional non-blocking “working on this” signal (ADR 0003).
+ *
+ * Many rows per bounty and per `(bounty_id, user_id)`. **No exclusive unique
+ * index** — this is not a claim-lock and not a money row. V2 code paths must
+ * not insert `claim_locks`.
+ */
+export const workSignals = pgTable(
+  "work_signals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bountyId: uuid("bounty_id")
+      .notNull()
+      .references(() => bounties.id, { onDelete: "restrict" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    signaledAt: timestamp("signaled_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    clearedAt: timestamp("cleared_at", { withTimezone: true, mode: "date" }),
+    ...timestamps,
+  },
+  (table) => [
+    index("work_signals_bounty_id_idx").on(table.bountyId),
+    index("work_signals_user_id_idx").on(table.userId),
+    index("work_signals_bounty_user_idx").on(table.bountyId, table.userId),
+  ],
+);
+
 /** Persisted markEligible outcome — skip reasons are queryable without Cloud Logging. */
 export type WebhookClaimResult = {
   issueNumber: number;
@@ -353,3 +508,6 @@ export const bountyStatusValues = bountyStatusEnum.enumValues;
 export const claimLockStatusValues = claimLockStatusEnum.enumValues;
 export const escrowStatusValues = escrowStatusEnum.enumValues;
 export const claimStatusValues = claimStatusEnum.enumValues;
+export const poolParticipantRoleValues = poolParticipantRoleEnum.enumValues;
+export const allocationLedgerKindValues = allocationLedgerKindEnum.enumValues;
+export const allocationLedgerStatusValues = allocationLedgerStatusEnum.enumValues;

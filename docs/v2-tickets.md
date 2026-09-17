@@ -2,7 +2,8 @@
 
 - **ADR:** [0003 — V2 multi-hunter participation pool](adr/0003-v2-multi-hunter-pool.md) (**Accepted**)
 - **Product rules:** frozen by LB PM (Enrique delegated). Tickets must match the freeze exactly.
-- **V2-0:** implemented (fixtures + `splitPostFeePool`). **Do not start V2-1+ here.**
+- **V2-0:** implemented (fixtures + `splitPostFeePool`).
+- **V2-1:** implemented (schema + seed fixtures). **Do not start V2-2+ here.**
 - **Not blocking:** V1.5 WalletConnect + amount chips is parallel polish after x402
   [#29](https://github.com/jegamboafuentes/github-bounties/pull/29). It does not
   gate this spec or V2-0…V2-5.
@@ -10,7 +11,7 @@
 Official name: **GitHub Bounties**. This is not Lightning Bounties / LB1.
 
 V1 today: single winner (merged PR author), 2% face fee, exclusive 72h claim-lock,
-`settleEscrow` = `HUNTER_PAYOUT` + `FEE_OUT`. Pool stubs on `bounties` are unused.
+`settleEscrow` = `HUNTER_PAYOUT` + `FEE_OUT`. V2-1 persists pool rows; settle still V1 until V2-3.
 
 ## Frozen rules → ticket map
 
@@ -82,25 +83,25 @@ intended chain movement. Add non-exclusive work signals.
 
 ### Acceptance criteria
 
-- [ ] `bounties.participation_pool_bps` documented/default **1500 = 15% of
+- [x] `bounties.participation_pool_bps` documented/default **1500 = 15% of
       post-fee**, not 15% of face. ADR 0001 sketch is superseded.
-- [ ] Table `pool_participants` (name indicative) with unique `(bounty_id, github_id)`:
+- [x] Table `pool_participants` (name indicative) with unique `(bounty_id, github_id)`:
       `role` ∈ `winner | pool | overflow | excluded_poster | excluded_bot`;
       qualifying PR number / `created_at` / url; snapshot `commit_sha`;
       nullable `user_id`; `share_usdc`; payout hash fields; `skip_reason`.
-- [ ] Table `allocation_ledger` with unique `(bounty_id, kind, participant_id)`
+- [x] Table `allocation_ledger` with unique `(bounty_id, kind, participant_id)`
       and unique `idempotency_key`. `kind` ∈ `FEE_OUT | WINNER_PAYOUT | POOL_PAYOUT`.
       Status `pending | submitted | confirmed | failed`.
-- [ ] Table `work_signals`: many rows per bounty (`bounty_id, user_id`);
+- [x] Table `work_signals`: many rows per bounty (`bounty_id, user_id`);
       **no** exclusive unique index. Signal is not a money row.
-- [ ] `claims` remains **winner-only**. Pool members are not `claims` rows.
-- [ ] `escrows.payout_tx_hash` remains the winner hash (V1 readers). Pool hashes
+- [x] `claims` remains **winner-only**. Pool members are not `claims` rows.
+- [x] `escrows.payout_tx_hash` remains the winner hash (V1 readers). Pool hashes
       live on the new ledger / participant rows.
-- [ ] Invariant test: `fee + winner + Σ pool shares = F` when `|E|>0`;
+- [x] Invariant test: `fee + winner + Σ pool shares = F` when `|E|>0`;
       `fee + winner = F` when `|E|=0`.
-- [ ] Migration is additive. V1 exclusive `claim_locks` unique index stays until
+- [x] Migration is additive. V1 exclusive `claim_locks` unique index stays until
       V2-4 sunset drain; do not acquire new exclusive locks from V2 code paths.
-- [ ] Seed / fixture rows for: 2-hunter pool, 11th overflow, empty pool, poster
+- [x] Seed / fixture rows for: 2-hunter pool, 11th overflow, empty pool, poster
       excluded, unlinked `github_id`.
 
 ### Out of scope

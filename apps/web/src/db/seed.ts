@@ -3,6 +3,7 @@ import { CLAIM_LOCK_HOURS, FEE_BPS } from "../lib/constants";
 import { claimLockExpiresAt, feeFromFaceUsdc } from "../lib/money";
 import { createDb } from "./client";
 import { loadDotenvFiles } from "./load-dotenv";
+import { seedV2PoolFixtures } from "./seed-v2-pool";
 import {
   bounties,
   claimLocks,
@@ -327,6 +328,11 @@ async function main() {
     }
     console.log(
       `  fee_ledger: fee_bps=${fee?.feeBps} fee_usdc=${fee?.feeUsdc} (2% of 100)`,
+    );
+
+    await seedV2PoolFixtures(db);
+    console.log(
+      "  V2-1 fixtures: 2-hunter #50, overflow #51, empty #52, poster-excluded #53, unlinked #54",
     );
   } finally {
     await sql.end({ timeout: 5 });
