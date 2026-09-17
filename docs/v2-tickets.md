@@ -5,15 +5,16 @@
 - **V2-0:** implemented (fixtures + `splitPostFeePool`).
 - **V2-1:** implemented (schema + seed fixtures).
 - **V2-2:** implemented (merge-time freeze + optional live roster).
-- **V2-3:** implemented (multi-payee settle). **Do not start V2-4+ here.**
+- **V2-3:** implemented (multi-payee settle).
+- **V2-4:** implemented (signals, roster, payout breakdown, claim-lock sunset). **Do not start V2-5 here.**
 - **Not blocking:** V1.5 WalletConnect + amount chips is parallel polish after x402
   [#29](https://github.com/jegamboafuentes/github-bounties/pull/29). It does not
   gate this spec or V2-0…V2-5.
 
 Official name: **GitHub Bounties**. This is not Lightning Bounties / LB1.
 
-V1 today: single winner (merged PR author), 2% face fee, exclusive 72h claim-lock,
-`settleEscrow` = `FEE_OUT` + `WINNER_PAYOUT` + `POOL_PAYOUT` × N (empty pool = V1 post-fee). V2-4 is UI.
+V1 today: single winner (merged PR author), 2% face fee, parallel hunt (exclusive 72h claim-lock retired in V2-4),
+`settleEscrow` = `FEE_OUT` + `WINNER_PAYOUT` + `POOL_PAYOUT` × N (empty pool = V1 post-fee). V2-5 is DEV dogfood.
 
 ## Frozen rules → ticket map
 
@@ -205,28 +206,28 @@ exclusive 72h claim-lock.
 
 ### Acceptance criteria
 
-- [ ] **Claim-lock sunset:** `/board` and `/bounties/[id]` do not start an
+- [x] **Claim-lock sunset:** `/board` and `/bounties/[id]` do not start an
       exclusive 72h lock. No “Claimed by X until …”. Residual active V1 locks
       are force-released / expired on read or via a one-shot drain job.
-- [ ] Optional **“Working on this”** signal: signed-in hunter, non-blocking,
+- [x] Optional **“Working on this”** signal: signed-in hunter, non-blocking,
       many hunters per bounty, can clear. Not shown as exclusive. Does not
       change `E` or money.
-- [ ] **Pool roster** on bounty detail: winner, each frozen pool member
+- [x] **Pool roster** on bounty detail: winner, each frozen pool member
       (login, qualifying PR, share), overflow count (“+K not paid, cap 10”),
       excluded poster if they opened a PR (so the rule is visible).
-- [ ] **Payout breakdown:** face `F`, fee 2%, winner ≈83.3%, pool ≈14.7% (or
+- [x] **Payout breakdown:** face `F`, fee 2%, winner ≈83.3%, pool ≈14.7% (or
       100% post-fee when `E` empty), per-member equal share, each tx hash after
       settle.
-- [ ] Pre-merge roster may show *candidates* (unfrozen). Copy must say
+- [x] Pre-merge roster may show *candidates* (unfrozen). Copy must say
       eligibility freezes at winning merge.
-- [ ] Unlinked member: Connect GitHub CTA (reuse V1 `hunter_not_linked` pattern).
-- [ ] Poster / anonymous: can see roster + breakdown; cannot claim pool or
+- [x] Unlinked member: Connect GitHub CTA (reuse V1 `hunter_not_linked` pattern).
+- [x] Poster / anonymous: can see roster + breakdown; cannot claim pool or
       winner payout they do not own.
-- [ ] Winner Claim path still BYO Base address (V1-6). Pool members need the
+- [x] Winner Claim path still BYO Base address (V1-6). Pool members need the
       same address on Settings (or a later per-member claim — if a single
       poster/winner settle pays everyone who already has a wallet, document it
       on the page).
-- [ ] Expiry cron: stop advertising exclusive lock; `expires_at` bounty refunds
+- [x] Expiry cron: stop advertising exclusive lock; `expires_at` bounty refunds
       unchanged.
 
 ### Out of scope
@@ -241,7 +242,7 @@ exclusive 72h claim-lock.
 
 **Goal:** Meet the product done bar on `https://dev.githubbounties.xyz`.
 
-**Depends on:** V2-1…V2-4. Ops: CDP secrets already used for V1-5 Sepolia.
+**Depends on:** V2-1…V2-4. Ops: CDP secrets already used for V1-5 Sepolia. V2-4 UI is on `main` after this ticket; this runbook is the remaining product-done bar.
 
 ### Acceptance criteria
 

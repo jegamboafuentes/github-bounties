@@ -6,6 +6,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * Cron-friendly expiry. Cloud Scheduler can GET or POST.
+ * V2-4: drains residual exclusive claim-locks (does not advertise 72h lock).
+ * `bounties.expires_at` refunds are unchanged.
  * If CRON_SECRET is set, require `Authorization: Bearer <CRON_SECRET>`.
  * Never commit that secret.
  */
@@ -24,9 +26,12 @@ async function run(req: Request) {
   return Response.json(
     {
       ok: true,
+      claim_lock_sunset: true,
       expired: result.expiredLockIds.length,
+      released: result.releasedLockIds.length,
       restored_funded: result.restoredBountyIds.length,
       expired_lock_ids: result.expiredLockIds,
+      released_lock_ids: result.releasedLockIds,
       restored_bounty_ids: result.restoredBountyIds,
       refunded_expired_bounties: money.refundedBountyIds.length,
       voided_expired_bounties: money.voidedBountyIds.length,

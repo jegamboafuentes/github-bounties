@@ -1,6 +1,6 @@
 # Webhooks and claim eligibility
 
-GitHub Bounties pays the **author of the merged pull request that closes funded issue `#N`**. Claim-lock (V1-4: exclusive **72 hours**) coordinates work; **merge is truth**. This webhook path does not move money and does not require an active lock — `funded` and `claim_locked` bounties both accept an eligible Claim. See [bounties.md](bounties.md).
+GitHub Bounties pays the **author of the merged pull request that closes funded issue `#N`**. Exclusive 72h claim-lock is retired (V2-4). Optional Working on this is not exclusive; **merge is truth**. This webhook path does not move money and does not require a lock — `funded` and residual `claim_locked` bounties both accept an eligible Claim. See [bounties.md](bounties.md).
 
 Product login is Google Sign-In. This GitHub App is **repo authority + webhooks**.
 
@@ -87,7 +87,7 @@ Case-insensitive; optional colon. Same-repo: `Fixes #42`. Cross-repo: `Fixes own
 
 **Winner** = `pull_request.user.login` (and `user.id` when present). V1-3 intersects `closedIssueNumbers` with **funded** (or `claim_locked`) bounties on a connected `repos` row and upserts `claims` with `status=eligible`.
 
-The hunter must already have a `github_links` row (`github_id` or `github_login`). Otherwise no `claims` row is written — `claims.hunter_user_id` is required. That skip is persisted on `webhook_deliveries.claim_results` (and returned as `claims` / `claimSkips` on the webhook HTTP body) so Ops can see `hunter_not_linked` without Cloud Logging. The board and bounty page show the PR author login and a Connect GitHub CTA. The claim-lock holder is **not** assigned the Claim. After the hunter Connects GitHub as the PR author login, **Redeliver** the same GUID (or wait for Connect GitHub backfill) to insert the eligible Claim.
+The hunter must already have a `github_links` row (`github_id` or `github_login`). Otherwise no `claims` row is written — `claims.hunter_user_id` is required. That skip is persisted on `webhook_deliveries.claim_results` (and returned as `claims` / `claimSkips` on the webhook HTTP body) so Ops can see `hunter_not_linked` without Cloud Logging. The board and bounty page show the PR author login and a Connect GitHub CTA. Working on this is **not** assigned the Claim. After the hunter Connects GitHub as the PR author login, **Redeliver** the same GUID (or wait for Connect GitHub backfill) to insert the eligible Claim.
 
 ## V2-2 pool freeze (merge-time backfill)
 
@@ -188,15 +188,15 @@ Point `scripts/replay-delivery.ts` at `http://127.0.0.1:3000/webhooks/github` af
 
 `POST /app/hook/deliveries/{delivery_id}/attempts` (authenticate as the App JWT). Same GUID semantics as the UI.
 
-## Claim-lock (72h) — shipped in V1-4; webhooks stay eligibility-only
+## Claim-lock (72h) — retired in V2-4; webhooks stay eligibility-only
 
-V1-4 shipped the board, exclusive **72h** claim-lock, and expiry job. See [bounties.md](bounties.md).
+V1-4 shipped exclusive **72h** claim-lock. V2-4 sunsets it in product UI (drain on read). See [bounties.md](bounties.md).
 
-This webhook path writes `claims.status=eligible` on merge+close of a `funded` or `claim_locked` issue and (V2-2) freezes `pool_participants`. It does not acquire, release, or expire locks and does not move USDC. **Lock ≠ money**; merge is still truth.
+This webhook path writes `claims.status=eligible` on merge+close of a `funded` or `claim_locked` issue and (V2-2) freezes `pool_participants`. It does not acquire exclusive locks and does not move USDC. **Signals ≠ money**; merge is still truth.
 
 | Event | V1-4 / later |
 | --- | --- |
-| `issue_comment` created | Optional later `/claim` wakeup; lock is taken in the product UI today |
+| `issue_comment` created | Optional later `/claim` wakeup; Working on this is taken in the product UI |
 | `pull_request` opened / synchronize / ready_for_review | V2-2 live-roster candidates (unfrozen). Freeze still recomputes from GitHub at winning merge |
 | `issues` assigned | Alternate lock representation (not used) |
 | `installation` deleted / `suspend` | Pause jobs; repo no longer authorized (`repos.is_active=false`) |

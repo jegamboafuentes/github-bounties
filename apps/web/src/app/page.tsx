@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  CLAIM_LOCK_HOURS,
   DEFAULT_CHAIN,
   DEFAULT_CURRENCY,
   FEE_BPS,
@@ -33,7 +32,7 @@ export default function Home() {
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 py-14">
         <div className="flex flex-col gap-4">
           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-            V1-6 claim payout
+            V2-4 parallel hunt
           </p>
           <h1>
             <BrandWordmark size="hero" priority />
@@ -41,8 +40,7 @@ export default function Home() {
           </h1>
           <p className="max-w-xl text-lg leading-8 text-zinc-600 dark:text-zinc-400">
             USDC bounties on GitHub issues. Winner is the author of the merged pull
-            request that closes funded issue #N. Claim-lock coordinates work; merge
-            is truth.
+            request that closes funded issue #N. Parallel hunt; merge is truth.
           </p>
         </div>
         <dl className="grid gap-4 sm:grid-cols-3">
@@ -53,10 +51,10 @@ export default function Home() {
           </div>
           <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
             <dt className="text-xs uppercase tracking-wide text-zinc-500">
-              Claim-lock
+              Hunt
             </dt>
-            <dd className="mt-1 text-2xl font-semibold">{CLAIM_LOCK_HOURS}h</dd>
-            <dd className="text-sm text-zinc-500">exclusive, no USDC movement</dd>
+            <dd className="mt-1 text-2xl font-semibold">Parallel</dd>
+            <dd className="text-sm text-zinc-500">optional Working on this, not exclusive</dd>
           </div>
           <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
             <dt className="text-xs uppercase tracking-wide text-zinc-500">Rail</dt>
@@ -102,8 +100,9 @@ export default function Home() {
           <Link href="/settings" className="underline underline-offset-4">
             Settings
           </Link>
-          . Claim-lock is coordination only; merge is still truth. Eligible hunters
-          claim net-of-fee USDC to a BYO Base address. Escrow holds face in{" "}
+          . Exclusive claim-lock is retired; merge is still truth. Eligible winners
+          claim their share to a BYO Base address. Pool members are paid to Settings
+          wallets when settle runs. Escrow holds face in{" "}
           <code>gb-escrow</code>; 2% to <code>gb-fee</code> at settlement. Hosted
           checkout is disabled.
         </p>

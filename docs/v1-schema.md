@@ -4,7 +4,7 @@ Contract for tickets **V1-2…V1-6**. Source of truth: [`apps/web/src/db/schema.
 
 **ORM:** Drizzle (SQL-first migrations, no Prisma client runtime).
 
-This is not Lightning Bounties / LB1. Winner later: author of the merged PR that closes funded issue `#N`. Claim-lock is exclusive **72h** coordination and **does not move USDC** (V1-4 board + expiry). Fee is **2%** (`fee_bps = 200`) at settlement.
+This is not Lightning Bounties / LB1. Winner later: author of the merged PR that closes funded issue `#N`. Exclusive 72h claim-lock is **retired** (V2-4); residual `claim_locks` drain on read. Optional `work_signals` are not exclusive and **do not move USDC**. Fee is **2%** (`fee_bps = 200`) at settlement.
 
 ## Tables
 
@@ -14,7 +14,7 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 | `github_links` | One GitHub account per user (`github_id`, `github_login`). Unique on `user_id` and `github_id`. Settings Disconnect deletes this row only. |
 | `repos` | Connected repo (`github_repo_id`, `full_name`, `installation_id`, `connected_by_user_id`, `is_active`) |
 | `bounties` | Issue bounty; `amount_usdc`, `currency` default USDC, `chain` default `base` |
-| `claim_locks` | Exclusive lock; `expires_at` defaults to `now() + 72 hours`; one `active` row per bounty |
+| `claim_locks` | Legacy exclusive lock (V2-4 sunset). Residual `active` rows drain to `released`/`expired`; unique one-active-per-bounty index remains |
 | `escrows` | 1:1 with bounty; fund / payout / fee / refund tx hashes + idempotency key (V1-5); last Lock/settle `fail_code` / `fail_reason` |
 | `claims` | Winner-only `eligible` \| `paid` \| `rejected` \| `disputed`; PR + merge + payout fields. Pool members are **not** claims rows. |
 | `fee_ledger` | `face_usdc`, `fee_usdc`, `fee_bps` default **200**, `settled_at` |
@@ -47,7 +47,7 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 ## Indexes / invariants
 
 - Unique **one active bounty** per `(repo_id, github_issue_number)` while status is `pending_fund`, `funded`, `claim_locked`, `settling`, `settled_partial`, or `refunding`.
-- Unique **one active claim-lock** per `bounty_id` (V1 exclusive index stays until V2-4; V2 does not acquire new locks).
+- Unique **one active claim-lock** per `bounty_id` (index kept; V2-4 does not acquire new locks; drain on read).
 - Unique `(bounty_id, github_id)` on `pool_participants`.
 - Unique `(bounty_id, kind, participant_id)` (`NULLS NOT DISTINCT` unique constraint) and unique `idempotency_key` on `allocation_ledger`.
 - `work_signals` has **no** exclusive unique index.

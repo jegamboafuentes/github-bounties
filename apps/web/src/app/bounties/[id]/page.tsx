@@ -1,16 +1,17 @@
 import Link from "next/link";
 import { getCurrentPublicUser } from "@/auth/protect";
 import {
-  acquireClaimLockAction,
   cancelBountyAction,
   claimPayoutAction,
-  releaseClaimLockAction,
+  clearWorkSignalAction,
   fundBountyAction,
+  signalWorkingOnThisAction,
 } from "@/app/actions/bounties";
 import {
   bountyStatusLabel,
   formatUsdc,
   getBoardBounty,
+  getPoolRoster,
   LOCK_NOT_MONEY_COPY,
   pendingHunterLinkCaption,
 } from "@/bounties";
@@ -18,9 +19,11 @@ import { ClaimPayoutPanel } from "@/components/claim-payout-form";
 import { FundLockPanel } from "@/components/fund-lock-panel";
 import { GitHubAvatar } from "@/components/github-avatar";
 import { AppHeader } from "@/components/header";
+import { PayoutBreakdown } from "@/components/payout-breakdown";
+import { PoolRoster } from "@/components/pool-roster";
+import { WorkSignalsPanel } from "@/components/work-signals-panel";
 import { getRuntimeDb } from "@/db/runtime";
 import { getEscrowSnapshot } from "@/escrow";
-import { CLAIM_LOCK_HOURS } from "@/lib/constants";
 import { walletConnectConfigured } from "@/wallet/env";
 
 export const dynamic = "force-dynamic";
@@ -35,10 +38,11 @@ export default async function BountyDetailPage({
   const { id } = await params;
   const query = await searchParams;
   const db = getRuntimeDb();
-  const [user, bounty, escrow] = await Promise.all([
+  const [user, bounty, escrow, roster] = await Promise.all([
     getCurrentPublicUser(),
     getBoardBounty(id, db).catch(() => null),
     getEscrowSnapshot(id, db).catch(() => null),
+    getPoolRoster(id, db).catch(() => null),
   ]);
 
   if (!bounty) {
@@ -58,11 +62,14 @@ export default async function BountyDetailPage({
   }
 
   const isPoster = user?.id === bounty.posterUserId;
-  const isLockHolder = user?.id === bounty.activeLock?.hunterUserId;
   const isEligibleHunter = Boolean(user && bounty.payout && user.id === bounty.payout.hunterUserId);
   const canFund = Boolean(isPoster && bounty.status === "pending_fund");
-  const canLock = Boolean(user && bounty.status === "funded" && !bounty.activeLock && !bounty.payout);
-  const canRelease = Boolean(bounty.activeLock && (isLockHolder || isPoster) && !bounty.payout);
+  const canSignal = Boolean(
+    user &&
+      (bounty.status === "pending_fund" ||
+        bounty.status === "funded" ||
+        bounty.status === "claim_locked"),
+  );
   const canCancel = Boolean(
     isPoster &&
       !bounty.payout &&
@@ -78,6 +85,8 @@ export default async function BountyDetailPage({
         bounty.status === "settling" ||
         bounty.status === "settled_partial"),
   );
+  const signInHref = `/signin?callbackUrl=${encodeURIComponent(`/bounties/${bounty.id}`)}`;
+  const winnerUsdc = roster?.breakdown.winnerUsdc;
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
@@ -97,14 +106,19 @@ export default async function BountyDetailPage({
           {LOCK_NOT_MONEY_COPY}
         </p>
 
-        {bounty.activeLock ? (
-          <p className="flex items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:bg-amber-950/40 dark:text-amber-100">
-            <GitHubAvatar login={bounty.activeLock.githubLogin} size={20} className="mt-0.5" />
-            <span>
-              {bounty.activeLock.caption} ({CLAIM_LOCK_HOURS}h exclusive lock)
-            </span>
-          </p>
-        ) : null}
+        <WorkSignalsPanel
+          bountyId={bounty.id}
+          signals={bounty.workSignals}
+          viewerUserId={user?.id}
+          canSignal={canSignal}
+          signedIn={Boolean(user)}
+          signInHref={signInHref}
+          signalAction={signalWorkingOnThisAction}
+          clearAction={clearWorkSignalAction}
+        />
+
+        {roster ? <PoolRoster roster={roster} currency={bounty.currency} /> : null}
+        {roster ? <PayoutBreakdown roster={roster} currency={bounty.currency} /> : null}
 
         {bounty.pendingHunterLink ? (
           <p className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
@@ -116,7 +130,7 @@ export default async function BountyDetailPage({
             {bounty.pendingHunterLink.prNumber != null
               ? ` (merged PR #${bounty.pendingHunterLink.prNumber})`
               : ""}
-            . Claim-lock does not assign payout.
+            . Signals do not assign payout.
           </p>
         ) : null}
 
@@ -151,8 +165,9 @@ export default async function BountyDetailPage({
             }
             action={claimPayoutAction}
             signedIn={Boolean(user)}
-            signInHref={`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bounty.id}`)}`}
+            signInHref={signInHref}
             escrowFail={bounty.escrowFail}
+            winnerUsdc={winnerUsdc}
           />
         ) : null}
 
@@ -185,7 +200,7 @@ export default async function BountyDetailPage({
             ) : null}
             {escrow.payoutTxHash ? (
               <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
-                <dt className="text-xs uppercase tracking-wide text-zinc-500">Hunter tx</dt>
+                <dt className="text-xs uppercase tracking-wide text-zinc-500">Winner tx</dt>
                 <dd className="break-all sm:col-span-2">{escrow.payoutTxHash}</dd>
               </div>
             ) : null}
@@ -236,33 +251,6 @@ export default async function BountyDetailPage({
             />
           ) : null}
 
-          {canLock ? (
-            <form action={acquireClaimLockAction}>
-              <input type="hidden" name="bountyId" value={bounty.id} />
-              <button
-                type="submit"
-                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
-              >
-                Claim for {CLAIM_LOCK_HOURS}h
-              </button>
-              <p className="mt-2 text-xs text-zinc-500">
-                Exclusive coordination lock. Does not move USDC. Merge is still truth.
-              </p>
-            </form>
-          ) : null}
-
-          {canRelease ? (
-            <form action={releaseClaimLockAction}>
-              <input type="hidden" name="bountyId" value={bounty.id} />
-              <button
-                type="submit"
-                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
-              >
-                {isPoster && !isLockHolder ? "Force-release lock" : "Release lock early"}
-              </button>
-            </form>
-          ) : null}
-
           {canCancel ? (
             <form action={cancelBountyAction}>
               <input type="hidden" name="bountyId" value={bounty.id} />
@@ -273,21 +261,18 @@ export default async function BountyDetailPage({
                 {bounty.status === "pending_fund" ? "Cancel bounty" : "Cancel and refund"}
               </button>
               <p className="mt-2 text-xs text-zinc-500">
-                Unmerged cancel returns full face to the funder. No 2% fee. Claim-lock expiry does
-                not refund.
+                Unmerged cancel returns full face to the funder. No 2% fee. Bounty{" "}
+                <code>expires_at</code> refunds are unchanged. Exclusive claim-lock is retired.
               </p>
             </form>
           ) : null}
 
           {!user ? (
             <p className="text-sm text-zinc-500">
-              <Link
-                href={`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bounty.id}`)}`}
-                className="underline underline-offset-4"
-              >
+              <Link href={signInHref} className="underline underline-offset-4">
                 Sign in with Google
               </Link>{" "}
-              to fund, claim-lock, or claim a payout.
+              to fund, signal Working on this, or claim a winner payout.
             </p>
           ) : null}
         </div>

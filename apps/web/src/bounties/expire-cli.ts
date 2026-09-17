@@ -11,7 +11,7 @@ async function main() {
     const result = await expireClaimLocks(db);
     const money = await expireUnmergedBounties({ db });
     console.log(
-      `Expired ${result.expiredLockIds.length} lock(s); restored ${result.restoredBountyIds.length} bounty(ies) to funded.`,
+      `Drained exclusive locks: expired ${result.expiredLockIds.length}, released ${result.releasedLockIds.length}; restored ${result.restoredBountyIds.length} bounty(ies) to funded.`,
     );
     console.log(
       `Refunded ${money.refundedBountyIds.length} expired funded bounty(ies); voided ${money.voidedBountyIds.length} unfunded.`,

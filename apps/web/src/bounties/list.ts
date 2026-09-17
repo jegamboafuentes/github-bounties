@@ -1,9 +1,8 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
   bounties,
   bountyStatusValues,
-  claimLocks,
   escrows,
   githubLinks,
   repos,
@@ -15,8 +14,8 @@ import {
 } from "../claims/pending-link";
 import { listPayoutClaimsForBounties, type PayoutClaimView } from "../claims/read";
 import { formatEscrowFailLabel } from "../escrow/fail";
-import { claimedByUntilLabel, hunterLabel, isActiveClaimLock } from "./display";
 import { expireClaimLocks } from "./expire";
+import { listWorkSignalsForBounties, type WorkSignalView } from "./signals";
 
 export type BoardFilters = {
   repo?: string;
@@ -38,13 +37,9 @@ export type BoardBounty = {
   posterGithubLogin: string | null;
   fundedAt: Date | null;
   createdAt: Date;
-  activeLock: {
-    hunterLabel: string;
-    githubLogin: string | null;
-    expiresAt: Date;
-    hunterUserId: string;
-    caption: string;
-  } | null;
+  /** Always null after V2-4 sunset drain. Kept so old readers do not throw. */
+  activeLock: null;
+  workSignals: WorkSignalView[];
   payout: PayoutClaimView | null;
   /** Eligible merge recorded, but the PR author has no github_links row. */
   pendingHunterLink: PendingHunterLink | null;
@@ -54,7 +49,8 @@ export type BoardBounty = {
 const STATUS_SET = new Set<string>(bountyStatusValues);
 
 /**
- * Board listing. Expires overdue locks first so captions stay accurate.
+ * Board listing. Drains residual exclusive V1 claim-locks first so the board
+ * never shows “Claimed by X until …”.
  */
 export async function listBoardBounties(
   db: Database,
@@ -85,9 +81,6 @@ export async function listBoardBounties(
       posterGithubLogin: githubLinks.githubLogin,
       fundedAt: bounties.fundedAt,
       createdAt: bounties.createdAt,
-      lockStatus: claimLocks.status,
-      lockExpiresAt: claimLocks.expiresAt,
-      lockHunterUserId: claimLocks.hunterUserId,
       escrowFailCode: escrows.failCode,
       escrowFailReason: escrows.failReason,
     })
@@ -95,10 +88,6 @@ export async function listBoardBounties(
     .innerJoin(repos, eq(repos.id, bounties.repoId))
     .innerJoin(users, eq(users.id, bounties.posterUserId))
     .leftJoin(githubLinks, eq(githubLinks.userId, bounties.posterUserId))
-    .leftJoin(
-      claimLocks,
-      and(eq(claimLocks.bountyId, bounties.id), eq(claimLocks.status, "active")),
-    )
     .leftJoin(escrows, eq(escrows.bountyId, bounties.id))
     .where(
       and(
@@ -110,37 +99,8 @@ export async function listBoardBounties(
     )
     .orderBy(desc(bounties.createdAt));
 
-  const hunterIds = [
-    ...new Set(
-      rows
-        .map((row) => row.lockHunterUserId)
-        .filter((id): id is string => Boolean(id)),
-    ),
-  ];
-
-  const hunterById = new Map<string, { displayName: string; githubLogin: string | null }>();
-  if (hunterIds.length > 0) {
-    const hunterRows = await db
-      .select({
-        id: users.id,
-        displayName: users.displayName,
-        githubLogin: githubLinks.githubLogin,
-      })
-      .from(users)
-      .leftJoin(githubLinks, eq(githubLinks.userId, users.id))
-      .where(inArray(users.id, hunterIds));
-    for (const hunter of hunterRows) {
-      hunterById.set(hunter.id, {
-        displayName: hunter.displayName,
-        githubLogin: hunter.githubLogin,
-      });
-    }
-  }
-
-  const payoutByBounty = await listPayoutClaimsForBounties(
-    db,
-    rows.map((row) => row.id),
-  );
+  const ids = rows.map((row) => row.id);
+  const payoutByBounty = await listPayoutClaimsForBounties(db, ids);
   const pendingByBounty = await listPendingHunterLinksForBounties(
     db,
     rows
@@ -151,14 +111,14 @@ export async function listBoardBounties(
         repoFullName: row.repoFullName,
       })),
   );
+  const signalsByBounty = await listWorkSignalsForBounties(db, ids);
 
   return rows.map((row) =>
     toBoardBounty(
       row,
-      hunterById,
-      now,
       payoutByBounty.get(row.id) ?? null,
       payoutByBounty.has(row.id) ? null : (pendingByBounty.get(row.id) ?? null),
+      signalsByBounty.get(row.id) ?? [],
     ),
   );
 }
@@ -185,9 +145,6 @@ export async function getBoardBounty(
       posterGithubLogin: githubLinks.githubLogin,
       fundedAt: bounties.fundedAt,
       createdAt: bounties.createdAt,
-      lockStatus: claimLocks.status,
-      lockExpiresAt: claimLocks.expiresAt,
-      lockHunterUserId: claimLocks.hunterUserId,
       escrowFailCode: escrows.failCode,
       escrowFailReason: escrows.failReason,
     })
@@ -195,35 +152,11 @@ export async function getBoardBounty(
     .innerJoin(repos, eq(repos.id, bounties.repoId))
     .innerJoin(users, eq(users.id, bounties.posterUserId))
     .leftJoin(githubLinks, eq(githubLinks.userId, bounties.posterUserId))
-    .leftJoin(
-      claimLocks,
-      and(eq(claimLocks.bountyId, bounties.id), eq(claimLocks.status, "active")),
-    )
     .leftJoin(escrows, eq(escrows.bountyId, bounties.id))
     .where(eq(bounties.id, bountyId))
     .limit(1);
 
   if (!row) return null;
-
-  const hunterById = new Map<string, { displayName: string; githubLogin: string | null }>();
-  if (row.lockHunterUserId) {
-    const [hunter] = await db
-      .select({
-        id: users.id,
-        displayName: users.displayName,
-        githubLogin: githubLinks.githubLogin,
-      })
-      .from(users)
-      .leftJoin(githubLinks, eq(githubLinks.userId, users.id))
-      .where(eq(users.id, row.lockHunterUserId))
-      .limit(1);
-    if (hunter) {
-      hunterById.set(hunter.id, {
-        displayName: hunter.displayName,
-        githubLogin: hunter.githubLogin,
-      });
-    }
-  }
 
   const payoutByBounty = await listPayoutClaimsForBounties(db, [row.id]);
   const payout = payoutByBounty.get(row.id) ?? null;
@@ -236,12 +169,12 @@ export async function getBoardBounty(
           repoFullName: row.repoFullName,
         },
       ]);
+  const signalsByBounty = await listWorkSignalsForBounties(db, [row.id]);
   return toBoardBounty(
     row,
-    hunterById,
-    now,
     payout,
     payout ? null : (pendingByBounty.get(row.id) ?? null),
+    signalsByBounty.get(row.id) ?? [],
   );
 }
 
@@ -259,30 +192,16 @@ type ListRow = {
   posterGithubLogin: string | null;
   fundedAt: Date | null;
   createdAt: Date;
-  lockStatus: string | null;
-  lockExpiresAt: Date | null;
-  lockHunterUserId: string | null;
   escrowFailCode: string | null;
   escrowFailReason: string | null;
 };
 
 function toBoardBounty(
   row: ListRow,
-  hunterById: Map<string, { displayName: string; githubLogin: string | null }>,
-  now: Date,
   payout: PayoutClaimView | null,
   pendingHunterLink: PendingHunterLink | null,
+  workSignals: WorkSignalView[],
 ): BoardBounty {
-  const lock =
-    row.lockStatus && row.lockExpiresAt
-      ? { status: row.lockStatus, expiresAt: row.lockExpiresAt }
-      : null;
-  const hunter = row.lockHunterUserId ? hunterById.get(row.lockHunterUserId) : undefined;
-  const label = hunterLabel({
-    githubLogin: hunter?.githubLogin,
-    displayName: hunter?.displayName,
-  });
-  const active = isActiveClaimLock(lock, now);
   return {
     id: row.id,
     title: row.title,
@@ -297,19 +216,8 @@ function toBoardBounty(
     posterGithubLogin: row.posterGithubLogin,
     fundedAt: row.fundedAt,
     createdAt: row.createdAt,
-    activeLock:
-      active && row.lockExpiresAt && row.lockHunterUserId
-        ? {
-            hunterLabel: label,
-            githubLogin: hunter?.githubLogin ?? null,
-            expiresAt: row.lockExpiresAt,
-            hunterUserId: row.lockHunterUserId,
-            caption: claimedByUntilLabel({
-              hunterLabel: label,
-              expiresAt: row.lockExpiresAt,
-            }),
-          }
-        : null,
+    activeLock: null,
+    workSignals,
     payout,
     pendingHunterLink,
     escrowFail: toEscrowFail(row.escrowFailCode, row.escrowFailReason),

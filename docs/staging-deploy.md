@@ -320,6 +320,7 @@ CDP secrets attached, `escrow.rail` should be `cdp` and `missing` empty:
   "product": "GitHub Bounties",
   "fee_bps": 200,
   "claim_lock_hours": 72,
+  "claim_lock_sunset": true,
   "escrow": {
     "wired": true,
     "rail": "cdp",

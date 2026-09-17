@@ -4,7 +4,7 @@ Next.js App Router (TypeScript) for Cloud Run, plus the V1 Postgres schema.
 
 **ORM: Drizzle** — SQL-first, versioned migrations next to the app, no Prisma generate step. Schema is the contract for V1-2…V1-6 ([docs/v1-schema.md](../../docs/v1-schema.md)).
 
-This package hosts GitHub App install, `POST /webhooks/github`, the bounty board / 72h claim-lock, V1-5 CDP escrow (2% at settlement), and V1-6 hunter claim payout. The V0-B spike at repo-root `src/` stays in CI (`npm test` from the repository root). `services/hello` remains the Cloud Run canary.
+This package hosts GitHub App install, `POST /webhooks/github`, the bounty board / parallel hunt (exclusive 72h claim-lock retired), V1-5 CDP escrow (2% at settlement), V1-6 hunter claim payout, and V2-4 pool roster + signals. The V0-B spike at repo-root `src/` stays in CI (`npm test` from the repository root). `services/hello` remains the Cloud Run canary.
 
 ## Product locks
 
@@ -12,7 +12,7 @@ This package hosts GitHub App install, `POST /webhooks/github`, the bounty board
 | --- | --- |
 | Name | GitHub Bounties |
 | Fee | 2% → `fee_ledger.fee_bps` default **200** |
-| Claim-lock | exclusive **72h** (`expires_at` default `now() + 72 hours`) |
+| Claim-lock | **sunset** (V2-4). Residual exclusive rows drain on read. Optional non-exclusive `work_signals` |
 | Winner | author of the merged PR that closes funded `#N` |
 | CDP / x402 | V1-5 escrow lock / settle / refund (x402 exact inbound on DEV; mock if `CDP_*` missing; hosted checkout disabled) |
 | Payout | V1-6 eligible hunter claims net-of-fee USDC to a BYO Base address |
@@ -108,10 +108,10 @@ Do not point `cloudbuild.yaml` at this app. Closed-beta checklist: [docs/staging
 | --- | --- |
 | `npm run db:generate` | `drizzle-kit generate` after schema edits (diff from `drizzle/meta/*_snapshot.json`) |
 | `npm run db:migrate` | apply `drizzle/` SQL to `DATABASE_URL` (`0004_v2_pool_participants.sql` + snapshots) |
-| `npm run db:seed` | sample user / repo / pending_fund + claim-locked + open funded bounty + V2-1 pool fixtures |
-| `npm run expire-locks` | expire overdue 72h claim-locks (same function as the cron route) |
-| `npm run test:unit` | fee 2% + Base address + escrow state machine + CDP env/mainnet guard + 72h + auth + V0-B eligibility fixtures + HMAC + webhook replay + board helpers + V2 pool invariants + V2-2 freeze rows (no live GitHub, no database) |
-| `npm run test:db` | unique indexes + `users.google_sub` upsert + eligible Claim + claim-lock exclusivity/expiry + escrow fund/settle/refund + hunter-only payout mocks + GitHub unlink + V2-1 pool schema + V2-2 pool freeze (needs `DATABASE_URL`) |
+| `npm run db:seed` | sample user / repo / pending_fund + funded + open funded bounty + V2 pool fixtures (no exclusive lock) |
+| `npm run expire-locks` | drain residual exclusive claim-locks + `expires_at` refunds (same function as the cron route) |
+| `npm run test:unit` | fee 2% + Base address + escrow state machine + CDP env/mainnet guard + claim-lock sunset copy + auth + V0-B eligibility fixtures + HMAC + webhook replay + board helpers + V2 pool invariants + V2-2 freeze rows + V2-4 roster (no live GitHub, no database) |
+| `npm run test:db` | unique indexes + `users.google_sub` upsert + eligible Claim + claim-lock sunset drain + work signals + escrow fund/settle/refund + hunter-only payout mocks + GitHub unlink + V2-1 pool schema + V2-2 pool freeze (needs `DATABASE_URL`) |
 | `npm run build` | Next.js standalone |
 
 ## Google Sign-In (V1-2)
@@ -156,16 +156,16 @@ See [docs/github-app.md](../../docs/github-app.md) and [docs/webhooks.md](../../
 
 If Google env is missing, `/signin` lists the unset variable names. Home and `/api/health` still work. If GitHub App env is missing, Settings shows the documented blocker; webhooks return 503.
 
-## Bounty board + 72h claim-lock (V1-4)
+## Bounty board + parallel hunt (V1-4 / V2-4)
 
 | URL | Auth |
 | --- | --- |
-| `/board` | public list + repo/status filters |
+| `/board` | public list + repo/status filters (Working on this; no exclusive lock caption) |
 | `/bounties/new` | Google session; issue URL must match an App-connected repo |
-| `/bounties/[id]` | escrow lock (poster: WalletConnect / Pay face / Advanced paste-hash), claim-lock (hunter), hunter payout claim, early/force release, cancel/refund |
-| `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` bearer |
+| `/bounties/[id]` | escrow lock (poster: WalletConnect / Pay face / Advanced paste-hash), Working on this, pool roster, payout breakdown, winner payout claim, cancel/refund |
+| `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` bearer; drains residual exclusive locks; `expires_at` refunds unchanged |
 
-Claim-lock is exclusive **72h** coordination. **It does not move money.** Merge is still truth (V1-3 eligible Claim). See [docs/bounties.md](../../docs/bounties.md).
+Exclusive 72h claim-lock is **retired**. Optional Working on this is not exclusive and **does not move money.** Merge is still truth (V1-3 eligible Claim). See [docs/bounties.md](../../docs/bounties.md).
 
 ## Escrow + 2% fee (V1-5)
 

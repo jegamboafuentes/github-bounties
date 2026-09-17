@@ -6,7 +6,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: PRODUCT_NAME,
-  description: "USDC bounties on GitHub issues. 2% fee. Exclusive 72h claim-lock.",
+  description: "USDC bounties on GitHub issues. 2% fee. Parallel hunt; optional Working on this.",
   icons: {
     icon: [
       { url: "/favicon.ico", sizes: "48x48" },

@@ -20,6 +20,7 @@ export function ClaimPayoutPanel({
   signedIn,
   signInHref,
   escrowFail,
+  winnerUsdc,
 }: {
   bountyId: string;
   faceUsdc: string;
@@ -31,10 +32,13 @@ export function ClaimPayoutPanel({
   signedIn: boolean;
   signInHref: string;
   escrowFail?: { code: string; reason: string } | null;
+  /** ADR 0003 winner share when a freeze/pool exists; otherwise V1 post-fee. */
+  winnerUsdc?: string | null;
 }) {
   const split = payoutBreakdown(faceUsdc);
   const paid = payout.status === "paid";
-  const net = payout.payoutUsdc ?? split.hunterUsdc;
+  const net = payout.payoutUsdc ?? winnerUsdc ?? split.hunterUsdc;
+  const claimAmount = winnerUsdc ?? split.hunterUsdc;
 
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -83,7 +87,7 @@ export function ClaimPayoutPanel({
           </dd>
         </div>
         <div className="grid gap-1 px-3 py-2 sm:grid-cols-3">
-          <dt className="text-xs uppercase tracking-wide text-zinc-500">Net to hunter</dt>
+          <dt className="text-xs uppercase tracking-wide text-zinc-500">Winner share</dt>
           <dd className="sm:col-span-2 font-medium">
             {formatUsdc(net)} {currency}
           </dd>
@@ -144,11 +148,11 @@ export function ClaimPayoutPanel({
             type="submit"
             className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
           >
-            Claim {formatUsdc(split.hunterUsdc)} {currency}
+            Claim {formatUsdc(claimAmount)} {currency}
           </button>
           <p className="text-xs text-zinc-500">
-            Saves this address on your account. Triggers the V1-5 escrow release (mock rail until
-            CDP_* is set). {HOSTED_CHECKOUT_DISABLED_COPY}
+            Saves this address on your account. Triggers settle (fee + winner + pool wallets that
+            exist). Mock rail until CDP_* is set. {HOSTED_CHECKOUT_DISABLED_COPY}
           </p>
         </form>
       ) : paid ? (

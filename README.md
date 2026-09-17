@@ -14,7 +14,7 @@ USDC bounties on GitHub issues. Official name: **GitHub Bounties**.
 
 This is not Lightning Bounties, LB1, or “Lightning Bounties 2”.
 
-**V1 winner:** author of the merged pull request that closes funded issue `#N`. Claim-lock (exclusive **72h**) coordinates work; **merge is truth**.
+**V1 winner:** author of the merged pull request that closes funded issue `#N`. Parallel hunt (optional Working on this); **merge is truth**. Exclusive 72h claim-lock is retired (V2-4).
 
 ## Money path status
 
@@ -29,13 +29,13 @@ This is not Lightning Bounties, LB1, or “Lightning Bounties 2”.
 | Rail | CDP server wallets + x402 USDC on Base (Sepolia in sandbox) |
 | Escrow | Platform CDP wallet `gb-escrow` holds face value |
 | Fee | **2% of bounty face** at **settlement**: `fee = floor(face * 0.02)`, hunter gets the remainder |
-| Claim-lock | V1 exclusive **72h** coordination lock — **does not move money** |
-| V2 | Multi-hunter pool (ADR 0003 **Accepted**): 15% of **post-fee**, max 10. **V2-0** math + **V2-1** schema + **V2-2** freeze landed; settle/UI/dogfood are V2-3…V2-5. Exclusive 72h claim-lock still V1 until V2-4. [tickets](docs/v2-tickets.md) |
+| Claim-lock | V1 exclusive **72h** (retired V2-4) — **does not move money** |
+| V2 | Multi-hunter pool (ADR 0003 **Accepted**): 15% of **post-fee**, max 10. **V2-0…V2-4** landed (math, schema, freeze, multi-payee settle, UI + claim-lock sunset). V2-5 is DEV dogfood. [tickets](docs/v2-tickets.md) |
 
 Read the decision, sequences, failure modes, and GCP Secret Manager names in:
 
 - [ADR 0001 — CDP wallets + x402 USDC escrow](docs/adr/0001-cdp-x402-wallets.md)
-- [ADR 0003 — V2 multi-hunter pool](docs/adr/0003-v2-multi-hunter-pool.md) (Accepted; V2-0…V2-2 landed, settle is V2-3)
+- [ADR 0003 — V2 multi-hunter pool](docs/adr/0003-v2-multi-hunter-pool.md) (Accepted; V2-0…V2-4 landed, dogfood is V2-5)
 - [V2 tickets / spike plan](docs/v2-tickets.md)
 - [ADR index](docs/adr/README.md)
 
@@ -105,7 +105,7 @@ Copy [.env.example](.env.example) locally. Do not commit `.env`.
 ## Product constants
 
 - Platform fee: 2% of face
-- V1 claim-lock: 72 hours, exclusive, coordination only
+- V1 claim-lock: 72 hours exclusive (retired V2-4; residual rows drain on read)
 - GCP: `experiment-jegf` / `42206083192`
 
 ## V1-1 — App scaffold + schema
@@ -160,16 +160,16 @@ Signed-in Google users **Connect GitHub** (App install). `POST /webhooks/github`
 
 V0-B `npm test` at the repo root stays green. `apps/web` reuses the same fixtures.
 
-## V1-4 — Bounty post + board + 72h claim-lock
+## V1-4 — Bounty post + board + parallel hunt
 
-Poster creates a bounty from a GitHub issue URL (repo must be App-connected). Board lists and filters. Hunters take an exclusive **72h** claim-lock. **Lock ≠ money**; merge is still truth.
+Poster creates a bounty from a GitHub issue URL (repo must be App-connected). Board lists and filters. Hunters hunt in parallel; optional **Working on this** is not exclusive. **Signals ≠ money**; merge is still truth. Exclusive 72h claim-lock is retired (V2-4).
 
 | Item | Where |
 | --- | --- |
-| Board | `/board` (filter by repo / status; **Claimed by X until …**) |
+| Board | `/board` (filter by repo / status; Working on this, not **Claimed by X until …**) |
 | Post | `/bounties/new` (Google session) |
-| Detail | `/bounties/[id]` — escrow lock, claim, early/force release, poster cancel/refund |
-| Expiry | `GET\|POST /api/jobs/expire-claim-locks` or `npm run expire-locks` (locks + `expires_at` refunds) |
+| Detail | `/bounties/[id]` — escrow lock, signals, pool roster, payout breakdown, winner Claim, poster cancel/refund |
+| Expiry | `GET\|POST /api/jobs/expire-claim-locks` or `npm run expire-locks` (residual lock drain + `expires_at` refunds) |
 | Docs | [docs/bounties.md](docs/bounties.md), [docs/escrow.md](docs/escrow.md) |
 
 Escrow lock records `escrows.status=funded` (real CDP when secrets exist; otherwise a mock hash plus the exact missing `CDP_*` names). DEV fund without a pasted hash: WalletConnect / Pay face on `/bounties/[id]`, or `GET|POST /api/bounties/:id/x402` (x402 `exact` → `gb-escrow`) then Lock. Settle: `POST /api/bounties/:id/settle`. Hosted checkout stays disabled. Ops: set public `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` for the WalletConnect button.

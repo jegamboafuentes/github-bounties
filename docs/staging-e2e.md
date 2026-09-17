@@ -68,7 +68,7 @@ curl -sS -H "Authorization: Bearer $(gcloud auth print-identity-token)" "$URL/ap
 Pass when:
 
 - [ ] HTTP 200
-- [ ] `ok: true`, `service: github-bounties-web`, `fee_bps: 200`, `claim_lock_hours: 72`
+- [ ] `ok: true`, `service: github-bounties-web`, `fee_bps: 200`, `claim_lock_hours: 72`, `claim_lock_sunset: true`
 - [ ] `escrow.network` is `base-sepolia` (or documented override — not `base` unless gated)
 - [ ] `escrow.rail` is `cdp` and `escrow.missing` is empty (first-deploy CDP secrets are bound)
 - [ ] If someone detached CDP secrets: `rail=mock` and `missing` lists exact names only
@@ -84,7 +84,7 @@ expected. Do not “fix” that with a public binding if org policy blocks `allU
 ## Happy path
 
 Work a **new** funded issue (not a leftover seed row unless Ops seeded staging on
-purpose). Lock ≠ money. Merge is truth. Hunter payout is net of **2%**.
+purpose). Signals ≠ money. Merge is truth. Winner share is ADR 0003 (empty pool = 98% of face).
 
 ### 1. Google sign-in
 
@@ -126,12 +126,14 @@ Fallback (unchanged):
 
 Hosted checkout stays **disabled**. Do not treat a Coinbase checkout redirect as funded.
 
-### 5. Claim-lock (72h, not money)
+### 5. Parallel hunt (no exclusive 72h lock)
 
-- [ ] Hunter: take the exclusive **72h** claim-lock
-- [ ] Board shows **Claimed by X until …**
-- [ ] Second hunter cannot take the same lock
-- [ ] Optional: issue comment / `bounty-claimed` label (best-effort; GitHub errors must not roll back the lock)
+- [ ] Board / detail do **not** show **Claimed by X until …**
+- [ ] There is no **Claim for 72h** button
+- [ ] Signed-in hunter: **Working on this** (non-blocking). A second hunter can signal the same bounty
+- [ ] Clear signal works; it does not change eligibility or money
+- [ ] Residual V1 exclusive locks drain on read or `{ORIGIN}/api/jobs/expire-claim-locks` (`claim_lock_sunset: true`); bounty returns to `funded` (not refunded)
+- [ ] `expires_at` bounty refunds still run from the same cron
 
 ### 6. Merge → eligible
 
@@ -141,16 +143,17 @@ Hosted checkout stays **disabled**. Do not treat a Coinbase checkout redirect as
 - [ ] One `claims` row with `status=eligible` for the merged PR author
 - [ ] Board / bounty page shows payout-eligible for that hunter
 
-### 7. Claim payout (net of 2%)
+### 7. Claim payout (ADR 0003 split)
 
-Face `F`, fee `floor(F × 0.02)`, hunter `F − fee` (example: 100 / 2 / 98).
+Face `F`, fee `floor(F × 0.02)`, winner ≈83.3% of face when the pool is non-empty, or **100% of post-fee** when `E` is empty (example empty-pool: 100 / 2 / 98).
 
-- [ ] Eligible hunter enters a BYO Base address (`0x` + 40 hex; not zero, not ENS)
+- [ ] Eligible winner enters a BYO Base address (`0x` + 40 hex; not zero, not ENS)
 - [ ] **Claim … USDC** succeeds
-- [ ] UI shows face / 2% fee / net / payout tx
+- [ ] UI shows face / 2% fee / winner / pool / each share / tx hashes
 - [ ] Board: **Completed (paid)**
-- [ ] `claims.status=paid`, `bounties.status=settled`
-- [ ] Poster (or anyone else) calling claim gets a clear `not_hunter` error; bounty stays paid (idempotent hunter retry is OK)
+- [ ] `claims.status=paid`, `bounties.status=settled` (or `settled_partial` if a pool wallet is missing)
+- [ ] Poster (or anyone else) calling claim gets a clear `not_hunter` error; they can still see roster + breakdown
+- [ ] Pool members are paid to Settings wallets that exist; unlinked members show Connect GitHub
 
 ---
 
@@ -165,10 +168,9 @@ Face `F`, fee `floor(F × 0.02)`, hunter `F − fee` (example: 100 / 2 / 98).
 
 ### Expired lock
 
-- [ ] On a **different** funded bounty, take a claim-lock
-- [ ] Expire it: wait 72h **or** call `{ORIGIN}/api/jobs/expire-claim-locks` (Bearer `CRON_SECRET` if set) **or** `cd apps/web && npm run expire-locks` against staging via proxy (secret-safe, same as migrate)
-- [ ] Lock status `expired`; bounty returns to `funded` (not refunded)
-- [ ] Merge of a closing PR still marks the merged author eligible (lock ≠ money)
+- [ ] Residual exclusive lock (if any leftover V1 row): call `{ORIGIN}/api/jobs/expire-claim-locks` (Bearer `CRON_SECRET` if set) **or** `cd apps/web && npm run expire-locks` against staging via proxy (secret-safe, same as migrate) **or** open `/board` (drain on read)
+- [ ] Lock status `expired` or `released`; bounty returns to `funded` (not refunded)
+- [ ] Merge of a closing PR still marks the merged author eligible (signals ≠ money)
 
 ### Refund
 
@@ -224,3 +226,12 @@ Stop the beta and ping Ops if:
 
 Hello canary remaining up (`github-bounties-hello`) does **not** mean the product
 is healthy.
+
+---
+
+## V2-5 (next, not this ticket)
+
+DEV dogfood on `https://dev.githubbounties.xyz`: ≥2 hunters open qualifying PRs
+before the winning merge, exclusive lock was not required, settle pays fee +
+winner + each pool member, plus an empty-pool regression (winner 100% of
+post-fee). Full checklist: [docs/v2-tickets.md](v2-tickets.md) § V2-5.
