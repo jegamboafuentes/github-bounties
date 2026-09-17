@@ -59,6 +59,7 @@ export async function handleGitHubWebhookRequest(args: {
   });
 
   const claims = result.claims ?? [];
+  const pool = result.pool ?? [];
   return {
     status: 200,
     body: {
@@ -72,6 +73,18 @@ export async function handleGitHubWebhookRequest(args: {
       winnerLogin: result.decision?.winnerLogin ?? null,
       claims,
       claimSkips: claimSkipReasons(claims),
+      pool,
+      poolFrozen: pool.some((row) => row.frozen),
+      poolSkips: [
+        ...new Set(
+          pool
+            .flatMap((row) => [
+              row.skip,
+              ...(row.skipped ?? []).map((s) => s.reason),
+            ])
+            .filter((skip): skip is string => Boolean(skip)),
+        ),
+      ],
     },
   };
 }

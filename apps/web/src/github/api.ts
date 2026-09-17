@@ -40,7 +40,10 @@ function defaultHttp(
   return fetch(input, init);
 }
 
-function apiHeaders(token: string, extra?: Record<string, string>): Record<string, string> {
+export function githubApiHeaders(
+  token: string,
+  extra?: Record<string, string>,
+): Record<string, string> {
   return {
     accept: GITHUB_ACCEPT,
     "x-github-api-version": GITHUB_API_VERSION,
@@ -48,6 +51,10 @@ function apiHeaders(token: string, extra?: Record<string, string>): Record<strin
     authorization: `Bearer ${token}`,
     ...extra,
   };
+}
+
+function apiHeaders(token: string, extra?: Record<string, string>): Record<string, string> {
+  return githubApiHeaders(token, extra);
 }
 
 export function createAppJwt(env: NodeJS.ProcessEnv = process.env): string {

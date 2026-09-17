@@ -89,6 +89,25 @@ Case-insensitive; optional colon. Same-repo: `Fixes #42`. Cross-repo: `Fixes own
 
 The hunter must already have a `github_links` row (`github_id` or `github_login`). Otherwise no `claims` row is written — `claims.hunter_user_id` is required. That skip is persisted on `webhook_deliveries.claim_results` (and returned as `claims` / `claimSkips` on the webhook HTTP body) so Ops can see `hunter_not_linked` without Cloud Logging. The board and bounty page show the PR author login and a Connect GitHub CTA. The claim-lock holder is **not** assigned the Claim. After the hunter Connects GitHub as the PR author login, **Redeliver** the same GUID (or wait for Connect GitHub backfill) to insert the eligible Claim.
 
+## V2-2 pool freeze (merge-time backfill)
+
+After the V1 winner is known, the same `pull_request` `closed` + `merged=true` delivery **freezes** `pool_participants` (ADR 0003). Source of truth is a GitHub snapshot at freeze (`list PRs referencing #N` + `GET …/pulls/{n}/commits`) — not the incremental stream. Incremental `opened` / `synchronize` / `ready_for_review` upsert unfrozen candidates for roster UX only.
+
+| Lock | Behavior |
+| --- | --- |
+| Winner | Unchanged: merged PR author → `claims.status=eligible` |
+| Eligible set `E` | Non-winner, non-poster, referencing PR, `created_at < merged_at`, ≥1 own commit at freeze |
+| Cap | First 10 by `created_at` (then `pr_number`, `github_id`) are `role=pool`; rest `overflow` with `share_usdc=0` |
+| Late PRs | `created_at >= merged_at` → skipped, not `pool` |
+| Bots | `user.type=Bot` excluded (`excluded_bot`) |
+| Unlinked hunters | Participant row by `github_id` / login, `user_id` null, `skip_reason=hunter_not_linked` until Connect |
+| Idempotency | Same `X-GitHub-Delivery` does not duplicate participants or change a row that already has `frozen_at` |
+| Money / lock | **Does not move USDC.** Does not acquire exclusive claim-lock. Settle is V2-3. |
+
+Redeliver the **winning merge** GUID after a remount so freeze can run if the first pass only wrote the V1 Claim (or skipped snapshot). A freeze that already has `frozen_at` is left unchanged; Connect GitHub still attaches `user_id` on unlinked rows.
+
+Fixtures: [`fixtures/pool-eligibility-cases.json`](../fixtures/pool-eligibility-cases.json) (V2-0 predicate + V2-2 freeze rows).
+
 Known GitHub behavior we reproduce: `must NOT close #N` still matches. Do not rely on negation in PR bodies.
 
 ### Squash-merge edge
@@ -163,7 +182,7 @@ Point `scripts/replay-delivery.ts` at `http://127.0.0.1:3000/webhooks/github` af
 
 1. GitHub → Settings → Developer settings → GitHub Apps → your staging App → **Advanced**.
 2. Under **Recent deliveries**, open the delivery GUID.
-3. **Redeliver**. `X-GitHub-Delivery` is unchanged. If a Claim was already written, this is a no-op (`duplicate: true`). If the first pass skipped (`hunter_not_linked`, `no_funded_bounty`, or a pre-fix row with `eligible=true` and empty `claim_results`), the worker retries the Claim write (`replayed: true`).
+3. **Redeliver**. `X-GitHub-Delivery` is unchanged. If a Claim was already written, this is a no-op for claims (`duplicate: true`). If the first pass skipped (`hunter_not_linked`, `no_funded_bounty`, or a pre-fix row with `eligible=true` and empty `claim_results`), the worker retries the Claim write (`replayed: true`). After remounting V2-2, redeliver the **winning merge** so freeze can run; a freeze that already has `frozen_at` is left unchanged.
 
 ### D. GitHub API
 
@@ -173,12 +192,12 @@ Point `scripts/replay-delivery.ts` at `http://127.0.0.1:3000/webhooks/github` af
 
 V1-4 shipped the board, exclusive **72h** claim-lock, and expiry job. See [bounties.md](bounties.md).
 
-This webhook path still **only** writes `claims.status=eligible` on merge+close of a `funded` or `claim_locked` issue. It does not acquire, release, or expire locks. **Lock ≠ money**; merge is still truth.
+This webhook path writes `claims.status=eligible` on merge+close of a `funded` or `claim_locked` issue and (V2-2) freezes `pool_participants`. It does not acquire, release, or expire locks and does not move USDC. **Lock ≠ money**; merge is still truth.
 
 | Event | V1-4 / later |
 | --- | --- |
 | `issue_comment` created | Optional later `/claim` wakeup; lock is taken in the product UI today |
-| `pull_request` opened / synchronize | Work underway during the lock |
+| `pull_request` opened / synchronize / ready_for_review | V2-2 live-roster candidates (unfrozen). Freeze still recomputes from GitHub at winning merge |
 | `issues` assigned | Alternate lock representation (not used) |
 | `installation` deleted / `suspend` | Pause jobs; repo no longer authorized (`repos.is_active=false`) |
 | `pull_request` closed + merged | Eligibility fires here even if the lock expired |

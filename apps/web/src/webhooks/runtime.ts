@@ -5,6 +5,7 @@ import { postgresClaimWriter } from "./claims";
 import { postgresDeliveryRecorder } from "./delivery-store";
 import { missingGitHubAppApiEnv } from "./env";
 import { applySurfaceOverrides } from "./input";
+import { postgresPoolWriter } from "./pool";
 import { processDelivery, type ProcessDeliveryDeps } from "./process-delivery";
 import type { EligibilityInput, GitHubWebhookPayload } from "./types";
 
@@ -13,6 +14,7 @@ export function productWebhookDeps(): ProcessDeliveryDeps {
   return {
     store: postgresDeliveryRecorder(db),
     claims: postgresClaimWriter(db),
+    pool: postgresPoolWriter(db),
     deactivateInstallation: (installationId) =>
       deactivateReposForInstallation(installationId, db).then(() => undefined),
     enrich: enrichEligibilitySurfaces,

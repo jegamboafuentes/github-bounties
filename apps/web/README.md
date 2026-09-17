@@ -110,8 +110,8 @@ Do not point `cloudbuild.yaml` at this app. Closed-beta checklist: [docs/staging
 | `npm run db:migrate` | apply `drizzle/` SQL to `DATABASE_URL` (`0004_v2_pool_participants.sql` + snapshots) |
 | `npm run db:seed` | sample user / repo / pending_fund + claim-locked + open funded bounty + V2-1 pool fixtures |
 | `npm run expire-locks` | expire overdue 72h claim-locks (same function as the cron route) |
-| `npm run test:unit` | fee 2% + Base address + escrow state machine + CDP env/mainnet guard + 72h + auth + V0-B eligibility fixtures + HMAC + webhook replay + board helpers + V2 pool invariants (no live GitHub, no database) |
-| `npm run test:db` | unique indexes + `users.google_sub` upsert + eligible Claim + claim-lock exclusivity/expiry + escrow fund/settle/refund + hunter-only payout mocks + GitHub unlink + V2-1 pool schema (needs `DATABASE_URL`) |
+| `npm run test:unit` | fee 2% + Base address + escrow state machine + CDP env/mainnet guard + 72h + auth + V0-B eligibility fixtures + HMAC + webhook replay + board helpers + V2 pool invariants + V2-2 freeze rows (no live GitHub, no database) |
+| `npm run test:db` | unique indexes + `users.google_sub` upsert + eligible Claim + claim-lock exclusivity/expiry + escrow fund/settle/refund + hunter-only payout mocks + GitHub unlink + V2-1 pool schema + V2-2 pool freeze (needs `DATABASE_URL`) |
 | `npm run build` | Next.js standalone |
 
 ## Google Sign-In (V1-2)

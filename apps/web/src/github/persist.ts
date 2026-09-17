@@ -6,6 +6,37 @@ import type { GitHubIdentity, InstallationRepo } from "./api";
 export type GithubLinkRow = typeof githubLinks.$inferSelect;
 export type RepoRow = typeof repos.$inferSelect;
 
+export async function findGithubLinkByIdOrLogin(
+  db: Database,
+  identity: { githubId?: number | bigint | null; githubLogin?: string | null },
+): Promise<Pick<GithubLinkRow, "userId" | "githubId" | "githubLogin"> | null> {
+  if (identity.githubId != null) {
+    const [byId] = await db
+      .select({
+        userId: githubLinks.userId,
+        githubId: githubLinks.githubId,
+        githubLogin: githubLinks.githubLogin,
+      })
+      .from(githubLinks)
+      .where(eq(githubLinks.githubId, BigInt(identity.githubId)))
+      .limit(1);
+    if (byId) return byId;
+  }
+
+  const login = identity.githubLogin?.trim();
+  if (!login) return null;
+  const [byLogin] = await db
+    .select({
+      userId: githubLinks.userId,
+      githubId: githubLinks.githubId,
+      githubLogin: githubLinks.githubLogin,
+    })
+    .from(githubLinks)
+    .where(sql`lower(${githubLinks.githubLogin}) = ${login.toLowerCase()}`)
+    .limit(1);
+  return byLogin ?? null;
+}
+
 export async function findGithubLinkByUserId(
   userId: string,
   db: Database,

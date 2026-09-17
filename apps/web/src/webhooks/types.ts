@@ -56,6 +56,7 @@ export type HandleResult = {
   decision?: EligibilityDecision;
   logs: string[];
   claims?: ClaimWriteResult[];
+  pool?: PoolWriteResult[];
 };
 
 export type ClaimWriteResult = {
@@ -68,6 +69,19 @@ export type ClaimWriteResult = {
   winnerLogin?: string | null;
 };
 
+export type PoolWriteResult = {
+  issueNumber: number;
+  bountyId?: string;
+  frozen?: boolean;
+  alreadyFrozen?: boolean;
+  ingested?: boolean;
+  paidCount?: number;
+  overflowCount?: number;
+  participantCount?: number;
+  skip?: string;
+  skipped?: Array<{ login: string; reason: string; prNumber?: number }>;
+};
+
 export type GitHubWebhookPayload = {
   action?: string;
   zen?: string;
@@ -78,7 +92,9 @@ export type GitHubWebhookPayload = {
     merged?: boolean | null;
     merged_at?: string | null;
     html_url?: string | null;
-    user?: { login?: string | null; id?: number | null } | null;
+    draft?: boolean | null;
+    created_at?: string | null;
+    user?: { login?: string | null; id?: number | null; type?: string | null } | null;
     base?: {
       ref?: string | null;
       repo?: {
@@ -86,6 +102,10 @@ export type GitHubWebhookPayload = {
         default_branch?: string | null;
         full_name?: string | null;
       } | null;
+    } | null;
+    head?: {
+      ref?: string | null;
+      repo?: { full_name?: string | null } | null;
     } | null;
     merge_commit_sha?: string | null;
     /** Fixture-only surfaces (not on live REST webhooks). */
