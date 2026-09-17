@@ -3,7 +3,8 @@
 - **ADR:** [0003 — V2 multi-hunter participation pool](adr/0003-v2-multi-hunter-pool.md) (**Accepted**)
 - **Product rules:** frozen by LB PM (Enrique delegated). Tickets must match the freeze exactly.
 - **V2-0:** implemented (fixtures + `splitPostFeePool`).
-- **V2-1:** implemented (schema + seed fixtures). **Do not start V2-2+ here.**
+- **V2-1:** implemented (schema + seed fixtures).
+- **V2-2:** implemented (merge-time freeze + optional live roster). **Do not start V2-3+ here.**
 - **Not blocking:** V1.5 WalletConnect + amount chips is parallel polish after x402
   [#29](https://github.com/jegamboafuentes/github-bounties/pull/29). It does not
   gate this spec or V2-0…V2-5.
@@ -128,29 +129,29 @@ reference `#N`, commit authors, `created_at` vs `merged_at`).
 
 ### Acceptance criteria
 
-- [ ] Winner path unchanged: merged PR author, default branch, closing surfaces
+- [x] Winner path unchanged: merged PR author, default branch, closing surfaces
       from [webhooks.md](webhooks.md) → `claims.status=eligible`.
-- [ ] After winner is known, compute `E` with **all five** frozen predicates
+- [x] After winner is known, compute `E` with **all five** frozen predicates
       (non-winner, non-poster, referencing PR, `created_at < merged_at`, ≥1 own
       commit on that PR at freeze).
-- [ ] Draft PRs qualify. Cross-fork PRs into the bounty repo qualify.
+- [x] Draft PRs qualify. Cross-fork PRs into the bounty repo qualify.
       Cross-repo `other/repo#N` does not.
-- [ ] Force-push: commit list at freeze; no reflog.
-- [ ] Late PRs (`created_at >= merged_at`) written as skipped, not `pool`.
-- [ ] `|E|>10`: first 10 by `created_at` (tie-break) get `role=pool`; rest
+- [x] Force-push: commit list at freeze; no reflog.
+- [x] Late PRs (`created_at >= merged_at`) written as skipped, not `pool`.
+- [x] `|E|>10`: first 10 by `created_at` (tie-break) get `role=pool`; rest
       `overflow`, `share_usdc=0`.
-- [ ] Poster and winner persisted as `excluded_*` / `winner` for the roster, not paid
+- [x] Poster and winner persisted as `excluded_*` / `winner` for the roster, not paid
       from the pool.
-- [ ] Bots (`type=Bot`) excluded.
-- [ ] Unlinked hunters: participant row by `github_id` / login, `user_id` null,
+- [x] Bots (`type=Bot`) excluded.
+- [x] Unlinked hunters: participant row by `github_id` / login, `user_id` null,
       skip reason `hunter_not_linked` until Connect (redeliver / backfill, same
       as V1).
-- [ ] Delivery idempotency: same `X-GitHub-Delivery` does not duplicate
+- [x] Delivery idempotency: same `X-GitHub-Delivery` does not duplicate
       participants or change a freeze that already has `frozen_at`.
-- [ ] Duplicate merge / `issues.closed` still does not double-write `claims`
+- [x] Duplicate merge / `issues.closed` still does not double-write `claims`
       (existing unique `(bounty_id, pr_number)`).
-- [ ] **Does not move USDC.** Does not acquire exclusive claim-lock.
-- [ ] Unit tests reuse [Pool eligibility fixtures](#pool-eligibility-fixtures).
+- [x] **Does not move USDC.** Does not acquire exclusive claim-lock.
+- [x] Unit tests reuse [Pool eligibility fixtures](#pool-eligibility-fixtures).
 
 ### Out of scope
 

@@ -204,6 +204,152 @@ describe("processDelivery", () => {
     assert.equal(result.decision?.eligible, false);
     assert.equal(logs.some((line) => line.includes("mark claim eligible")), false);
   });
+
+  it("freezes the pool after the winner is known and does not change a frozen_at set", async () => {
+    const logs: string[] = [];
+    const freezeCalls: Array<{ already?: boolean }> = [];
+    const ingestCalls: unknown[] = [];
+    const deps = {
+      store: memoryDeliveryRecorder(),
+      log: (line: string) => logs.push(line),
+      claims: {
+        async markEligible() {
+          return [{ issueNumber: 42, claimId: "claim-1", status: "eligible" }];
+        },
+      },
+      pool: {
+        async freezeAfterWinner() {
+          const already = freezeCalls.length > 0;
+          freezeCalls.push({ already });
+          return [
+            {
+              issueNumber: 42,
+              bountyId: "bounty-1",
+              frozen: true,
+              alreadyFrozen: already,
+              paidCount: 1,
+              overflowCount: 0,
+              participantCount: 2,
+            },
+          ];
+        },
+        async ingestLiveRoster(args: unknown) {
+          ingestCalls.push(args);
+          return [];
+        },
+      },
+    };
+
+    const first = await processDelivery({
+      deliveryId: fixture.deliveryId,
+      event: fixture.event,
+      payload: fixture.payload,
+      deps,
+    });
+    const second = await processDelivery({
+      deliveryId: fixture.deliveryId,
+      event: fixture.event,
+      payload: fixture.payload,
+      deps,
+    });
+
+    assert.equal(first.duplicate, false);
+    assert.equal(first.pool?.[0]?.frozen, true);
+    assert.equal(first.pool?.[0]?.alreadyFrozen, false);
+    assert.equal(second.duplicate, true);
+    assert.equal(second.pool?.[0]?.alreadyFrozen, true);
+    assert.equal(freezeCalls.length, 2);
+    assert.equal(ingestCalls.length, 0);
+    assert.match(logs.join("\n"), /\[pool] freeze /);
+    assert.match(logs.join("\n"), /already frozen/);
+  });
+
+  it("ingests opened / synchronize as live-roster candidates, not as winner claims", async () => {
+    const payload: GitHubWebhookPayload = structuredClone(fixture.payload);
+    payload.action = "opened";
+    if (payload.pull_request) payload.pull_request.merged = false;
+    const ingested: string[] = [];
+    const result = await processDelivery({
+      deliveryId: "opened-1",
+      event: "pull_request",
+      payload,
+      deps: {
+        store: memoryDeliveryRecorder(),
+        log: () => {},
+        claims: {
+          async markEligible() {
+            throw new Error("opened must not write claims");
+          },
+        },
+        pool: {
+          async freezeAfterWinner() {
+            throw new Error("opened must not freeze");
+          },
+          async ingestLiveRoster() {
+            ingested.push("opened");
+            return [{ issueNumber: 42, bountyId: "bounty-1", ingested: true, frozen: false }];
+          },
+        },
+      },
+    });
+    assert.equal(result.decision?.eligible, false);
+    assert.equal(result.pool?.[0]?.ingested, true);
+    assert.deepEqual(ingested, ["opened"]);
+  });
+
+  it("does not freeze on issues.closed (claims stay merge-only)", async () => {
+    let freezeCalls = 0;
+    const result = await processDelivery({
+      deliveryId: "issues-closed-1",
+      event: "issues",
+      payload: { action: "closed", repository: fixture.payload.repository },
+      deps: {
+        store: memoryDeliveryRecorder(),
+        log: () => {},
+        pool: {
+          async freezeAfterWinner() {
+            freezeCalls += 1;
+            return [];
+          },
+          async ingestLiveRoster() {
+            freezeCalls += 1;
+            return [];
+          },
+        },
+      },
+    });
+    assert.equal(result.decision?.eligible, false);
+    assert.equal(freezeCalls, 0);
+  });
+
+  it("keeps the V1 winner path when pool freeze throws", async () => {
+    const result = await processDelivery({
+      deliveryId: "pool-throw-1",
+      event: fixture.event,
+      payload: fixture.payload,
+      deps: {
+        store: memoryDeliveryRecorder(),
+        log: () => {},
+        claims: {
+          async markEligible() {
+            return [{ issueNumber: 42, claimId: "claim-1", status: "eligible" }];
+          },
+        },
+        pool: {
+          async freezeAfterWinner() {
+            throw new Error("github snapshot 502");
+          },
+          async ingestLiveRoster() {
+            return [];
+          },
+        },
+      },
+    });
+    assert.equal(result.duplicate, false);
+    assert.equal(result.decision?.eligible, true);
+    assert.equal(result.claims?.[0]?.claimId, "claim-1");
+    assert.deepEqual(result.pool, []);
+  });
 });
 
 describe("handleGitHubWebhookRequest", () => {
@@ -306,5 +452,45 @@ describe("handleGitHubWebhookRequest", () => {
     assert.equal((result.body.claims as { skip?: string }[])[0]?.skip, "no_funded_bounty");
     const stored = await store.get("http-skip-1");
     assert.equal(stored?.claimResults?.[0]?.skip, "no_funded_bounty");
+  });
+
+  it("returns poolFrozen on the HTTP body after freeze", async () => {
+    const store = memoryDeliveryRecorder();
+    const body = Buffer.from(JSON.stringify(fixture.payload), "utf8");
+    const result = await handleGitHubWebhookRequest({
+      rawBody: body,
+      signatureHeader: githubSignature256(body, SECRET),
+      secret: SECRET,
+      deliveryId: "http-pool-1",
+      event: fixture.event,
+      deps: {
+        store,
+        log: () => {},
+        claims: {
+          async markEligible() {
+            return [{ issueNumber: 42, claimId: "claim-1", status: "eligible" }];
+          },
+        },
+        pool: {
+          async freezeAfterWinner() {
+            return [
+              {
+                issueNumber: 42,
+                bountyId: "bounty-1",
+                frozen: true,
+                paidCount: 0,
+                participantCount: 1,
+              },
+            ];
+          },
+          async ingestLiveRoster() {
+            return [];
+          },
+        },
+      },
+    });
+    assert.equal(result.status, 200);
+    assert.equal(result.body.eligible, true);
+    assert.equal(result.body.poolFrozen, true);
   });
 });

@@ -1,115 +1,24 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
-import { fileURLToPath } from "node:url";
 import { POOL_MAX_PAID } from "./constants";
 import {
   pullRequestReferencesIssue,
   referencedIssueNumbersForRepo,
 } from "./issue-refs";
 import {
+  loadPoolEligibilityFixtures,
+  poolEligibilityInputForCase,
+  type PoolFixtureHunterSeed,
+} from "./pool-eligibility-fixtures";
+import {
   capPaidPool,
   comparePoolRank,
   evaluatePoolEligibility,
-  type PoolEligibilityInput,
-  type PoolPullRequest,
 } from "./pool-eligibility";
 import { closingIssueNumbersForRepo } from "../webhooks/closing-keywords";
 
-type Actor = { login: string; githubId: number };
-
-type HunterSeed = {
-  login: string;
-  githubId: number;
-  prNumber: number;
-  createdAt: string;
-  body?: string;
-  title?: string;
-};
-
-type FixtureCase = {
-  id: string;
-  description: string;
-  bountyStatus?: string;
-  expectedInE: string[];
-  expectedOverflow: string[];
-  pullRequests?: PoolPullRequest[];
-  qualifyingHunters?: HunterSeed[];
-  winningPrOverrides?: Partial<PoolPullRequest>;
-  assertNotV1WinnerCloser?: boolean;
-};
-
-type FixtureFile = {
-  meta: {
-    bountyIssueNumber: number;
-    repositoryFullName: string;
-    bountyStatus: string;
-    mergedAt: string;
-    poster: Actor;
-    winner: Actor;
-    winningPr: PoolPullRequest;
-  };
-  ticketIds: string[];
-  cases: FixtureCase[];
-};
-
-const fixtures = JSON.parse(
-  readFileSync(
-    join(
-      dirname(fileURLToPath(import.meta.url)),
-      "../../../../fixtures/pool-eligibility-cases.json",
-    ),
-    "utf8",
-  ),
-) as FixtureFile;
-
-function qualifyingPr(seed: HunterSeed, repo: string): PoolPullRequest {
-  return {
-    number: seed.prNumber,
-    title: seed.title ?? "Hunt",
-    body: seed.body ?? "Refs #42",
-    authorLogin: seed.login,
-    authorId: seed.githubId,
-    authorType: "User",
-    createdAt: seed.createdAt,
-    draft: false,
-    merged: false,
-    closed: false,
-    baseRepositoryFullName: repo,
-    headRepositoryFullName: `${seed.login}/repo`,
-    commitAuthorsAtFreeze: [{ login: seed.login, githubId: seed.githubId }],
-    commitMessages: ["wip"],
-  };
-}
-
-function toInput(row: FixtureCase): PoolEligibilityInput {
-  const { meta } = fixtures;
-  const winningPr = {
-    ...meta.winningPr,
-    ...(row.winningPrOverrides ?? {}),
-  };
-  const extra = [
-    ...(row.pullRequests ?? []),
-    ...(row.qualifyingHunters ?? []).map((h) =>
-      qualifyingPr(h, meta.repositoryFullName),
-    ),
-  ];
-  return {
-    bounty: {
-      issueNumber: meta.bountyIssueNumber,
-      repositoryFullName: meta.repositoryFullName,
-      status: row.bountyStatus ?? meta.bountyStatus,
-      poster: meta.poster,
-    },
-    winner: meta.winner,
-    winningMerge: {
-      prNumber: winningPr.number,
-      mergedAt: meta.mergedAt,
-    },
-    pullRequests: [winningPr, ...extra],
-  };
-}
+const fixtures = loadPoolEligibilityFixtures();
+const toInput = poolEligibilityInputForCase;
 
 describe("pool eligibility fixtures (ADR 0003 / V2-0)", () => {
   it("covers every row in the ticket Pool eligibility fixtures table", () => {
@@ -175,7 +84,7 @@ describe("pool eligibility fixtures (ADR 0003 / V2-0)", () => {
   }
 
   it("cap: 12 eligible → paid set is the 10 earliest created_at", () => {
-    const hunters: HunterSeed[] = [];
+    const hunters: PoolFixtureHunterSeed[] = [];
     for (let i = 1; i <= 12; i += 1) {
       const n = String(i).padStart(2, "0");
       hunters.push({

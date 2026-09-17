@@ -69,7 +69,7 @@ Do **not** request Administration, Checks, Actions, or Members for V1 eligibilit
 
 | Event | Why now | Later |
 | --- | --- | --- |
-| **Pull request** | Merge is truth. `action=closed` + `merged=true` is the eligibility signal | `opened` / `synchronize` can show work started while a lock is held |
+| **Pull request** | Merge is truth. `action=closed` + `merged=true` is the eligibility signal **and** V2-2 pool freeze | `opened` / `synchronize` / `ready_for_review` ingest unfrozen roster candidates (UX only; freeze recomputes from GitHub) |
 | **Issues** | Optional context (labels). **Not** used as the eligibility signal (avoids double-fire with PR merge) | V1-4 best-effort `bounty-claimed` label + comment on lock |
 | **Issue comment** | Not handled for eligibility | Claim comments (`/claim`) and expiry-job wakeups |
 | **Installation** | Log install/uninstall; uninstall marks `repos.is_active=false` | Uninstall → pause claim-expiry jobs for that account |

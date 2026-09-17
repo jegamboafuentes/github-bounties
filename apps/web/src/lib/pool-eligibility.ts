@@ -1,6 +1,6 @@
 /**
- * V2-0 pool eligibility predicate (ADR 0003). Pure. No DB, no GitHub API,
- * no webhook writer. V2-2 will feed freeze-time snapshots into this.
+ * V2-0 pool eligibility predicate (ADR 0003). Pure. No DB, no GitHub API.
+ * V2-2 feeds freeze-time snapshots into this and persists `pool_participants`.
  *
  * Eligible = non-winner, non-poster; opened ≥1 PR that references funded `#N`
  * **before** the winning merge; that PR has ≥1 commit by them at freeze.
@@ -47,8 +47,18 @@ export type PoolPullRequest = {
   headRepositoryFullName?: string;
   /** Commit authors on the PR **at freeze** (winning merge). No reflog. */
   commitAuthorsAtFreeze: PoolCommitAuthor[];
+  /**
+   * Optional freeze-time commit list (SHA + authors). V2-2 snapshot uses this
+   * for `commit_sha`; fixtures may omit it and keep `commitAuthorsAtFreeze`.
+   */
+  commitsAtFreeze?: Array<{
+    sha: string;
+    authors: PoolCommitAuthor[];
+    message?: string;
+  }>;
   commitMessages?: string[];
   closingIssueNumbers?: number[];
+  htmlUrl?: string;
 };
 
 export type PoolActor = {

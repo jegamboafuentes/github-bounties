@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { bounties, claims, githubLinks, repos, webhookDeliveries } from "../db/schema";
+import { findGithubLinkByIdOrLogin } from "../github/persist";
+import { bounties, claims, repos, webhookDeliveries } from "../db/schema";
 import { CLAIM_SKIP } from "./outcome";
 import type { ClaimWriteResult, EligibilityDecision, GitHubWebhookPayload } from "./types";
 
@@ -259,21 +260,9 @@ async function findHunter(
   db: Database,
   decision: EligibilityDecision,
 ): Promise<{ userId: string } | null> {
-  if (decision.winnerId != null) {
-    const [byId] = await db
-      .select({ userId: githubLinks.userId })
-      .from(githubLinks)
-      .where(eq(githubLinks.githubId, BigInt(decision.winnerId)))
-      .limit(1);
-    if (byId) return byId;
-  }
-
-  const login = decision.winnerLogin?.trim();
-  if (!login) return null;
-  const [byLogin] = await db
-    .select({ userId: githubLinks.userId })
-    .from(githubLinks)
-    .where(sql`lower(${githubLinks.githubLogin}) = ${login.toLowerCase()}`)
-    .limit(1);
-  return byLogin ?? null;
+  const link = await findGithubLinkByIdOrLogin(db, {
+    githubId: decision.winnerId,
+    githubLogin: decision.winnerLogin,
+  });
+  return link ? { userId: link.userId } : null;
 }
