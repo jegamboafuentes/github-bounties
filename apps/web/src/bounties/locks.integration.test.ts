@@ -69,6 +69,10 @@ async function fixture() {
   return { db, sql, suffix, posterId, hunterId, otherHunterId, repoId, fullName };
 }
 
+function hoursFrom(origin: Date, hours: number): Date {
+  return new Date(origin.getTime() + hours * 3600_000);
+}
+
 describe("V2-4 bounty post + claim-lock sunset", () => {
   it("creates from a connected issue URL and rejects a second active bounty", async () => {
     const { db, sql, posterId, fullName } = await fixture();
@@ -142,7 +146,10 @@ describe("V2-4 bounty post + claim-lock sunset", () => {
           }),
         },
       );
-      const lockedAt = new Date("2026-09-09T12:00:00.000Z");
+      const now = new Date();
+      const lockedAt = hoursFrom(now, -1);
+      const expiresAt = hoursFrom(now, 71);
+      const readAt = now;
       await fundBounty(created.id, posterId, db, lockedAt);
 
       await assert.rejects(
@@ -166,7 +173,7 @@ describe("V2-4 bounty post + claim-lock sunset", () => {
         bountyId: created.id,
         hunterUserId: hunterId,
         lockedAt,
-        expiresAt: new Date("2026-09-12T12:00:00.000Z"),
+        expiresAt,
         status: "active",
       });
       await db
@@ -176,11 +183,11 @@ describe("V2-4 bounty post + claim-lock sunset", () => {
 
       const forbidden = claimedByUntilLabel({
         hunterLabel: `octo-${suffix}`,
-        expiresAt: new Date("2026-09-12T12:00:00.000Z"),
+        expiresAt,
       });
       assert.match(forbidden, /^Claimed by octo-/);
 
-      const board = await getBoardBounty(created.id, db, new Date("2026-09-09T13:00:00.000Z"));
+      const board = await getBoardBounty(created.id, db, readAt);
       assert.equal(board?.activeLock, null);
       assert.equal(board?.status, "funded");
       assert.equal(board?.posterGithubLogin, `ada-${suffix}`);
@@ -189,7 +196,7 @@ describe("V2-4 bounty post + claim-lock sunset", () => {
       const listed = await listBoardBounties(
         db,
         { repo: fullName, status: "funded" },
-        new Date("2026-09-09T13:00:00.000Z"),
+        readAt,
       );
       assert.equal(listed.length, 1);
       assert.equal(listed[0]?.activeLock, null);
@@ -223,13 +230,15 @@ describe("V2-4 bounty post + claim-lock sunset", () => {
       );
       await fundBounty(created.id, posterId, db);
       const lockId = randomUUID();
-      const lockedAt = new Date("2026-09-09T12:00:00.000Z");
+      const now = new Date();
+      const lockedAt = hoursFrom(now, -80);
+      const expiresAt = hoursFrom(now, -8);
       await db.insert(claimLocks).values({
         id: lockId,
         bountyId: created.id,
         hunterUserId: hunterId,
         lockedAt,
-        expiresAt: new Date("2026-09-12T12:00:00.000Z"),
+        expiresAt,
         status: "active",
       });
       await db
@@ -237,7 +246,7 @@ describe("V2-4 bounty post + claim-lock sunset", () => {
         .set({ status: "claim_locked", updatedAt: lockedAt })
         .where(eq(bounties.id, created.id));
 
-      const expired = await expireClaimLocks(db, new Date("2026-09-13T15:00:00.000Z"));
+      const expired = await expireClaimLocks(db, now);
       assert.ok(expired.expiredLockIds.includes(lockId));
       assert.ok(expired.restoredBountyIds.includes(created.id));
 
@@ -247,7 +256,7 @@ describe("V2-4 bounty post + claim-lock sunset", () => {
         .where(eq(bounties.id, created.id));
       assert.equal(after?.status, "funded");
 
-      const open = await getBoardBounty(created.id, db, new Date("2026-09-13T15:01:00.000Z"));
+      const open = await getBoardBounty(created.id, db, new Date(now.getTime() + 60_000));
       assert.equal(open?.status, "funded");
       assert.equal(open?.activeLock, null);
     } finally {

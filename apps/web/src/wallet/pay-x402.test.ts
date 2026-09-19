@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { BASE_SEPOLIA_CAIP2, USDC_BASE_SEPOLIA } from "../lib/constants";
+import { BASE_MAINNET_CAIP2, BASE_SEPOLIA_CAIP2, USDC_BASE_MAINNET, USDC_BASE_SEPOLIA } from "../lib/constants";
 import { decodePaymentRequiredHeader } from "../escrow/x402";
 import { encodePaymentRequiredHeader } from "../escrow/x402";
 import {
@@ -9,6 +9,7 @@ import {
   caip2ToChainId,
   eip3009TypedData,
   encodePaymentSignatureHeader,
+  defaultFundChainCaip2,
   lockAfterInbound,
   parseX402Challenge,
   payX402Exact,
@@ -197,10 +198,10 @@ describe("x402 browser pay payload", () => {
     assert.equal(parseX402Challenge({ error: "payment_required", resource: "/x402" }, null), null);
   });
 
-  it("refuses Base mainnet in the browser pay path", async () => {
+  it("refuses Base mainnet in the browser pay path when the allow flag is unset", async () => {
     const mainnet = {
       ...challenge,
-      accepts: [{ ...challenge.accepts[0], network: "eip155:8453" as const }],
+      accepts: [{ ...challenge.accepts[0], network: BASE_MAINNET_CAIP2, asset: USDC_BASE_MAINNET }],
     };
     const result = await payX402Exact({
       resourceUrl: "/x402",
@@ -212,5 +213,42 @@ describe("x402 browser pay payload", () => {
     });
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.error, "mainnet_refused");
+    assert.equal(defaultFundChainCaip2({}), BASE_SEPOLIA_CAIP2);
+    assert.equal(defaultFundChainCaip2({ CDP_NETWORK: "base" }), BASE_SEPOLIA_CAIP2);
+  });
+
+  it("pays Base mainnet when allowMainnet is set (PROD rail)", async () => {
+    const mainnet = {
+      ...challenge,
+      accepts: [{ ...challenge.accepts[0], network: BASE_MAINNET_CAIP2, asset: USDC_BASE_MAINNET }],
+    };
+    let signedChainId: number | undefined;
+    const result = await payX402Exact({
+      resourceUrl: "/x402",
+      allowMainnet: true,
+      signer: {
+        address: "0x1111111111111111111111111111111111111111",
+        signTypedData: async (typed) => {
+          signedChainId = typed.domain.chainId;
+          return `0x${"ee".repeat(65)}`;
+        },
+      },
+      fetchImpl: (async (_url, init) => {
+        const headers = Object.fromEntries(new Headers(init?.headers).entries());
+        if (!headers["payment-signature"]) {
+          return new Response(JSON.stringify(mainnet), { status: 402 });
+        }
+        return new Response(
+          JSON.stringify({ ok: true, inboundRecorded: true, fundTxHash: "0xmain" }),
+          { status: 200 },
+        );
+      }) as typeof fetch,
+    });
+    assert.equal(result.ok, true);
+    assert.equal(signedChainId, 8453);
+    assert.equal(
+      defaultFundChainCaip2({ CDP_NETWORK: "base", CDP_ALLOW_MAINNET: "1" }),
+      BASE_MAINNET_CAIP2,
+    );
   });
 });

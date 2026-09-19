@@ -9,8 +9,8 @@ import {
   formatUsdc,
 } from "@/bounties/display";
 import { ConnectWalletButtons } from "@/components/connect-wallet";
-import { FUND_CHAIN } from "@/wallet/config";
 import { lockAfterInbound, payX402Exact } from "@/wallet/pay-x402";
+import { useFundWallet } from "@/wallet/providers";
 
 export function FundLockPanel({
   bountyId,
@@ -31,6 +31,7 @@ export function FundLockPanel({
   walletConnectConfigured: boolean;
   fundAction: (formData: FormData) => void | Promise<void>;
 }) {
+  const fund = useFundWallet();
   const face = formatUsdc(faceUsdc);
   const { address, isConnected, chainId } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -38,12 +39,12 @@ export function FundLockPanel({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [paidInbound, setPaidInbound] = useState(inboundRecorded);
-  const readyToPay = Boolean(isConnected && address && chainId === FUND_CHAIN.id && walletClient);
+  const readyToPay = Boolean(isConnected && address && chainId === fund.chainId && walletClient);
   const showPay = !paidInbound;
 
   async function onPay() {
     if (!walletClient || !address) {
-      setError("Connect a Base Sepolia wallet first.");
+      setError(`Connect a ${fund.chainName} wallet first.`);
       return;
     }
     setBusy("pay");
@@ -52,6 +53,7 @@ export function FundLockPanel({
     try {
       const paid = await payX402Exact({
         resourceUrl,
+        allowMainnet: fund.allowMainnet,
         signer: {
           address,
           signTypedData: async (typed) =>
@@ -122,7 +124,7 @@ export function FundLockPanel({
                 (<code className="break-all">{escrowAddress}</code>)
               </>
             ) : null}{" "}
-            on Base Sepolia, then Lock. Hosted Coinbase checkout stays disabled.
+            on {fund.chainName}, then Lock. Hosted Coinbase checkout stays disabled.
           </p>
         </div>
       )}

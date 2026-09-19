@@ -178,6 +178,7 @@ export async function handleX402Fund(
       payTo: wallets.escrowAddress,
       network: rail.network,
       paymentHeader,
+      env,
     });
   } catch (err) {
     if (err instanceof EscrowError) {
