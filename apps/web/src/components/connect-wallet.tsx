@@ -1,7 +1,8 @@
 "use client";
 
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
-import { FUND_CHAIN, isWalletConnectConnector, shortenAddress } from "@/wallet/config";
+import { isWalletConnectConnector, shortenAddress } from "@/wallet/config";
+import { useFundWallet } from "@/wallet/providers";
 
 export function ConnectWalletButtons({
   walletConnectConfigured,
@@ -10,19 +11,20 @@ export function ConnectWalletButtons({
   walletConnectConfigured: boolean;
   purpose?: "fund" | "payout";
 }) {
+  const fund = useFundWallet();
   const { address, isConnected, chainId } = useAccount();
   const { connect, connectors, isPending, error } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain, isPending: isSwitching } = useSwitchChain();
-  const wrongChain = isConnected && chainId !== FUND_CHAIN.id;
+  const wrongChain = isConnected && chainId !== fund.chainId;
   const chainHint =
     purpose === "payout"
       ? wrongChain
-        ? " · switch to Base Sepolia if you also fund from this wallet"
-        : " · Base Sepolia"
+        ? ` · switch to ${fund.chainName} if you also fund from this wallet`
+        : ` · ${fund.chainName}`
       : wrongChain
-        ? " · switch to Base Sepolia to pay"
-        : " · Base Sepolia";
+        ? ` · switch to ${fund.chainName} to pay`
+        : ` · ${fund.chainName}`;
 
   if (isConnected && address) {
     return (
@@ -36,10 +38,10 @@ export function ConnectWalletButtons({
             <button
               type="button"
               disabled={isSwitching}
-              onClick={() => switchChain({ chainId: FUND_CHAIN.id })}
+              onClick={() => switchChain({ chainId: fund.chainId })}
               className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
             >
-              {isSwitching ? "Switching…" : "Switch to Base Sepolia"}
+              {isSwitching ? "Switching…" : `Switch to ${fund.chainName}`}
             </button>
           ) : null}
           <button
@@ -64,7 +66,7 @@ export function ConnectWalletButtons({
           <button
             type="button"
             disabled={isPending}
-            onClick={() => connect({ connector: walletConnect, chainId: FUND_CHAIN.id })}
+            onClick={() => connect({ connector: walletConnect, chainId: fund.chainId })}
             className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
           >
             {isPending ? "Connecting…" : "WalletConnect"}
@@ -74,7 +76,7 @@ export function ConnectWalletButtons({
           <button
             type="button"
             disabled={isPending}
-            onClick={() => connect({ connector: injected, chainId: FUND_CHAIN.id })}
+            onClick={() => connect({ connector: injected, chainId: fund.chainId })}
             className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium dark:border-zinc-700"
           >
             Browser wallet

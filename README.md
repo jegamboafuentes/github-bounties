@@ -227,6 +227,7 @@ live migrate + deploy after merge — this repo only lands the wiring and docs.
 | Migrate (SM `DATABASE_URL`) | [`infra/gcloud/migrate-staging.sh`](infra/gcloud/migrate-staging.sh) |
 | Secret map + Ops commands | [docs/staging-deploy.md](docs/staging-deploy.md) |
 | Closed-beta E2E checklist | [docs/staging-e2e.md](docs/staging-e2e.md) |
+| PROD cutover (new service, apex, mainnet) | [docs/prod-cutover.md](docs/prod-cutover.md) |
 
 ```bash
 # After merge, on an Ops machine (never from this PR / agent):

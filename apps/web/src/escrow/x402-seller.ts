@@ -1,4 +1,6 @@
-import { BASE_MAINNET_CAIP2, BASE_SEPOLIA_CAIP2 } from "../lib/constants";
+import { BASE_MAINNET_CAIP2 } from "../lib/constants";
+import type { EnvMap } from "./env";
+import { isMainnetAllowed } from "./env";
 import { EscrowError } from "./errors";
 import { x402DollarPrice, x402NetworkCaip2, x402ResourceUrl } from "./x402";
 
@@ -97,6 +99,22 @@ export function requestToAdapter(req: Request): LooseAdapter {
 }
 
 /**
+ * Live seller network: same gate as the rail. Mainnet only when
+ * `CDP_ALLOW_MAINNET` is truthy. DEV stays Base Sepolia.
+ */
+export function x402SellerNetworkCaip2(network: string, env: EnvMap = process.env) {
+  const caip2 = x402NetworkCaip2(network);
+  if (caip2 === BASE_MAINNET_CAIP2 && !isMainnetAllowed(env)) {
+    throw new EscrowError(
+      "mainnet_refused",
+      "x402 exact seller refuses Base mainnet unless this is an explicit prod go-live (CDP_ALLOW_MAINNET=1). DEV uses Base Sepolia.",
+      { details: { network } },
+    );
+  }
+  return caip2;
+}
+
+/**
  * Live x402 `exact` seller via CDP facilitator + @x402/core HTTP server.
  * payTo is gb-escrow (passed in). Dynamic-imports so unit tests never load the SDK.
  */
@@ -107,15 +125,9 @@ export async function processLiveX402Exact(input: {
   payTo: string;
   network: string;
   paymentHeader?: string;
+  env?: EnvMap;
 }): Promise<X402SellerResult> {
-  const caip2 = x402NetworkCaip2(input.network);
-  if (caip2 === BASE_MAINNET_CAIP2) {
-    throw new EscrowError(
-      "mainnet_refused",
-      "x402 exact seller refuses Base mainnet unless this is an explicit prod go-live (CDP_ALLOW_MAINNET=1). DEV uses Base Sepolia.",
-      { details: { network: input.network } },
-    );
-  }
+  const caip2 = x402SellerNetworkCaip2(input.network, input.env);
 
   let createCdpFacilitatorClient: () => unknown;
   type ResourceServer = {
@@ -150,7 +162,7 @@ export async function processLiveX402Exact(input: {
   const route = {
     accepts: {
       scheme: "exact" as const,
-      network: BASE_SEPOLIA_CAIP2,
+      network: caip2,
       payTo: input.payTo,
       price,
     },
@@ -166,7 +178,7 @@ export async function processLiveX402Exact(input: {
   try {
     const facilitator = createCdpFacilitatorClient();
     const resourceServer = new x402ResourceServer(facilitator).register(
-      BASE_SEPOLIA_CAIP2,
+      caip2,
       new ExactEvmScheme(),
     );
     await resourceServer.initialize();

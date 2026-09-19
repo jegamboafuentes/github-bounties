@@ -7,7 +7,9 @@ Ops runbook for **GitHub Bounties** staging in GCP project `experiment-jegf` /
 default to dry-run. This file documents the exact commands after merge.
 
 Canonical project lock: [`gcp-bootstrap.md`](gcp-bootstrap.md). Closed-beta
-checklist: [`staging-e2e.md`](staging-e2e.md).
+checklist: [`staging-e2e.md`](staging-e2e.md). **Production** (new Cloud Run
+service + apex `https://githubbounties.xyz`, not a DEV remount):
+[`prod-cutover.md`](prod-cutover.md).
 
 | Item | Value |
 | --- | --- |
@@ -343,6 +345,6 @@ Hello canary (separate service): `GET /` and `GET /api/health` →
 ## Out of scope
 
 - This PR does **not** run `gcloud --apply` against staging.
-- Production marketing, load tests.
+- Production marketing, load tests. PROD cutover ops live in [prod-cutover.md](prod-cutover.md).
 - Secret values in git or PR text.
 - V2-5 live multi-browser dogfood (Enrique; see [staging-e2e.md](staging-e2e.md)).

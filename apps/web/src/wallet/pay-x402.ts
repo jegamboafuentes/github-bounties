@@ -1,5 +1,6 @@
-import { BASE_SEPOLIA_CAIP2 } from "../lib/constants";
+import { BASE_MAINNET_CAIP2, BASE_SEPOLIA_CAIP2 } from "../lib/constants";
 import type { X402ExactRequirements, X402PaymentRequired } from "../escrow/x402";
+import { isFundMainnetEnabled } from "./env";
 
 export const TRANSFER_WITH_AUTHORIZATION_TYPES = {
   TransferWithAuthorization: [
@@ -277,6 +278,8 @@ export async function payX402Exact(input: {
   fetchImpl?: typeof fetch;
   nowSeconds?: number;
   nonce?: `0x${string}`;
+  /** Same gate as the rail. Browser must pass the server-resolved flag. */
+  allowMainnet?: boolean;
 }): Promise<PayX402Result> {
   const fetchImpl = input.fetchImpl ?? fetch;
   const payUrl = sameOriginX402Path(input.resourceUrl);
@@ -321,10 +324,11 @@ export async function payX402Exact(input: {
   if (requirements.scheme !== "exact") {
     return payFailure("x402_payment_invalid", `Unsupported x402 scheme: ${requirements.scheme}`);
   }
-  if (requirements.network === "eip155:8453") {
+  const allowMainnet = input.allowMainnet ?? isFundMainnetEnabled();
+  if (requirements.network === BASE_MAINNET_CAIP2 && !allowMainnet) {
     return payFailure(
       "mainnet_refused",
-      "This UI pays Base Sepolia test USDC only. Mainnet is refused.",
+      "This UI pays Base Sepolia test USDC unless CDP_NETWORK is Base and CDP_ALLOW_MAINNET is set.",
     );
   }
 
@@ -417,4 +421,9 @@ export async function lockAfterInbound(
   );
 }
 
-export const DEFAULT_FUND_CHAIN_CAIP2 = BASE_SEPOLIA_CAIP2;
+export function defaultFundChainCaip2(env?: NodeJS.ProcessEnv): typeof BASE_SEPOLIA_CAIP2 | typeof BASE_MAINNET_CAIP2 {
+  return isFundMainnetEnabled(env) ? BASE_MAINNET_CAIP2 : BASE_SEPOLIA_CAIP2;
+}
+
+/** DEV default (process.env). Prefer `defaultFundChainCaip2(env)` in tests. */
+export const DEFAULT_FUND_CHAIN_CAIP2 = defaultFundChainCaip2();

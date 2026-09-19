@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { BASE_SEPOLIA_CAIP2, USDC_BASE_SEPOLIA } from "../lib/constants";
+import { BASE_MAINNET_CAIP2, BASE_SEPOLIA_CAIP2, USDC_BASE_SEPOLIA } from "../lib/constants";
+import { EscrowError } from "./errors";
+import { x402SellerNetworkCaip2 } from "./x402-seller";
 import { inboundIsRecorded, resolveLockFundTxHash } from "./inbound";
 import { HOSTED_CHECKOUT_ENABLED } from "./hosted";
 import {
@@ -64,6 +66,18 @@ describe("x402 exact fund challenge", () => {
     assert.equal(x402NetworkCaip2("base-sepolia"), BASE_SEPOLIA_CAIP2);
     assert.equal(x402ExactStatus({}).hostedCheckout, "disabled");
     assert.equal(HOSTED_CHECKOUT_ENABLED, false);
+  });
+
+  it("seller follows the rail mainnet allow flag", () => {
+    assert.equal(x402SellerNetworkCaip2("base-sepolia", {}), BASE_SEPOLIA_CAIP2);
+    assert.throws(
+      () => x402SellerNetworkCaip2("base", {}),
+      (err: unknown) => err instanceof EscrowError && err.code === "mainnet_refused",
+    );
+    assert.equal(
+      x402SellerNetworkCaip2("eip155:8453", { CDP_ALLOW_MAINNET: "1" }),
+      BASE_MAINNET_CAIP2,
+    );
   });
 
   it("reads PAYMENT-SIGNATURE / X-PAYMENT and prefers pasted hash over recorded inbound", () => {
