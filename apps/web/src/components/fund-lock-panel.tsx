@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import {
-  FUND_LOCK_COPY,
   HOSTED_CHECKOUT_DISABLED_COPY,
-  X402_EXACT_FUND_COPY,
   formatUsdc,
+  fundLockCopy,
+  x402ExactFundCopy,
 } from "@/bounties/display";
 import { ConnectWalletButtons } from "@/components/connect-wallet";
 import { lockAfterInbound, payX402Exact } from "@/wallet/pay-x402";
@@ -96,7 +96,7 @@ export function FundLockPanel({
         <p className="mt-1 text-lg font-medium">
           Face {face} {currency}
         </p>
-        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{X402_EXACT_FUND_COPY}</p>
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{x402ExactFundCopy(fund.chainName)}</p>
       </div>
 
       {paidInbound ? (
@@ -177,7 +177,7 @@ export function FundLockPanel({
         </details>
       ) : null}
 
-      <p className="text-xs text-zinc-500">{FUND_LOCK_COPY}</p>
+      <p className="text-xs text-zinc-500">{fundLockCopy(fund.chainName)}</p>
       <p className="text-xs text-zinc-500">{HOSTED_CHECKOUT_DISABLED_COPY}</p>
     </section>
   );

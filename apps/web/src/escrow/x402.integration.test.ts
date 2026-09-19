@@ -140,6 +140,34 @@ describe("x402 exact inbound → Lock without paste-hash", () => {
       assert.equal(mockPaid.status, 400);
       assert.equal((mockPaid.body as { error?: string }).error, "x402_facilitator_unavailable");
 
+      const rechallenge = await handleX402Fund(
+        new Request(`https://githubbounties.xyz/api/bounties/${created.id}/x402`, {
+          method: "POST",
+          headers: { "PAYMENT-SIGNATURE": "sig" },
+        }),
+        created.id,
+        {
+          db,
+          rail: cdpLike,
+          env: {
+            PUBLIC_BASE_URL: "https://githubbounties.xyz",
+            CDP_NETWORK: "base",
+            CDP_ALLOW_MAINNET: "1",
+          },
+          liveSeller: async () => ({
+            kind: "challenge",
+            challenge: {
+              status: 402,
+              headers: { "PAYMENT-REQUIRED": "e30=" },
+              body: {},
+            },
+          }),
+        },
+      );
+      assert.equal(rechallenge.status, 400);
+      assert.equal((rechallenge.body as { error?: string }).error, "x402_verify_failed");
+      assert.match((rechallenge.body as { message?: string }).message ?? "", /rejected the signed payment/);
+
       const paid = await handleX402Fund(
         new Request(`https://dev.githubbounties.xyz/api/bounties/${created.id}/x402`, {
           method: "POST",

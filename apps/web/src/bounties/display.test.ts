@@ -17,6 +17,9 @@ import {
   unlinkedPoolMemberCaption,
   workingOnThisCaption,
   X402_EXACT_FUND_COPY,
+  fundLockCopy,
+  fundRailCaption,
+  x402ExactFundCopy,
   payoutBreakdown,
   payoutCaption,
 } from "./display";
@@ -77,6 +80,14 @@ describe("board display helpers", () => {
     assert.match(X402_EXACT_FUND_COPY, /x402 exact/i);
     assert.match(X402_EXACT_FUND_COPY, /wallet|WalletConnect/i);
     assert.match(X402_EXACT_FUND_COPY, /no explorer hash|no hash paste|Lock does not need a paste/i);
+    assert.match(x402ExactFundCopy("Base"), /Connect a Base wallet/);
+    assert.doesNotMatch(x402ExactFundCopy("Base"), /Sepolia/);
+    assert.match(fundLockCopy("Base"), /on Base when CDP_\*/);
+    assert.doesNotMatch(fundLockCopy("Base"), /Sepolia/);
+    assert.match(fundRailCaption("Base"), /rail Base \(CDP\)/);
+    assert.doesNotMatch(fundRailCaption("Base"), /Sepolia/);
+    assert.match(x402ExactFundCopy("Base Sepolia"), /Base Sepolia/);
+    assert.match(fundLockCopy("Base Sepolia"), /Base Sepolia/);
   });
 
   it("formats overflow +K not paid, cap 10 and unlinked CTA", () => {

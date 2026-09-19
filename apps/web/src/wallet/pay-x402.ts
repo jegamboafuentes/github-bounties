@@ -124,7 +124,7 @@ export function eip3009TypedData(input: {
   requirements: X402ExactRequirements;
   authorization: Eip3009Authorization;
 }) {
-  const extra = input.requirements.extra ?? { name: "USDC" as const, version: "2" as const };
+  const extra = input.requirements.extra ?? { name: "USDC", version: "2" };
   const chainId = caip2ToChainId(input.requirements.network);
   return {
     domain: {
@@ -372,6 +372,8 @@ export async function payX402Exact(input: {
     fundTxHash?: string | null;
     error?: string;
     message?: string;
+    errorReason?: string;
+    errorMessage?: string;
   } | null;
 
   if (paid.status === 200 && (paidBody?.inboundRecorded || paidBody?.alreadyFunded || paidBody?.ok)) {
@@ -384,9 +386,31 @@ export async function payX402Exact(input: {
     };
   }
 
+  if (paid.status === 402) {
+    const reason =
+      paidBody?.errorReason ||
+      paidBody?.errorMessage ||
+      (paidBody?.error &&
+      paidBody.error !== "payment_required" &&
+      paidBody.error !== "Payment required" &&
+      paidBody.error !== "x402_settle_failed"
+        ? paidBody.error
+        : "") ||
+      paidBody?.message ||
+      "";
+    return payFailure(
+      "x402_payment_rejected",
+      reason
+        ? `Signed payment was re-challenged (HTTP 402): ${reason}. Not settled.`
+        : "Signed payment was re-challenged (HTTP 402) instead of settling. Not funded.",
+    );
+  }
+
   return payFailure(
     paidBody?.error || "x402_settle_failed",
-    paidBody?.message || `x402 settle failed (HTTP ${paid.status}).`,
+    paidBody?.message ||
+      paidBody?.errorReason ||
+      `x402 settle failed (HTTP ${paid.status}).`,
   );
 }
 

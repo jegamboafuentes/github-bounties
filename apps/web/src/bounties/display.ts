@@ -7,14 +7,28 @@ export const LOCK_NOT_MONEY_COPY =
 
 export const PARALLEL_HUNT_COPY = LOCK_NOT_MONEY_COPY;
 
-export const FUND_LOCK_COPY =
-  "Locks face USDC in gb-escrow (CDP server wallet on Base Sepolia when CDP_* is set; otherwise a documented mock rail that lists the exact missing env). Prefer x402 exact to gb-escrow, then Lock without pasting a hash. Hosted checkout is disabled. Exclusive claim-lock is retired; Working on this does not move money.";
+export type FundChainDisplayName = "Base" | "Base Sepolia";
+
+export function fundLockCopy(chainName: FundChainDisplayName): string {
+  return `Locks face USDC in gb-escrow (CDP server wallet on ${chainName} when CDP_* is set; otherwise a documented mock rail that lists the exact missing env). Prefer x402 exact to gb-escrow, then Lock without pasting a hash. Hosted checkout is disabled. Exclusive claim-lock is retired; Working on this does not move money.`;
+}
+
+export function x402ExactFundCopy(chainName: FundChainDisplayName): string {
+  return `Connect a ${chainName} wallet, then Pay face F (x402 exact to gb-escrow). Settlement records inbound so Lock needs no explorer hash. Advanced paste-hash remains a fallback. Hosted checkout stays disabled.`;
+}
+
+export function fundRailCaption(chainName: FundChainDisplayName): string {
+  return `chain base · rail ${chainName} (CDP)`;
+}
+
+/** DEV default (Sepolia). Prefer `fundLockCopy(fund.chainName)` on fund/WC paths. */
+export const FUND_LOCK_COPY = fundLockCopy("Base Sepolia");
 
 export const HOSTED_CHECKOUT_DISABLED_COPY =
   "Hosted Coinbase checkout is disabled until ADR 0001 confirms settlement.feeAmount / net proceeds equal face. Do not treat a checkout as escrow.";
 
-export const X402_EXACT_FUND_COPY =
-  "Connect a Base Sepolia wallet, then Pay face F (x402 exact to gb-escrow). Settlement records inbound so Lock needs no explorer hash. Advanced paste-hash remains a fallback. Hosted checkout stays disabled.";
+/** DEV default (Sepolia). Prefer `x402ExactFundCopy(fund.chainName)` on fund/WC paths. */
+export const X402_EXACT_FUND_COPY = x402ExactFundCopy("Base Sepolia");
 
 export const CLAIM_PAYOUT_COPY =
   "Eligible winner only: the merged pull request author claims their share to a bring-your-own Base address. Pool members are paid to wallets already saved in Settings when settle runs. Poster and the board then see completed (paid).";

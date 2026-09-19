@@ -251,4 +251,64 @@ describe("x402 browser pay payload", () => {
       BASE_MAINNET_CAIP2,
     );
   });
+
+  it("signs Base mainnet USDC with EIP-712 name USD Coin", () => {
+    const auth = buildEip3009Authorization({
+      from: "0x1111111111111111111111111111111111111111",
+      to: "0x4a26235bf51c73048635d607EB5371E9b3e611B8",
+      amountAtomic: "1000000",
+      nowSeconds: 1_778_000_000,
+      maxTimeoutSeconds: 300,
+      nonce: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    });
+    const typed = eip3009TypedData({
+      requirements: {
+        ...challenge.accepts[0],
+        network: BASE_MAINNET_CAIP2,
+        asset: USDC_BASE_MAINNET,
+        extra: { name: "USD Coin", version: "2" },
+      },
+      authorization: auth,
+    });
+    assert.equal(typed.domain.chainId, 8453);
+    assert.equal(typed.domain.name, "USD Coin");
+    assert.equal(typed.domain.verifyingContract, USDC_BASE_MAINNET);
+  });
+
+  it("does not map a settle-path 402 re-challenge to x402_settle_failed", async () => {
+    const result = await payX402Exact({
+      resourceUrl: "/x402",
+      allowMainnet: true,
+      signer: {
+        address: "0x1111111111111111111111111111111111111111",
+        signTypedData: async () => `0x${"ee".repeat(65)}`,
+      },
+      fetchImpl: (async (_url, init) => {
+        const headers = Object.fromEntries(new Headers(init?.headers).entries());
+        if (!headers["payment-signature"]) {
+          return new Response(
+            JSON.stringify({
+              ...challenge,
+              accepts: [
+                {
+                  ...challenge.accepts[0],
+                  network: BASE_MAINNET_CAIP2,
+                  asset: USDC_BASE_MAINNET,
+                  extra: { name: "USD Coin", version: "2" },
+                },
+              ],
+            }),
+            { status: 402 },
+          );
+        }
+        return new Response(JSON.stringify({}), { status: 402 });
+      }) as typeof fetch,
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.error, "x402_payment_rejected");
+      assert.match(result.message, /re-challenged/i);
+      assert.notEqual(result.error, "x402_settle_failed");
+    }
+  });
 });

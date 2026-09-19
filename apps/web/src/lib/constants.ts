@@ -46,3 +46,12 @@ export const USDC_BASE_SEPOLIA = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 
 /** Native USDC on Base mainnet — refused unless CDP_ALLOW_MAINNET=1. */
 export const USDC_BASE_MAINNET = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+
+/**
+ * EIP-712 `name()` for x402 exact / EIP-3009. Must match the token contract.
+ * Base Sepolia Circle test USDC → "USDC". Native Base USDC → "USD Coin".
+ * A wrong name makes the facilitator verify fail and @x402/core re-challenge 402.
+ */
+export const USDC_EIP712_NAME_SEPOLIA = "USDC";
+export const USDC_EIP712_NAME_MAINNET = "USD Coin";
+export const USDC_EIP712_VERSION = "2";

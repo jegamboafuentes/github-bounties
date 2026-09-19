@@ -1,10 +1,7 @@
 import Link from "next/link";
-import {
-  DEFAULT_CHAIN,
-  DEFAULT_CURRENCY,
-  FEE_BPS,
-  PRODUCT_NAME,
-} from "@/lib/constants";
+import { DEFAULT_CURRENCY, FEE_BPS, PRODUCT_NAME } from "@/lib/constants";
+import { fundRailCaption } from "@/bounties/display";
+import { resolveFundWalletRuntime } from "@/wallet/env";
 import {
   authModule,
   bountiesModule,
@@ -60,7 +57,7 @@ export default function Home() {
             <dt className="text-xs uppercase tracking-wide text-zinc-500">Rail</dt>
             <dd className="mt-1 text-2xl font-semibold">{DEFAULT_CURRENCY}</dd>
             <dd className="text-sm text-zinc-500">
-              chain {DEFAULT_CHAIN} · rail Base Sepolia (CDP)
+              {fundRailCaption(resolveFundWalletRuntime().chainName)}
             </dd>
           </div>
         </dl>
