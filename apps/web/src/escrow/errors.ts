@@ -12,6 +12,7 @@ export type EscrowErrorCode =
   | "mainnet_refused"
   | "inbound_unconfirmed"
   | "x402_payment_invalid"
+  | "x402_verify_failed"
   | "x402_settle_failed"
   | "x402_facilitator_unavailable"
   | "hosted_checkout_disabled"

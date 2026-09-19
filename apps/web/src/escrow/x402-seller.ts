@@ -2,7 +2,14 @@ import { BASE_MAINNET_CAIP2 } from "../lib/constants";
 import type { EnvMap } from "./env";
 import { isMainnetAllowed } from "./env";
 import { EscrowError } from "./errors";
-import { x402DollarPrice, x402NetworkCaip2, x402ResourceUrl } from "./x402";
+import {
+  logX402PaidFailure,
+  x402DollarPrice,
+  x402FailureFromChallenge,
+  x402NetworkCaip2,
+  x402ResourceUrl,
+  x402UsdcEip712Extra,
+} from "./x402";
 
 export type X402SellerChallenge = {
   status: 402;
@@ -74,11 +81,20 @@ type HttpServer = {
   }>;
 };
 
-export function requestToAdapter(req: Request): LooseAdapter {
+export function requestToAdapter(req: Request, paymentHeader?: string): LooseAdapter {
   const url = new URL(req.url);
   return {
     getHeader(name) {
-      return req.headers.get(name) ?? undefined;
+      const fromReq = req.headers.get(name) ?? undefined;
+      if (fromReq) return fromReq;
+      const lower = name.toLowerCase();
+      if (
+        paymentHeader &&
+        (lower === "payment-signature" || lower === "x-payment")
+      ) {
+        return paymentHeader;
+      }
+      return undefined;
     },
     getMethod() {
       return req.method;
@@ -159,12 +175,14 @@ export async function processLiveX402Exact(input: {
 
   const path = new URL(input.req.url).pathname;
   const price = x402DollarPrice(input.faceUsdc);
+  const extra = x402UsdcEip712Extra(input.network);
   const route = {
     accepts: {
       scheme: "exact" as const,
       network: caip2,
       payTo: input.payTo,
       price,
+      extra,
     },
     description: `GitHub Bounties fund lock: exact face to gb-escrow (${input.bountyId})`,
     mimeType: "application/json",
@@ -193,7 +211,7 @@ export async function processLiveX402Exact(input: {
     );
   }
 
-  const adapter = requestToAdapter(input.req);
+  const adapter = requestToAdapter(input.req, input.paymentHeader);
   const processed = await httpServer.processHTTPRequest({
     adapter,
     path,
@@ -202,9 +220,45 @@ export async function processLiveX402Exact(input: {
   });
 
   if (processed.type === "payment-error" && processed.response) {
+    const failure = x402FailureFromChallenge({
+      body: processed.response.body,
+      headers: processed.response.headers,
+    });
+    if (input.paymentHeader && processed.response.status === 402) {
+      logX402PaidFailure("x402_paid_post_rechallenged", {
+        bountyId: input.bountyId,
+        status: 402,
+        processType: processed.type,
+        network: caip2,
+        errorReason: failure.errorReason,
+        errorMessage: failure.errorMessage,
+      });
+      return {
+        kind: "error",
+        error: {
+          status: 400,
+          headers: processed.response.headers ?? { "cache-control": "no-store" },
+          body: {
+            ok: false,
+            error: "facilitator_rechallenge",
+            message: `Signed payment was re-challenged (${failure.errorReason}). Do not mark funded.`,
+            errorReason: failure.errorReason,
+            errorMessage: failure.errorMessage,
+          },
+        },
+      };
+    }
     if (processed.response.status === 402) {
       return { kind: "challenge", challenge: { ...processed.response, status: 402 } };
     }
+    logX402PaidFailure("x402_process_http_error", {
+      bountyId: input.bountyId,
+      status: processed.response.status || 400,
+      processType: processed.type,
+      network: caip2,
+      errorReason: failure.errorReason,
+      errorMessage: failure.errorMessage,
+    });
     return {
       kind: "error",
       error: {
@@ -246,6 +300,18 @@ export async function processLiveX402Exact(input: {
       prior,
     );
     if (!settled.success) {
+      const failure = x402FailureFromChallenge({
+        headers: settled.headers,
+        errorReason: settled.errorReason,
+        errorMessage: settled.errorMessage,
+      });
+      logX402PaidFailure("x402_facilitator_settle_failed", {
+        bountyId: input.bountyId,
+        status: 400,
+        network: caip2,
+        errorReason: failure.errorReason,
+        errorMessage: failure.errorMessage,
+      });
       return {
         kind: "error",
         error: {
@@ -258,6 +324,8 @@ export async function processLiveX402Exact(input: {
               settled.errorMessage ||
               settled.errorReason ||
               "x402 exact settle failed. Do not mark funded.",
+            errorReason: failure.errorReason,
+            errorMessage: failure.errorMessage,
           },
         },
       };

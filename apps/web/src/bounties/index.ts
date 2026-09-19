@@ -25,6 +25,9 @@ export {
   WORKING_ON_THIS_COPY,
   FUND_LOCK_COPY,
   X402_EXACT_FUND_COPY,
+  fundLockCopy,
+  fundRailCaption,
+  x402ExactFundCopy,
 } from "./display";
 export { BountyError, isBountyError } from "./errors";
 export { expireClaimLocks, expireClaimLocksForBounty, drainExclusiveClaimLocks } from "./expire";

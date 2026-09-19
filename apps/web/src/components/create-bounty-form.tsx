@@ -2,14 +2,16 @@
 
 import { useActionState, useState } from "react";
 import { createBountyAction, type BountyActionState } from "@/app/actions/bounties";
-import { FUND_LOCK_COPY, LOCK_NOT_MONEY_COPY } from "@/bounties/display";
+import { LOCK_NOT_MONEY_COPY, fundLockCopy } from "@/bounties/display";
 import { AmountPresetChips } from "@/components/amount-presets";
+import { useFundWallet } from "@/wallet/providers";
 
 const initial: BountyActionState = { ok: true };
 
 export function CreateBountyForm() {
   const [state, action, pending] = useActionState(createBountyAction, initial);
   const [amountUsdc, setAmountUsdc] = useState("");
+  const fund = useFundWallet();
 
   return (
     <form action={action} className="flex flex-col gap-4">
@@ -39,7 +41,7 @@ export function CreateBountyForm() {
       </label>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         Submit stores <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">pending_fund</code>.
-        The form is the draft — the schema has no draft status. {FUND_LOCK_COPY}
+        The form is the draft — the schema has no draft status. {fundLockCopy(fund.chainName)}
       </p>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">{LOCK_NOT_MONEY_COPY}</p>
       {state && !state.ok ? (

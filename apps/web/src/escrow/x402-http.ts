@@ -10,8 +10,10 @@ import {
   buildX402ExactChallenge,
   encodePaymentRequiredHeader,
   extractPaymentHeader,
+  logX402PaidFailure,
   publicOrigin,
   x402ChallengeResponseBody,
+  x402FailureFromChallenge,
   x402ResourceUrl,
 } from "./x402";
 import { processLiveX402Exact } from "./x402-seller";
@@ -188,6 +190,31 @@ export async function handleX402Fund(
   }
 
   if (live.kind === "challenge") {
+    if (paymentHeader) {
+      const failure = x402FailureFromChallenge({
+        body: live.challenge.body,
+        headers: live.challenge.headers,
+      });
+      logX402PaidFailure("x402_paid_post_rechallenged", {
+        bountyId,
+        status: 402,
+        network: rail.network,
+        errorReason: failure.errorReason,
+        errorMessage: failure.errorMessage,
+      });
+      return {
+        status: 400,
+        headers: jsonHeaders(live.challenge.headers),
+        body: {
+          ok: false,
+          error: "facilitator_rechallenge",
+          message: `Signed payment was re-challenged (${failure.errorReason}). Do not mark funded.`,
+          errorReason: failure.errorReason,
+          errorMessage: failure.errorMessage,
+          hosted_checkout: hostedCheckoutStatus(),
+        },
+      };
+    }
     return {
       status: 402,
       headers: jsonHeaders(live.challenge.headers),

@@ -5,6 +5,9 @@ import {
   PRODUCT_NAME,
   USDC_BASE_MAINNET,
   USDC_BASE_SEPOLIA,
+  USDC_EIP712_NAME_MAINNET,
+  USDC_EIP712_NAME_SEPOLIA,
+  USDC_EIP712_VERSION,
 } from "../lib/constants";
 import { usdcToAtomic } from "../lib/money";
 import type { EnvMap } from "./env";
@@ -35,7 +38,7 @@ export type X402ExactRequirements = {
   amount: string;
   payTo: string;
   maxTimeoutSeconds: number;
-  extra: { name: "USDC"; version: "2" };
+  extra: { name: typeof USDC_EIP712_NAME_SEPOLIA | typeof USDC_EIP712_NAME_MAINNET; version: typeof USDC_EIP712_VERSION };
 };
 
 /** x402 v2 PaymentRequired — same shape CdpX402Client / @x402/core expect. */
@@ -68,6 +71,15 @@ export function x402NetworkCaip2(network: string): X402NetworkCaip2 {
 
 export function x402UsdcAsset(network: string): string {
   return x402NetworkCaip2(network) === BASE_MAINNET_CAIP2 ? USDC_BASE_MAINNET : USDC_BASE_SEPOLIA;
+}
+
+/** EIP-712 domain for the USDC asset on this fund chain. */
+export function x402UsdcEip712Extra(network: string): X402ExactRequirements["extra"] {
+  const mainnet = x402NetworkCaip2(network) === BASE_MAINNET_CAIP2;
+  return {
+    name: mainnet ? USDC_EIP712_NAME_MAINNET : USDC_EIP712_NAME_SEPOLIA,
+    version: USDC_EIP712_VERSION,
+  };
 }
 
 /** Dollar price for x402 route config (`$12.00`). Preserves >2 dp when face is not cents. */
@@ -110,7 +122,7 @@ export function buildX402ExactChallenge(input: {
         amount,
         payTo: input.payTo,
         maxTimeoutSeconds: input.maxTimeoutSeconds ?? 300,
-        extra: { name: "USDC", version: "2" },
+        extra: x402UsdcEip712Extra(input.network),
       },
     ],
   };
@@ -159,6 +171,68 @@ export function extractPaymentHeader(
     if (value) return value;
   }
   return undefined;
+}
+
+function headerLookup(headers: Record<string, string>, name: string): string | undefined {
+  const want = name.toLowerCase();
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === want && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+/**
+ * @x402/core v2 puts verify failures in PAYMENT-REQUIRED.error and often
+ * returns an empty JSON body. Decode that header (no secrets) for logs/UI.
+ */
+export function x402FailureFromChallenge(input: {
+  body?: unknown;
+  headers?: Record<string, string>;
+  errorReason?: string;
+  errorMessage?: string;
+}): { errorReason: string; errorMessage: string } {
+  const fromArgs = input.errorReason?.trim() || input.errorMessage?.trim() || "";
+  const body = input.body && typeof input.body === "object" ? (input.body as Record<string, unknown>) : null;
+  const fromBody =
+    (typeof body?.errorReason === "string" && body.errorReason.trim()) ||
+    (typeof body?.errorMessage === "string" && body.errorMessage.trim()) ||
+    (typeof body?.error === "string" &&
+    body.error !== "payment_required" &&
+    body.error !== "Payment required"
+      ? body.error.trim()
+      : "") ||
+    "";
+  const encoded =
+    (input.headers &&
+      (headerLookup(input.headers, "PAYMENT-REQUIRED") || headerLookup(input.headers, "payment-required"))) ||
+    "";
+  let fromHeader = "";
+  if (encoded) {
+    try {
+      const decoded = decodePaymentRequiredHeader(encoded);
+      const err = decoded.error?.trim();
+      if (err && err !== "Payment required" && err !== "payment_required") fromHeader = err;
+    } catch {
+      /* ignore malformed header */
+    }
+  }
+  const errorReason = fromArgs || fromBody || fromHeader || "x402_verify_failed";
+  const errorMessage =
+    (typeof body?.message === "string" && body.message.trim()) ||
+    input.errorMessage?.trim() ||
+    fromHeader ||
+    errorReason;
+  return { errorReason, errorMessage };
+}
+
+/** Cloud Run stdout — no payloads, signatures, or secrets. */
+export function logX402PaidFailure(event: string, details: Record<string, unknown>): void {
+  console.error(
+    JSON.stringify({
+      event,
+      ...details,
+    }),
+  );
 }
 
 export function x402ExactStatus(env: EnvMap = process.env) {

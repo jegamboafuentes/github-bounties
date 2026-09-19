@@ -31,7 +31,9 @@ export {
   x402ChallengeResponseBody,
   x402DollarPrice,
   x402ExactStatus,
+  x402FailureFromChallenge,
   x402ResourceUrl,
+  x402UsdcEip712Extra,
 } from "./x402";
 export { isMockTxHash, moneyIdempotencyKey } from "./idempotency";
 export {
