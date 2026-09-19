@@ -10,6 +10,7 @@ import {
   eip3009TypedData,
   encodePaymentSignatureHeader,
   defaultFundChainCaip2,
+  facilitatorRechallengeFromSettle,
   lockAfterInbound,
   parseX402Challenge,
   payX402Exact,
@@ -306,9 +307,24 @@ describe("x402 browser pay payload", () => {
     });
     assert.equal(result.ok, false);
     if (!result.ok) {
-      assert.equal(result.error, "x402_payment_rejected");
+      assert.equal(result.error, "facilitator_rechallenge");
       assert.match(result.message, /re-challenged/i);
       assert.notEqual(result.error, "x402_settle_failed");
     }
+
+    const fromChallengeBody = facilitatorRechallengeFromSettle({
+      status: 402,
+      body: { error: "payment_required", accepts: challenge.accepts, resource: challenge.resource },
+      paymentRequiredHeader: encodePaymentRequiredHeader({
+        ...challenge,
+        error: "invalid_signature",
+      }),
+    });
+    assert.equal(fromChallengeBody?.ok, false);
+    if (fromChallengeBody && !fromChallengeBody.ok) {
+      assert.equal(fromChallengeBody.error, "facilitator_rechallenge");
+      assert.match(fromChallengeBody.message, /invalid_signature/);
+    }
+    assert.equal(facilitatorRechallengeFromSettle({ status: 200, body: { ok: true } }), null);
   });
 });

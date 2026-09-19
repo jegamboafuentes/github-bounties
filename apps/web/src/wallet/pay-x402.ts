@@ -260,6 +260,79 @@ function payFailure(error: string, message: string): PayX402Result {
   return { ok: false, error, message };
 }
 
+const GENERIC_CHALLENGE_ERRORS = new Set([
+  "payment_required",
+  "Payment required",
+  "x402_settle_failed",
+]);
+
+function isChallengeBody(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false;
+  const rec = body as { accepts?: unknown; resource?: unknown; resourceUrl?: unknown };
+  return Boolean(rec.accepts || rec.resource || rec.resourceUrl);
+}
+
+function facilitatorReasonFromSettle(input: {
+  body?: {
+    error?: string;
+    message?: string;
+    errorReason?: string;
+    errorMessage?: string;
+  } | null;
+  paymentRequiredHeader?: string | null;
+}): string {
+  const fromBody =
+    input.body?.errorReason?.trim() ||
+    input.body?.errorMessage?.trim() ||
+    (input.body?.error && !GENERIC_CHALLENGE_ERRORS.has(input.body.error)
+      ? input.body.error.trim()
+      : "") ||
+    "";
+  if (fromBody) return fromBody;
+  if (input.paymentRequiredHeader) {
+    const decoded = decodeJsonHeader(input.paymentRequiredHeader) as { error?: unknown } | null;
+    const err = typeof decoded?.error === "string" ? decoded.error.trim() : "";
+    if (err && !GENERIC_CHALLENGE_ERRORS.has(err)) return err;
+  }
+  return input.body?.message?.trim() || "";
+}
+
+/**
+ * Signed POST that comes back as another 402 challenge (accepts/resource)
+ * is a facilitator re-challenge, not a settle failure.
+ */
+export function facilitatorRechallengeFromSettle(input: {
+  status: number;
+  body?: unknown;
+  paymentRequiredHeader?: string | null;
+}): PayX402Result | null {
+  const body = (input.body ?? null) as {
+    error?: string;
+    message?: string;
+    errorReason?: string;
+    errorMessage?: string;
+    accepts?: unknown;
+    resource?: unknown;
+    resourceUrl?: unknown;
+  } | null;
+  const isRechallenge =
+    input.status === 402 ||
+    body?.error === "facilitator_rechallenge" ||
+    body?.error === "payment_not_accepted" ||
+    isChallengeBody(body);
+  if (!isRechallenge || input.status === 200) return null;
+  const reason = facilitatorReasonFromSettle({
+    body,
+    paymentRequiredHeader: input.paymentRequiredHeader,
+  });
+  return payFailure(
+    "facilitator_rechallenge",
+    reason
+      ? `Signed payment was re-challenged (HTTP ${input.status}): ${reason}. Not settled.`
+      : `Signed payment was re-challenged (HTTP ${input.status}) instead of settling. Not funded.`,
+  );
+}
+
 async function readJson(res: Response): Promise<unknown> {
   try {
     return await res.json();
@@ -386,25 +459,14 @@ export async function payX402Exact(input: {
     };
   }
 
-  if (paid.status === 402) {
-    const reason =
-      paidBody?.errorReason ||
-      paidBody?.errorMessage ||
-      (paidBody?.error &&
-      paidBody.error !== "payment_required" &&
-      paidBody.error !== "Payment required" &&
-      paidBody.error !== "x402_settle_failed"
-        ? paidBody.error
-        : "") ||
-      paidBody?.message ||
-      "";
-    return payFailure(
-      "x402_payment_rejected",
-      reason
-        ? `Signed payment was re-challenged (HTTP 402): ${reason}. Not settled.`
-        : "Signed payment was re-challenged (HTTP 402) instead of settling. Not funded.",
-    );
-  }
+  const paidPaymentRequired =
+    paid.headers.get("PAYMENT-REQUIRED") || paid.headers.get("payment-required");
+  const rechallenge = facilitatorRechallengeFromSettle({
+    status: paid.status,
+    body: paidBody,
+    paymentRequiredHeader: paidPaymentRequired,
+  });
+  if (rechallenge) return rechallenge;
 
   return payFailure(
     paidBody?.error || "x402_settle_failed",

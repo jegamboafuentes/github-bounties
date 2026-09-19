@@ -165,8 +165,8 @@ describe("x402 exact inbound → Lock without paste-hash", () => {
         },
       );
       assert.equal(rechallenge.status, 400);
-      assert.equal((rechallenge.body as { error?: string }).error, "x402_verify_failed");
-      assert.match((rechallenge.body as { message?: string }).message ?? "", /rejected the signed payment/);
+      assert.equal((rechallenge.body as { error?: string }).error, "facilitator_rechallenge");
+      assert.match((rechallenge.body as { message?: string }).message ?? "", /re-challenged/);
 
       const paid = await handleX402Fund(
         new Request(`https://dev.githubbounties.xyz/api/bounties/${created.id}/x402`, {

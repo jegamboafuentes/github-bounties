@@ -207,8 +207,8 @@ export async function handleX402Fund(
         headers: jsonHeaders(live.challenge.headers),
         body: {
           ok: false,
-          error: "x402_verify_failed",
-          message: `x402 verify rejected the signed payment (${failure.errorReason}). Do not mark funded.`,
+          error: "facilitator_rechallenge",
+          message: `Signed payment was re-challenged (${failure.errorReason}). Do not mark funded.`,
           errorReason: failure.errorReason,
           errorMessage: failure.errorMessage,
           hosted_checkout: hostedCheckoutStatus(),
