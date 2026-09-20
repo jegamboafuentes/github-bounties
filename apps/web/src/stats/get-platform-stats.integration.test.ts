@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { resolve } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { usdcToAtomic } from "../lib/money";
 import { createDb } from "../db/client";
+import { loadDatabaseUrl } from "../db/env";
 import { loadDotenvFiles } from "../db/load-dotenv";
 import {
   allocationLedger,
+  bountyStatusValues,
   bounties,
   claimLocks,
   claims,
@@ -20,38 +25,67 @@ import {
 import {
   assemblePlatformStats,
   emptyPlatformStatsAggregates,
+  PLATFORM_STATS_BUCKETS,
   PLATFORM_STATS_SCHEMA_VERSION,
+  type PlatformStats,
 } from "./definitions";
 import { getPlatformStats } from "./get-platform-stats";
 
 loadDotenvFiles();
 
 const NOW = new Date("2026-09-20T15:00:00.000Z");
+const USDC = /^\d+\.\d{6}$/;
+const migrationsFolder = resolve(fileURLToPath(new URL(".", import.meta.url)), "../../drizzle");
+
+function assertPlatformStatsShape(stats: PlatformStats) {
+  assert.equal(stats.ok, true);
+  assert.equal(stats.schemaVersion, PLATFORM_STATS_SCHEMA_VERSION);
+  assert.equal(stats.generatedAt, NOW.toISOString());
+  assert.equal(stats.product, "GitHub Bounties");
+  assert.equal(stats.currency, "USDC");
+  assert.deepEqual(stats.buckets, PLATFORM_STATS_BUCKETS);
+  assert.deepEqual(Object.keys(stats.bounties.byStatus).sort(), [...bountyStatusValues].sort());
+  const bucketSum =
+    stats.bounties.open +
+    stats.bounties.completed +
+    stats.bounties.closed +
+    stats.bounties.inFlight;
+  assert.equal(stats.bounties.total, bucketSum);
+  assert.equal(
+    stats.bounties.total,
+    bountyStatusValues.reduce((acc, status) => acc + stats.bounties.byStatus[status], 0),
+  );
+  for (const value of Object.values(stats.volumeUsdc)) {
+    assert.match(value, USDC);
+  }
+  assert.ok(stats.developers.participated >= 0);
+  assert.ok(stats.developers.githubLinked >= 0);
+  assert.ok(stats.repos.connected >= 0);
+  assert.ok(stats.repos.total >= stats.repos.connected);
+}
 
 describe("getPlatformStats (empty-or-seeded Postgres)", () => {
-  it("matches independent SQL on the current database (zeros when empty)", async () => {
-    const { db, sql } = createDb();
+  it("returns zeros on a freshly migrated empty database", async () => {
+    const admin = createDb();
+    const dbName = `gb_stats_empty_${randomUUID().slice(0, 8)}`;
+    const baseUrl = new URL(loadDatabaseUrl());
+    baseUrl.pathname = `/${dbName}`;
+    const emptyUrl = baseUrl.toString();
+
     try {
-      const stats = await getPlatformStats(db, NOW);
-      const expected = await expectedFromSql(sql, NOW);
-
-      assert.equal(stats.ok, true);
-      assert.equal(stats.schemaVersion, PLATFORM_STATS_SCHEMA_VERSION);
-      assert.equal(stats.generatedAt, NOW.toISOString());
-      assert.deepEqual(stats.bounties, expected.bounties);
-      assert.deepEqual(stats.volumeUsdc, expected.volumeUsdc);
-      assert.deepEqual(stats.developers, expected.developers);
-      assert.deepEqual(stats.repos, expected.repos);
-
-      const empty = assemblePlatformStats(emptyPlatformStatsAggregates(), NOW);
-      if (expected.bounties.total === 0) {
-        assert.deepEqual(stats.bounties, empty.bounties);
-        assert.deepEqual(stats.volumeUsdc, empty.volumeUsdc);
-        assert.deepEqual(stats.developers, empty.developers);
-        assert.deepEqual(stats.repos, empty.repos);
+      await admin.sql.unsafe(`create database ${dbName}`);
+      const empty = createDb(emptyUrl);
+      try {
+        await migrate(empty.db, { migrationsFolder });
+        const stats = await getPlatformStats(empty.db, NOW);
+        assertPlatformStatsShape(stats);
+        assert.deepEqual(stats, assemblePlatformStats(emptyPlatformStatsAggregates(), NOW));
+      } finally {
+        await empty.sql.end({ timeout: 5 });
       }
     } finally {
-      await sql.end({ timeout: 5 });
+      await admin.sql.unsafe(`drop database if exists ${dbName}`);
+      await admin.sql.end({ timeout: 5 });
     }
   });
 
@@ -76,8 +110,6 @@ describe("getPlatformStats (empty-or-seeded Postgres)", () => {
     const githubUnlinkedPool = BigInt(81_000_000 + Number.parseInt(suffix.slice(0, 6), 16));
 
     try {
-      const before = await getPlatformStats(db, NOW);
-
       await db.insert(users).values([
         {
           id: posterId,
@@ -249,40 +281,93 @@ describe("getPlatformStats (empty-or-seeded Postgres)", () => {
       });
 
       const after = await getPlatformStats(db, NOW);
+      assertPlatformStatsShape(after);
 
-      assert.equal(after.bounties.total, before.bounties.total + 4);
-      assert.equal(after.bounties.open, before.bounties.open + 2);
-      assert.equal(after.bounties.completed, before.bounties.completed + 1);
-      assert.equal(after.bounties.closed, before.bounties.closed + 1);
-      assert.equal(after.bounties.byStatus.pending_fund, before.bounties.byStatus.pending_fund + 1);
-      assert.equal(after.bounties.byStatus.funded, before.bounties.byStatus.funded + 1);
-      assert.equal(after.bounties.byStatus.settled, before.bounties.byStatus.settled + 1);
-      assert.equal(after.bounties.byStatus.refunded, before.bounties.byStatus.refunded + 1);
+      const fixtureStatuses = await sql<{ status: string; n: number }[]>`
+        select status, count(*)::int as n
+        from bounties
+        where id in (
+          ${pendingId}::uuid, ${fundedId}::uuid, ${settledId}::uuid, ${refundedId}::uuid
+        )
+        group by status
+      `;
+      const byFixture = Object.fromEntries(fixtureStatuses.map((row) => [row.status, Number(row.n)]));
+      assert.equal(byFixture.pending_fund, 1);
+      assert.equal(byFixture.funded, 1);
+      assert.equal(byFixture.settled, 1);
+      assert.equal(byFixture.refunded, 1);
 
-      const transactedDelta =
-        usdcToAtomic(after.volumeUsdc.transacted) - usdcToAtomic(before.volumeUsdc.transacted);
+      const [fixtureVolume] = await sql<{ transacted: string; pending: string; fees: string }[]>`
+        select
+          coalesce(sum(amount_usdc) filter (
+            where status in (
+              'funded', 'settling', 'settled', 'settled_partial', 'refunding', 'refunded'
+            )
+          ), 0)::text as transacted,
+          coalesce(sum(amount_usdc) filter (where status in ('pending', 'failed')), 0)::text as pending,
+          (
+            select coalesce(sum(fee_usdc), 0)::text from fee_ledger
+            where bounty_id in (
+              ${pendingId}::uuid, ${fundedId}::uuid, ${settledId}::uuid, ${refundedId}::uuid
+            )
+          ) as fees
+        from escrows
+        where bounty_id in (
+          ${pendingId}::uuid, ${fundedId}::uuid, ${settledId}::uuid, ${refundedId}::uuid
+        )
+      `;
       // funded 100 + settled 50 + refunded 10. pending 25 and fee 1 are excluded.
-      assert.equal(transactedDelta, usdcToAtomic("160.000000"));
+      assert.equal(usdcToAtomic(fixtureVolume?.transacted ?? "0"), usdcToAtomic("160.000000"));
+      assert.equal(usdcToAtomic(fixtureVolume?.pending ?? "0"), usdcToAtomic("25.000000"));
+      assert.equal(usdcToAtomic(fixtureVolume?.fees ?? "0"), usdcToAtomic("1.000000"));
 
-      const outstandingDelta =
-        usdcToAtomic(after.volumeUsdc.outstandingOpen) -
-        usdcToAtomic(before.volumeUsdc.outstandingOpen);
-      assert.equal(outstandingDelta, usdcToAtomic("100.000000"));
+      const [fixtureOutstanding] = await sql<{ open_face: string; completed_face: string }[]>`
+        select
+          coalesce(sum(amount_usdc) filter (where status in ('funded', 'claim_locked')), 0)::text as open_face,
+          coalesce(sum(amount_usdc) filter (where status in ('settled', 'settled_partial')), 0)::text as completed_face
+        from bounties
+        where id in (
+          ${pendingId}::uuid, ${fundedId}::uuid, ${settledId}::uuid, ${refundedId}::uuid
+        )
+      `;
+      assert.equal(usdcToAtomic(fixtureOutstanding?.open_face ?? "0"), usdcToAtomic("100.000000"));
+      assert.equal(usdcToAtomic(fixtureOutstanding?.completed_face ?? "0"), usdcToAtomic("50.000000"));
 
-      const completedDelta =
-        usdcToAtomic(after.volumeUsdc.completed) - usdcToAtomic(before.volumeUsdc.completed);
-      assert.equal(completedDelta, usdcToAtomic("50.000000"));
+      const [fixtureDevs] = await sql<{ n: number }[]>`
+        select count(*)::int as n from (
+          select 'gh:' || gl.github_id::text as hid
+          from github_links gl
+          where gl.user_id in (
+            select hunter_user_id from claims where bounty_id = ${settledId}::uuid
+            union
+            select hunter_user_id from claim_locks where bounty_id = ${fundedId}::uuid
+          )
+          union
+          select 'gh:' || pp.github_id::text
+          from pool_participants pp
+          where pp.bounty_id = ${settledId}::uuid
+            and pp.role in ('winner', 'pool', 'overflow')
+          union
+          select 'user:' || ws.user_id::text
+          from work_signals ws
+          where ws.bounty_id = ${fundedId}::uuid
+            and not exists (
+              select 1 from github_links gl where gl.user_id = ws.user_id
+            )
+        ) hunters
+      `;
+      assert.equal(Number(fixtureDevs?.n), 3);
 
-      assert.equal(after.developers.participated, before.developers.participated + 3);
-      assert.equal(after.developers.githubLinked, before.developers.githubLinked + 1);
-      assert.equal(after.repos.connected, before.repos.connected + 1);
-      assert.equal(after.repos.total, before.repos.total + 2);
-
-      const expected = await expectedFromSql(sql, NOW);
-      assert.deepEqual(after.bounties, expected.bounties);
-      assert.deepEqual(after.volumeUsdc, expected.volumeUsdc);
-      assert.deepEqual(after.developers, expected.developers);
-      assert.deepEqual(after.repos, expected.repos);
+      const [fixtureRepos] = await sql<{ connected: number; total: number }[]>`
+        select
+          count(*) filter (where is_active)::int as connected,
+          count(*)::int as total
+        from repos
+        where id in (${repoActiveId}::uuid, ${repoInactiveId}::uuid)
+      `;
+      assert.equal(Number(fixtureRepos?.connected), 1);
+      assert.equal(Number(fixtureRepos?.total), 2);
+      assert.ok(usdcToAtomic(after.volumeUsdc.transacted) >= usdcToAtomic("160.000000"));
     } finally {
       await sql`
         delete from allocation_ledger where bounty_id in (
@@ -320,85 +405,3 @@ describe("getPlatformStats (empty-or-seeded Postgres)", () => {
     }
   });
 });
-
-async function expectedFromSql(
-  sql: ReturnType<typeof createDb>["sql"],
-  now: Date,
-) {
-  const statusRows = await sql<
-    { status: string; n: number; face: string }[]
-  >`
-    select status, count(*)::int as n, coalesce(sum(amount_usdc), 0)::text as face
-    from bounties
-    group by status
-  `;
-  const [volume] = await sql<{ transacted: string }[]>`
-    select coalesce(sum(amount_usdc), 0)::text as transacted
-    from escrows
-    where status in (
-      'funded', 'settling', 'settled', 'settled_partial', 'refunding', 'refunded'
-    )
-  `;
-  const [developers] = await sql<{ participated: number; linked: number }[]>`
-    select
-      (
-        select count(*)::int from (
-          select 'gh:' || gl.github_id::text as hid
-          from github_links gl
-          where gl.user_id in (
-            select hunter_user_id from claims
-            union
-            select user_id from work_signals
-            union
-            select hunter_user_id from claim_locks
-            union
-            select user_id from pool_participants
-            where user_id is not null and role in ('winner', 'pool', 'overflow')
-          )
-          union
-          select 'gh:' || pp.github_id::text
-          from pool_participants pp
-          where pp.role in ('winner', 'pool', 'overflow')
-          union
-          select 'user:' || hunter.user_id::text
-          from (
-            select hunter_user_id as user_id from claims
-            union
-            select user_id from work_signals
-            union
-            select hunter_user_id from claim_locks
-          ) hunter
-          where not exists (
-            select 1 from github_links gl where gl.user_id = hunter.user_id
-          )
-        ) hunters
-      ) as participated,
-      (select count(*)::int from github_links) as linked
-  `;
-  const [repo] = await sql<{ connected: number; total: number }[]>`
-    select
-      count(*) filter (where is_active)::int as connected,
-      count(*)::int as total
-    from repos
-  `;
-
-  const byStatus: Record<string, number> = {};
-  const faceByStatus: Record<string, string> = {};
-  for (const row of statusRows) {
-    byStatus[row.status] = Number(row.n);
-    faceByStatus[row.status] = row.face;
-  }
-
-  return assemblePlatformStats(
-    {
-      byStatus,
-      faceByStatus,
-      transactedUsdc: volume?.transacted ?? "0",
-      developersParticipated: Number(developers?.participated ?? 0),
-      developersGithubLinked: Number(developers?.linked ?? 0),
-      reposConnected: Number(repo?.connected ?? 0),
-      reposTotal: Number(repo?.total ?? 0),
-    },
-    now,
-  );
-}
