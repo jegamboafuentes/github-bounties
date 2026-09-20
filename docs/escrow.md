@@ -144,7 +144,7 @@ Legs (each with its own idempotency key; winner/fee reuse the V1-5 keys so in-fl
 | --- | --- | --- |
 | `FEE_OUT` | `floor(F × 200 / 10_000)` | `gb-fee` |
 | `WINNER_PAYOUT` | `winner_atomic + dust` (`post_fee` when empty) | winner BYO Base address |
-| `POOL_PAYOUT` × N | equal `floor(pool / N)` | each frozen `role=pool` member with a wallet |
+| `POOL_PAYOUT` × N | equal `floor(pool / N)` | each frozen `role=pool` member when **they** Claim |
 
 `allocation_ledger` rows are inserted `pending` before the first transfer. `escrows.payout_tx_hash` remains the **winner** hash. Pool hashes live on the ledger / `pool_participants`.
 
@@ -152,14 +152,14 @@ Legs (each with its own idempotency key; winner/fee reuse the V1-5 keys so in-fl
 | --- | --- | --- |
 | Winner transfer fails **before** a payout hash | Stay **`settling`** + `fail_code` | Winner leg first; fee/pool not sent yet |
 | Any intended leg confirmed and another not | **`settled_partial`** | Remaining legs only. Never reverse a confirmed transfer |
-| Unlinked / missing wallet pool member | **`settled_partial`** | That pool leg stays pending. **Do not redistribute** |
+| Unlinked / missing wallet pool member | **`settled_partial`** (**Winner paid — pool pending**) | Winner Claim still marks the winner paid. That pool hunter Claims later. **Do not redistribute** |
 | Refund/cancel before settle | Full `F` to funder | No fee / pool / winner. Pending allocation rows are voided |
 
 Recon: attributed escrow = `F − confirmed winner − confirmed pool − confirmed fee − refund`. Terminal Settled / Refunded = 0.
 
 Inbound fund / x402 Lock is unchanged. Hosted checkout stays disabled. Mock rail still lists missing `CDP_*`. Live DEV is Base Sepolia. Mainnet refused without `CDP_ALLOW_MAINNET=1`.
 
-UI breakdown (roster + face/fee/winner/pool/tx) is V2-4. Exclusive claim-lock is retired (V2-4); residual locks drain on read.
+Winner Claim (`scope=winner_and_fee`, default) transfers **FEE_OUT + WINNER_PAYOUT only**. Each pool member Claims `scope=pool_member`. `scope=all` remains the V2-3 ops retry. UI breakdown (roster + face/fee/winner/pool/Paid vs Claim) is V2-4 + pool self-claim. Exclusive claim-lock is retired (V2-4); residual locks drain on read. Hosted checkout stays disabled. DEV remount after merge; no PROD remount required.
 
 ## Idempotency + recon
 

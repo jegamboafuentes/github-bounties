@@ -184,7 +184,7 @@ Poster fund UX (V1.5): amount chips on `/bounties/new`; on Lock, **Pay {face} US
 
 ## Claim payout (V1-6)
 
-Eligible hunter (merged PR author) claims net-of-fee USDC to a BYO Base address. Calls V1-5 `settleEscrow`. Poster and the board show **Completed (paid)**.
+Eligible hunter (merged PR author) claims winner share + fee to a BYO Base address. Calls `settleEscrow` (`winner_and_fee`). Pool members claim their own shares. Poster and the board show **Completed (paid)** or **Winner paid — pool pending**.
 
 | Item | Where |
 | --- | --- |

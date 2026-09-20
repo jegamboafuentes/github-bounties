@@ -1,6 +1,6 @@
 import { and, eq, inArray, lte } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { bounties, claimLocks, claims, escrows, feeLedger, users } from "../db/schema";
+import { bounties, claimLocks, claims, escrows, feeLedger, githubLinks, users } from "../db/schema";
 import { FEE_BPS, POOL_BPS_OF_POST_FEE } from "../lib/constants";
 import { splitFaceUsdc, splitPostFeePool, type PostFeePoolSplit } from "../lib/money";
 import { EscrowError } from "./errors";
@@ -19,6 +19,7 @@ import {
   confirmedOutflowsFromLegs,
   ensurePendingLegs,
   findLedgerRow,
+  isExpectedPoolDefer,
   legHasTxHash,
   loadAllocationLegs,
   loadFrozenSettleSet,
@@ -29,8 +30,10 @@ import {
   markPoolParticipantSkip,
   planSettleLegs,
   resolvePoolMemberAddress,
+  shouldTransferLeg,
   voidPendingAllocationLegs,
   type PlannedLeg,
+  type SettleScope,
 } from "./allocation";
 import { resolveRail, type CdpRail } from "./rail";
 import { walletConnectStatus } from "../wallet/env";
@@ -261,12 +264,17 @@ async function persistSettleRailFail(
 }
 
 /**
- * Multi-payee settle (ADR 0003 / V2-3): FEE_OUT + WINNER_PAYOUT + POOL_PAYOUT×N.
- * Empty pool is byte-for-byte the V1 winner amount (post_fee).
+ * Multi-payee settle (ADR 0003 / V2-3): intended legs stay FEE_OUT +
+ * WINNER_PAYOUT + POOL_PAYOUT×N. Empty pool is the V1 winner amount (post_fee).
+ *
+ * Winner Claim (`scope=winner_and_fee`, default) transfers only fee + winner.
+ * Pool members Claim their own `POOL_PAYOUT` later (`scope=pool_member`).
+ * `scope=all` is the V2-3 ops retry that pays remaining wallets in one go.
  *
  * Insert allocation rows before the first transfer. Retry remaining legs only.
  * Winner-leg failure before a hash stays `settling` + fail_code (V1-5).
- * Any confirmed intended leg + any unconfirmed intended leg → SettledPartial.
+ * Winner+fee confirmed and any pool leg still pending → SettledPartial
+ * ("Winner paid — pool pending"). Missing pool wallets are not a rail fail.
  */
 export async function settleEscrow(
   bountyId: string,
@@ -275,10 +283,14 @@ export async function settleEscrow(
     hunterUserId?: string;
     hunterPayoutAddress?: string | null;
     claimId?: string;
+    scope?: SettleScope;
+    participantId?: string | null;
+    poolPayoutAddress?: string | null;
   },
   opts: EscrowServiceOpts,
 ): Promise<SettleResult> {
   const now = opts.now ?? new Date();
+  const scope: SettleScope = input.scope ?? "winner_and_fee";
   const rail = railOf(opts);
   const bounty = await loadBounty(opts.db, bountyId);
   const escrow = await loadEscrow(opts.db, bountyId);
@@ -322,7 +334,19 @@ export async function settleEscrow(
   }
 
   const hunter = await resolveHunter(opts.db, bountyId, input);
-  if (input.actorUserId && input.actorUserId !== bounty.posterUserId && input.actorUserId !== hunter.userId) {
+  if (scope === "pool_member") {
+    await assertPoolMemberActor(opts.db, freeze, input);
+    if (!escrow.payoutTxHash) {
+      throw new EscrowError(
+        "not_settleable",
+        "Winner must claim first. Pool shares stay reserved until the winner payout confirms.",
+      );
+    }
+  } else if (
+    input.actorUserId &&
+    input.actorUserId !== bounty.posterUserId &&
+    input.actorUserId !== hunter.userId
+  ) {
     throw new EscrowError("not_settler", "Only the poster or the winning hunter can settle.");
   }
 
@@ -363,7 +387,12 @@ export async function settleEscrow(
     freeze.poolMembers.map(async (member) => ({
       id: member.id,
       userId: member.userId,
-      toAddress: await resolvePoolMemberAddress(opts.db, member),
+      toAddress:
+        scope === "pool_member" &&
+        member.id === input.participantId &&
+        input.poolPayoutAddress?.trim()
+          ? input.poolPayoutAddress.trim()
+          : await resolvePoolMemberAddress(opts.db, member),
     })),
   );
 
@@ -395,17 +424,28 @@ export async function settleEscrow(
       continue;
     }
 
+    if (!shouldTransferLeg(leg, scope, input.participantId)) {
+      continue;
+    }
+
     if (leg.deferReason) {
       if (leg.participantId) {
         await markPoolParticipantSkip(opts.db, leg.participantId, leg.deferReason, now);
       }
-      lastFail = {
-        code: leg.deferReason,
-        reason:
+      if (scope === "pool_member") {
+        throw new EscrowError(
+          "missing_payout_address",
           leg.deferReason === "hunter_not_linked"
-            ? "Pool member GitHub identity is not linked. Connect GitHub, then retry settle — do not redistribute."
-            : "Pool member has no BYO Base payout address. Set users.wallet_address, then retry — do not redistribute.",
-      };
+            ? "Connect GitHub as this pool login before claiming the frozen share."
+            : "A BYO Base payout address is required to claim this pool share.",
+        );
+      }
+      if (!isExpectedPoolDefer(leg.deferReason)) {
+        lastFail = {
+          code: leg.deferReason,
+          reason: "Pool payout deferred. Retry remaining legs — do not redistribute.",
+        };
+      }
       continue;
     }
 
@@ -498,6 +538,9 @@ export async function settleEscrow(
     );
   });
 
+  const winnerAndFeeConfirmed =
+    Boolean(payoutTxHash) && (Boolean(feeTxHash) || split.feeAtomic === BigInt(0));
+  const railFail = lastFail && !isExpectedPoolDefer(lastFail.code) ? lastFail : null;
   const terminal: "settled" | "settled_partial" = intendedConfirmed
     ? "settled"
     : anyConfirmed
@@ -512,8 +555,12 @@ export async function settleEscrow(
         payoutTxHash,
         feeTxHash,
         escrowAddress: wallets.escrowAddress,
-        failCode: terminal === "settled" ? null : lastFail?.code ?? escrow.failCode,
-        failReason: terminal === "settled" ? null : lastFail?.reason ?? escrow.failReason,
+        failCode: terminal === "settled" || (winnerAndFeeConfirmed && !railFail)
+          ? null
+          : railFail?.code ?? escrow.failCode,
+        failReason: terminal === "settled" || (winnerAndFeeConfirmed && !railFail)
+          ? null
+          : railFail?.reason ?? escrow.failReason,
         updatedAt: now,
       })
       .where(eq(escrows.id, escrow.id));
@@ -526,7 +573,7 @@ export async function settleEscrow(
       })
       .where(eq(bounties.id, bountyId));
 
-    if (terminal === "settled") {
+    if (winnerAndFeeConfirmed) {
       await tx
         .insert(feeLedger)
         .values({
@@ -673,7 +720,7 @@ async function resolveHunter(
   const [eligible] = await db
     .select()
     .from(claims)
-    .where(and(eq(claims.bountyId, bountyId), eq(claims.status, "eligible")))
+    .where(and(eq(claims.bountyId, bountyId), inArray(claims.status, ["eligible", "paid"])))
     .limit(1);
 
   const hunterUserId = input.hunterUserId || eligible?.hunterUserId;
@@ -699,6 +746,29 @@ async function resolveHunter(
     );
   }
   return { userId: hunterUserId, address, claimId: eligible?.id };
+}
+
+async function assertPoolMemberActor(
+  db: Database,
+  freeze: Awaited<ReturnType<typeof loadFrozenSettleSet>>,
+  input: { actorUserId?: string; participantId?: string | null },
+): Promise<void> {
+  const member = freeze.poolMembers.find((row) => row.id === input.participantId);
+  if (!member || member.role !== "pool") {
+    throw new EscrowError("not_pool_member", "No frozen pool share matches this claim.");
+  }
+  if (!input.actorUserId) return;
+  if (member.userId && member.userId === input.actorUserId) return;
+  const [link] = await db
+    .select({ githubId: githubLinks.githubId })
+    .from(githubLinks)
+    .where(eq(githubLinks.userId, input.actorUserId))
+    .limit(1);
+  if (link && link.githubId === member.githubId) return;
+  throw new EscrowError(
+    "not_pool_member",
+    "Only that frozen pool participant can claim this share.",
+  );
 }
 
 async function walletOf(db: Database, userId: string): Promise<string | null> {

@@ -1,4 +1,4 @@
-import { formatUsdc, POOL_PAYOUT_COPY } from "@/bounties";
+import { formatUsdc, POOL_PAYOUT_COPY, sharePaidLabel } from "@/bounties";
 import { payoutPiesFromBreakdown } from "@/bounties/payout-pie";
 import type { PoolRosterView } from "@/bounties/roster";
 import { PayoutPieCharts } from "@/components/payout-pie";
@@ -50,6 +50,8 @@ export function PayoutBreakdown({
             </dt>
             <dd className="sm:col-span-2 font-medium">
               {formatUsdc(breakdown.winnerUsdc)} {currency}
+              {" · "}
+              {sharePaidLabel(Boolean(breakdown.winnerTxHash))}
               {breakdown.winnerTxHash ? (
                 <span className="mt-1 block break-all font-mono text-xs font-normal text-zinc-500">
                   tx {breakdown.winnerTxHash}
@@ -75,8 +77,23 @@ export function PayoutBreakdown({
               </dd>
             </div>
           ) : null}
+          {roster.pool.map((member) => (
+            <div key={member.id} className="grid gap-1 px-3 py-2 sm:grid-cols-3">
+              <dt className="text-xs uppercase tracking-wide text-zinc-500">
+                Pool · {member.githubLogin}
+              </dt>
+              <dd className="sm:col-span-2">
+                {formatUsdc(member.shareUsdc)} {currency} · {sharePaidLabel(member.paid)}
+                {member.payoutTxHash ? (
+                  <span className="mt-1 block break-all font-mono text-xs text-zinc-500">
+                    tx {member.payoutTxHash}
+                  </span>
+                ) : null}
+              </dd>
+            </div>
+          ))}
           {confirmedLegs
-            .filter((leg) => leg.kind === "POOL_PAYOUT")
+            .filter((leg) => leg.kind === "POOL_PAYOUT" && !roster.pool.some((m) => m.id === leg.participantId))
             .map((leg) => (
               <div key={`${leg.kind}-${leg.participantId}`} className="grid gap-1 px-3 py-2 sm:grid-cols-3">
                 <dt className="text-xs uppercase tracking-wide text-zinc-500">

@@ -21,6 +21,7 @@ export type RosterMemberView = {
   skipReason: string | null;
   frozen: boolean;
   unlinked: boolean;
+  paid: boolean;
 };
 
 export type AllocationLegView = {
@@ -95,6 +96,7 @@ function toMember(row: ParticipantRow, payoutTxHash: string | null): RosterMembe
     skipReason: row.skipReason,
     frozen: row.frozenAt != null,
     unlinked: isUnlinked(row),
+    paid: Boolean(payoutTxHash),
   };
 }
 

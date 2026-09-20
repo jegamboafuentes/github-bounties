@@ -23,8 +23,10 @@ import { PayoutBreakdown } from "@/components/payout-breakdown";
 import { PoolRoster } from "@/components/pool-roster";
 import { WorkSignalsPanel } from "@/components/work-signals-panel";
 import { getRuntimeDb } from "@/db/runtime";
+import { githubLinks } from "@/db/schema";
 import { getEscrowSnapshot } from "@/escrow";
 import { walletConnectConfigured } from "@/wallet/env";
+import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +46,15 @@ export default async function BountyDetailPage({
     getEscrowSnapshot(id, db).catch(() => null),
     getPoolRoster(id, db).catch(() => null),
   ]);
+  const viewerGithubId = user
+    ? (
+        await db
+          .select({ githubId: githubLinks.githubId })
+          .from(githubLinks)
+          .where(eq(githubLinks.userId, user.id))
+          .limit(1)
+      )[0]?.githubId.toString() ?? null
+    : null;
 
   if (!bounty) {
     return (
@@ -117,7 +128,22 @@ export default async function BountyDetailPage({
           clearAction={clearWorkSignalAction}
         />
 
-        {roster ? <PoolRoster roster={roster} currency={bounty.currency} /> : null}
+        {roster ? (
+          <PoolRoster
+            roster={roster}
+            currency={bounty.currency}
+            bountyId={bounty.id}
+            viewerUserId={user?.id}
+            viewerGithubId={viewerGithubId}
+            winnerPaid={Boolean(
+              bounty.payout?.status === "paid" || roster.winner?.paid || roster.breakdown.winnerTxHash,
+            )}
+            signedIn={Boolean(user)}
+            signInHref={signInHref}
+            defaultAddress={user?.wallet_address || ""}
+            claimAction={claimPayoutAction}
+          />
+        ) : null}
         {roster ? <PayoutBreakdown roster={roster} currency={bounty.currency} /> : null}
 
         {bounty.pendingHunterLink ? (
@@ -272,7 +298,7 @@ export default async function BountyDetailPage({
               <Link href={signInHref} className="underline underline-offset-4">
                 Sign in with Google
               </Link>{" "}
-              to fund, signal Working on this, or claim a winner payout.
+              to fund, signal Working on this, or claim a winner or pool payout.
             </p>
           ) : null}
         </div>

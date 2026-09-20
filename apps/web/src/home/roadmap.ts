@@ -54,11 +54,11 @@ export const PUBLIC_ROADMAP = [
   },
   {
     id: "pool-claim",
-    version: "V3+",
+    version: "V2.6",
     title: "Pool member self-claim",
     summary:
-      "Today settle pays Settings wallets. A later per-member claim path is planned, not scheduled.",
-    status: "planned",
+      "Winner Claim pays winner + fee only. Each frozen pool hunter Claims their own share when they have a wallet.",
+    status: "shipped",
   },
 ] as const satisfies readonly RoadmapItem[];
 

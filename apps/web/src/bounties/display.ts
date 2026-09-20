@@ -31,10 +31,15 @@ export const HOSTED_CHECKOUT_DISABLED_COPY =
 export const X402_EXACT_FUND_COPY = x402ExactFundCopy("Base Sepolia");
 
 export const CLAIM_PAYOUT_COPY =
-  "Eligible winner only: the merged pull request author claims their share to a bring-your-own Base address. Pool members are paid to wallets already saved in Settings when settle runs. Poster and the board then see completed (paid).";
+  "Eligible winner only: the merged pull request author claims their winner share + the 2% platform fee to a bring-your-own Base address. Pool members claim their own frozen shares separately. Missing pool wallets do not block the winner.";
 
 export const POOL_PAYOUT_COPY =
-  "Winner Claim still uses a BYO Base address on this form. Pool members are paid to the Base address saved in Settings when the winner (or poster) settles — settle pays wallets that already exist. Unlinked or wallet-less members stay retryable; their share is not redistributed.";
+  "Frozen 85/15 of post-fee (ADR 0003). Winner Claim pays winner + fee only. Each pool participant Claims their equal share when they have a Settings payout wallet. Already-paid shares show Paid. Unlinked or wallet-less members stay retryable; their share is not redistributed.";
+
+export const POOL_CLAIM_COPY =
+  "Claim your frozen pool share to a bring-your-own Base address. Wallet is required now — not when the winner claimed. Double-claim does not pay twice.";
+
+export const WINNER_PAID_POOL_PENDING_LABEL = "Winner paid — pool pending";
 
 export const ELIGIBILITY_FREEZE_COPY =
   "Eligibility freezes at the winning merge. Rows below may still be unfrozen candidates.";
@@ -113,7 +118,7 @@ export function bountyStatusLabel(status: (typeof bountyStatusValues)[number] | 
     case "settled":
       return "Completed (paid)";
     case "settled_partial":
-      return "Paid (partial)";
+      return WINNER_PAID_POOL_PENDING_LABEL;
     case "refunding":
       return "Refunding";
     case "refunded":
@@ -135,6 +140,8 @@ export function claimStatusLabel(status: string): string {
       return "Eligible";
     case "paid":
       return "Paid";
+    case "pending":
+      return "Claim pending";
     case "rejected":
       return "Rejected";
     case "disputed":
@@ -142,6 +149,10 @@ export function claimStatusLabel(status: string): string {
     default:
       return status;
   }
+}
+
+export function sharePaidLabel(paid: boolean): string {
+  return paid ? "Paid" : "Claim pending";
 }
 
 /** Trim trailing zeros for UI amounts. */

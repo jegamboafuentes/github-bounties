@@ -3,9 +3,18 @@ export {
   isClaimError,
   NOT_ELIGIBLE_MESSAGE,
   NOT_HUNTER_MESSAGE,
+  NOT_POOL_MEMBER_MESSAGE,
+  POOL_NOT_READY_MESSAGE,
   type ClaimErrorCode,
 } from "./errors";
-export { claimPayout, type ClaimPayoutInput, type ClaimPayoutResult } from "./payout";
+export {
+  claimPayout,
+  claimPoolPayout,
+  type ClaimPayoutInput,
+  type ClaimPayoutResult,
+  type ClaimPoolPayoutInput,
+  type ClaimPoolPayoutResult,
+} from "./payout";
 export {
   getPendingHunterLinkForBounty,
   listPendingHunterLinksForBounties,

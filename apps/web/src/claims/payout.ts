@@ -1,7 +1,8 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { bounties, claims, repos, users } from "../db/schema";
+import { bounties, claims, githubLinks, poolParticipants, repos, users } from "../db/schema";
 import { isEscrowError, settleEscrow, type SettleResult } from "../escrow";
+import { loadFrozenSettleSet } from "../escrow/allocation";
 import type { CdpRail } from "../escrow/rail";
 import { INVALID_BASE_ADDRESS_MESSAGE, normalizeBaseAddress } from "../lib/address";
 import { splitFaceUsdc } from "../lib/money";
@@ -9,6 +10,8 @@ import {
   ClaimError,
   NOT_ELIGIBLE_MESSAGE,
   NOT_HUNTER_MESSAGE,
+  NOT_POOL_MEMBER_MESSAGE,
+  POOL_NOT_READY_MESSAGE,
 } from "./errors";
 import { getPendingHunterLinkForBounty, pendingHunterLinkGuidance } from "./pending-link";
 
@@ -21,6 +24,19 @@ export type ClaimPayoutInput = {
 export type ClaimPayoutResult = SettleResult & {
   claimId: string;
   claimStatus: "paid" | "eligible" | string;
+  faceUsdc: string;
+  feePercent: number;
+};
+
+export type ClaimPoolPayoutInput = {
+  payoutAddress: string;
+  persistWallet?: boolean;
+  participantId?: string;
+};
+
+export type ClaimPoolPayoutResult = SettleResult & {
+  participantId: string;
+  poolShareUsdc: string;
   faceUsdc: string;
   feePercent: number;
 };
@@ -87,6 +103,7 @@ export async function claimPayout(
         hunterUserId: claim.hunterUserId,
         hunterPayoutAddress: address,
         claimId: claim.id,
+        scope: "winner_and_fee",
       },
       opts,
     );
@@ -111,6 +128,125 @@ export async function claimPayout(
     faceUsdc: split.faceUsdc,
     feePercent: split.feeBps / 100,
   };
+}
+
+/**
+ * Frozen pool member Claims their own equal share. Wallet is required here,
+ * not at winner Claim. Winner + fee must already be confirmed.
+ */
+export async function claimPoolPayout(
+  bountyId: string,
+  actorUserId: string,
+  input: ClaimPoolPayoutInput,
+  opts: ClaimPayoutOpts,
+): Promise<ClaimPoolPayoutResult> {
+  if (!actorUserId) {
+    throw new ClaimError("unauthorized", "Sign in with Google to claim a pool share.");
+  }
+
+  const [bounty] = await opts.db
+    .select()
+    .from(bounties)
+    .where(eq(bounties.id, bountyId))
+    .limit(1);
+  if (!bounty) {
+    throw new ClaimError("bounty_not_found", "Bounty not found.");
+  }
+
+  const freeze = await loadFrozenSettleSet(opts.db, bountyId);
+  const member = await resolvePoolMemberForActor(opts.db, freeze, actorUserId, input.participantId);
+
+  let address: string;
+  try {
+    address = normalizeBaseAddress(input.payoutAddress);
+  } catch {
+    throw new ClaimError("invalid_payout_address", INVALID_BASE_ADDRESS_MESSAGE);
+  }
+
+  const persistWallet = input.persistWallet !== false;
+  const now = opts.now ?? new Date();
+  if (persistWallet) {
+    await opts.db
+      .update(users)
+      .set({ walletAddress: address, updatedAt: now })
+      .where(eq(users.id, actorUserId));
+  }
+  if (!member.userId) {
+    await opts.db
+      .update(poolParticipants)
+      .set({ userId: actorUserId, skipReason: null, updatedAt: now })
+      .where(eq(poolParticipants.id, member.id));
+  }
+
+  let settled: SettleResult;
+  try {
+    settled = await settleEscrow(
+      bountyId,
+      {
+        actorUserId,
+        participantId: member.id,
+        poolPayoutAddress: address,
+        scope: "pool_member",
+      },
+      opts,
+    );
+  } catch (err) {
+    if (isEscrowError(err)) {
+      if (err.code === "not_pool_member" || err.code === "not_settler") {
+        throw new ClaimError("not_pool_member", NOT_POOL_MEMBER_MESSAGE);
+      }
+      if (err.code === "not_settleable" && /winner must claim first/i.test(err.message)) {
+        throw new ClaimError("pool_not_ready", POOL_NOT_READY_MESSAGE);
+      }
+      if (err.code === "missing_payout_address") {
+        throw new ClaimError("invalid_payout_address", err.message);
+      }
+    }
+    throw err;
+  }
+
+  const split = splitFaceUsdc(bounty.amountUsdc);
+  return {
+    ...settled,
+    participantId: member.id,
+    poolShareUsdc: member.shareUsdc,
+    faceUsdc: split.faceUsdc,
+    feePercent: split.feeBps / 100,
+  };
+}
+
+async function resolvePoolMemberForActor(
+  db: Database,
+  freeze: Awaited<ReturnType<typeof loadFrozenSettleSet>>,
+  actorUserId: string,
+  participantId?: string,
+) {
+  const [link] = await db
+    .select({ githubId: githubLinks.githubId })
+    .from(githubLinks)
+    .where(eq(githubLinks.userId, actorUserId))
+    .limit(1);
+
+  const owns = (row: (typeof freeze.poolMembers)[number]) =>
+    row.userId === actorUserId || (link != null && link.githubId === row.githubId);
+
+  const byId = participantId
+    ? freeze.poolMembers.find((row) => row.id === participantId)
+    : undefined;
+  if (participantId) {
+    if (!byId || !owns(byId)) {
+      throw new ClaimError("not_pool_member", NOT_POOL_MEMBER_MESSAGE);
+    }
+    return byId;
+  }
+
+  const member =
+    freeze.poolMembers.find((row) => row.userId === actorUserId) ??
+    freeze.poolMembers.find((row) => link != null && link.githubId === row.githubId);
+  if (!member) {
+    throw new ClaimError("not_pool_member", NOT_POOL_MEMBER_MESSAGE);
+  }
+  return member;
 }
 
 async function loadClaimForPayout(

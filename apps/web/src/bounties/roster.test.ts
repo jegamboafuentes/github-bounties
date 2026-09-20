@@ -125,6 +125,9 @@ describe("pool roster view", () => {
     assert.equal(view.pool[0]?.qualifyingPrNumber, 10);
     assert.equal(view.pool[0]?.shareUsdc, "7.350000");
     assert.equal(view.pool[0]?.payoutTxHash, "mock:alice");
+    assert.equal(view.pool[0]?.paid, true);
+    assert.equal(view.pool[1]?.paid, true);
+    assert.equal(view.winner?.paid, true);
     assert.equal(view.breakdown.feeUsdc, "2.000000");
     assert.equal(view.breakdown.winnerUsdc, "83.300000");
     assert.equal(view.breakdown.poolTotalUsdc, "14.700000");
