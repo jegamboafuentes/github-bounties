@@ -110,8 +110,8 @@ Do not point `cloudbuild.yaml` at this app. Closed-beta checklist: [docs/staging
 | `npm run db:migrate` | apply `drizzle/` SQL to `DATABASE_URL` (`0004_v2_pool_participants.sql` + snapshots) |
 | `npm run db:seed` | sample user / repo / pending_fund + funded + open funded bounty + V2 pool fixtures (no exclusive lock) |
 | `npm run expire-locks` | drain residual exclusive claim-locks + `expires_at` refunds (same function as the cron route) |
-| `npm run test:unit` | fee 2% + Base address + escrow state machine + CDP env/mainnet guard + claim-lock sunset copy + auth + V0-B eligibility fixtures + HMAC + webhook replay + board helpers + V2 pool invariants + V2-2 freeze rows + V2-4 roster (no live GitHub, no database) |
-| `npm run test:db` | unique indexes + `users.google_sub` upsert + eligible Claim + claim-lock sunset drain + work signals + escrow fund/settle/refund + hunter-only payout mocks + GitHub unlink + V2-1 pool schema + V2-2 pool freeze (needs `DATABASE_URL`) |
+| `npm run test:unit` | fee 2% + Base address + escrow state machine + CDP env/mainnet guard + claim-lock sunset copy + auth + V0-B eligibility fixtures + HMAC + webhook replay + board helpers + V2 pool invariants + V2-2 freeze rows + V2-4 roster + public stats definitions (no live GitHub, no database) |
+| `npm run test:db` | unique indexes + `users.google_sub` upsert + eligible Claim + claim-lock sunset drain + work signals + escrow fund/settle/refund + hunter-only payout mocks + GitHub unlink + V2-1 pool schema + V2-2 pool freeze + public `/api/stats` aggregates (needs `DATABASE_URL`) |
 | `npm run build` | Next.js standalone |
 
 ## Google Sign-In (V1-2)
@@ -161,6 +161,7 @@ If Google env is missing, `/signin` lists the unset variable names. Home and `/a
 | URL | Auth |
 | --- | --- |
 | `/board` | public list + repo/status filters (Working on this; no exclusive lock caption) |
+| `GET /api/stats` | public platform aggregates (`schemaVersion`); no session. [docs/stats.md](../../docs/stats.md) |
 | `/bounties/new` | Google session; issue URL must match an App-connected repo |
 | `/bounties/[id]` | escrow lock (poster: WalletConnect / Pay face / Advanced paste-hash), Working on this, pool roster, payout breakdown, winner payout claim, cancel/refund |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` bearer; drains residual exclusive locks; `expires_at` refunds unchanged |

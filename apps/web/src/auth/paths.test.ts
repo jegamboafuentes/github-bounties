@@ -17,10 +17,12 @@ describe("protected paths", () => {
     assert.equal(isProtectedApiPath("/api/me"), true);
     assert.equal(isProtectedApiPath("/api/github/connect"), true);
     assert.equal(isProtectedApiPath("/api/health"), false);
+    assert.equal(isProtectedApiPath("/api/stats"), false);
     assert.equal(isProtectedApiPath("/api/auth/signin"), false);
     assert.equal(isProtectedApiPath("/api/auth/callback/google"), false);
 
     assert.equal(isProtectedPath("/api/me"), true);
     assert.equal(isProtectedPath("/api/health"), false);
+    assert.equal(isProtectedPath("/api/stats"), false);
   });
 });
