@@ -1,4 +1,3 @@
-import { HomeReveal } from "@/components/home-reveal";
 import { PUBLIC_ROADMAP, ROADMAP_STATUS_LABEL, type RoadmapStatus } from "@/home/roadmap";
 
 function statusClass(status: RoadmapStatus): string {
@@ -13,8 +12,7 @@ function statusClass(status: RoadmapStatus): string {
 
 export function HomeRoadmap() {
   return (
-    <HomeReveal>
-      <section id="roadmap" className="flex flex-col gap-4">
+    <section id="roadmap" className="flex flex-col gap-4">
         <div className="home-reveal-item">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
             Public roadmap
@@ -50,7 +48,6 @@ export function HomeRoadmap() {
             </li>
           ))}
         </ol>
-      </section>
-    </HomeReveal>
+    </section>
   );
 }

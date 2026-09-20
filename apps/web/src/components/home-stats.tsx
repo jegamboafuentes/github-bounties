@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { HomeReveal } from "@/components/home-reveal";
 import { homepageStatCards } from "@/home/stats-display";
 import type { HomepageStatsSource } from "@/home/load-stats";
 
@@ -7,8 +6,7 @@ export function HomeStats({ source }: { source: HomepageStatsSource }) {
   const cards = homepageStatCards(source.stats);
 
   return (
-    <HomeReveal>
-      <section id="stats" className="home-reveal-item flex flex-col gap-4">
+    <section id="stats" className="home-reveal-item flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
@@ -21,7 +19,7 @@ export function HomeStats({ source }: { source: HomepageStatsSource }) {
             </p>
           </div>
           <p className="text-xs text-zinc-500">
-            <Link href="/api/stats" className="underline underline-offset-4">
+            <Link href="/api/stats" prefetch={false} className="underline underline-offset-4">
               GET /api/stats
             </Link>
             <span className="mx-1">·</span>
@@ -44,7 +42,6 @@ export function HomeStats({ source }: { source: HomepageStatsSource }) {
             </div>
           ))}
         </dl>
-      </section>
-    </HomeReveal>
+    </section>
   );
 }

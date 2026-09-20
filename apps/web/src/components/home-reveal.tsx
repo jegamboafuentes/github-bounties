@@ -2,6 +2,10 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 
+function select(root: HTMLElement, selector: string): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(selector));
+}
+
 /**
  * Anime.js island. Content stays SSR; motion is a client enhancement.
  * Queries are scoped to this root. Respects prefers-reduced-motion.
@@ -16,7 +20,8 @@ export function HomeReveal({
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!root.current) return;
+    const el = root.current;
+    if (!el) return;
 
     let cancelled = false;
     let revert = () => {};
@@ -30,19 +35,30 @@ export function HomeReveal({
         },
       }).add((self) => {
         if (!self || self.matches.reduceMotion) return;
-        animate(".home-reveal-item", {
-          opacity: { from: 0, to: 1, duration: 650, ease: "out(3)" },
-          y: { from: 16, to: 0, duration: 750, ease: "out(4)" },
-          delay: stagger(70),
-        });
-        animate(".home-wordmark", {
-          scale: { from: 0.97, to: 1, duration: 900, ease: "out(3)" },
-        });
-        animate(".home-aurora", {
-          opacity: { from: 0.35, to: 0.72, ease: "inOut(2)", duration: 4200 },
-          loop: true,
-          alternate: true,
-        });
+        const host = root.current;
+        if (!host) return;
+        const items = select(host, ".home-reveal-item");
+        if (items.length) {
+          animate(items, {
+            opacity: { from: 0, to: 1, duration: 700, ease: "out(3)" },
+            y: { from: 20, to: 0, duration: 800, ease: "out(4)" },
+            delay: stagger(90),
+          });
+        }
+        const wordmark = select(host, ".home-wordmark");
+        if (wordmark.length) {
+          animate(wordmark, {
+            scale: { from: 0.96, to: 1, duration: 1000, ease: "out(3)" },
+          });
+        }
+        const aurora = select(host, ".home-aurora");
+        if (aurora.length) {
+          animate(aurora, {
+            opacity: { from: 0.35, to: 0.75, ease: "inOut(2)", duration: 4200 },
+            loop: true,
+            alternate: true,
+          });
+        }
       });
       revert = () => scope.revert();
     });

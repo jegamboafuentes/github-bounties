@@ -1,4 +1,3 @@
-import { HomeReveal } from "@/components/home-reveal";
 import {
   authModule,
   bountiesModule,
@@ -11,8 +10,7 @@ const modules = [authModule, bountiesModule, escrowModule, webhooksModule, claim
 
 export function HomeModules() {
   return (
-    <HomeReveal>
-      <section className="home-reveal-item flex flex-col gap-3">
+    <section className="home-reveal-item flex flex-col gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Modules</h2>
         <ul className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
           {modules.map((mod) => (
@@ -27,7 +25,6 @@ export function HomeModules() {
             </li>
           ))}
         </ul>
-      </section>
-    </HomeReveal>
+    </section>
   );
 }

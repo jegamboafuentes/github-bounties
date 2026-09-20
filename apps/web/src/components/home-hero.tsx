@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { BrandWordmark } from "@/components/brand-wordmark";
-import { HomeReveal } from "@/components/home-reveal";
 import { homepageCtas, type HomepageCtaKind } from "@/home/ctas";
 import { DEFAULT_CURRENCY, FEE_BPS, PRODUCT_NAME } from "@/lib/constants";
 import { fundRailCaption, type FundChainDisplayName } from "@/bounties/display";
@@ -25,7 +24,7 @@ export function HomeHero({
   const ctas = homepageCtas(signedIn);
 
   return (
-    <HomeReveal className="relative overflow-hidden">
+    <div className="relative overflow-hidden">
       <div
         aria-hidden
         className="home-aurora pointer-events-none absolute -left-1/4 -top-16 h-72 w-2/3 rounded-full bg-emerald-400/20 blur-3xl dark:bg-emerald-400/15"
@@ -75,6 +74,6 @@ export function HomeHero({
           </div>
         </dl>
       </div>
-    </HomeReveal>
+    </div>
   );
 }

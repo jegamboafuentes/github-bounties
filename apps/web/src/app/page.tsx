@@ -4,6 +4,7 @@ import { AppHeader } from "@/components/header";
 import { HomeCompare } from "@/components/home-compare";
 import { HomeHero } from "@/components/home-hero";
 import { HomeModules } from "@/components/home-modules";
+import { HomeReveal } from "@/components/home-reveal";
 import { HomeRoadmap } from "@/components/home-roadmap";
 import { HomeStats } from "@/components/home-stats";
 import { NOT_LIGHTNING_BOUNTIES, loadHomepageStats } from "@/home";
@@ -20,12 +21,13 @@ export default async function Home() {
     <div className="flex flex-1 flex-col bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
       <AppHeader />
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-12 px-6 py-14">
-        <HomeHero signedIn={signedIn} chainName={fund.chainName} />
-        <HomeStats source={stats} />
-        <HomeCompare />
-        <HomeRoadmap />
-        <HomeModules />
-        <p className="text-sm text-zinc-500">
+        <HomeReveal className="flex flex-col gap-12">
+          <HomeHero signedIn={signedIn} chainName={fund.chainName} />
+          <HomeStats source={stats} />
+          <HomeCompare />
+          <HomeRoadmap />
+          <HomeModules />
+          <p className="home-reveal-item text-sm text-zinc-500">
           {NOT_LIGHTNING_BOUNTIES} Sign in with Google.{" "}
           <Link href="/board" className="underline underline-offset-4">
             Board
@@ -46,7 +48,8 @@ export default async function Home() {
           claim their share to a BYO Base address. Pool members are paid to Settings
           wallets when settle runs. Escrow holds face in <code>gb-escrow</code>; 2% to{" "}
           <code>gb-fee</code> at settlement. Hosted checkout is disabled.
-        </p>
+          </p>
+        </HomeReveal>
       </main>
     </div>
   );

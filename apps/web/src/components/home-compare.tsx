@@ -1,10 +1,8 @@
-import { HomeReveal } from "@/components/home-reveal";
 import { HOMEPAGE_DIFFERENTIATORS, NOT_LIGHTNING_BOUNTIES } from "@/home/differentiators";
 
 export function HomeCompare() {
   return (
-    <HomeReveal>
-      <section id="compare" className="flex flex-col gap-4">
+    <section id="compare" className="flex flex-col gap-4">
         <div className="home-reveal-item">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
             vs Lightning Bounties
@@ -22,7 +20,6 @@ export function HomeCompare() {
             </li>
           ))}
         </ul>
-      </section>
-    </HomeReveal>
+    </section>
   );
 }
