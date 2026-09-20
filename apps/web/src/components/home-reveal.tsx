@@ -34,31 +34,41 @@ export function HomeReveal({
           reduceMotion: "(prefers-reduced-motion: reduce)",
         },
       }).add((self) => {
-        if (!self || self.matches.reduceMotion) return;
         const host = root.current;
         if (!host) return;
+        if (!self || self.matches.reduceMotion) {
+          host.dataset.homeMotion = "reduced";
+          return;
+        }
         const items = select(host, ".home-reveal-item");
         if (items.length) {
           animate(items, {
-            opacity: { from: 0, to: 1, duration: 700, ease: "out(3)" },
-            y: { from: 20, to: 0, duration: 800, ease: "out(4)" },
+            opacity: [0, 1],
+            y: [20, 0],
+            duration: 800,
+            ease: "out(4)",
             delay: stagger(90),
           });
         }
         const wordmark = select(host, ".home-wordmark");
         if (wordmark.length) {
           animate(wordmark, {
-            scale: { from: 0.96, to: 1, duration: 1000, ease: "out(3)" },
+            scale: [0.96, 1],
+            duration: 1000,
+            ease: "out(3)",
           });
         }
         const aurora = select(host, ".home-aurora");
         if (aurora.length) {
           animate(aurora, {
-            opacity: { from: 0.35, to: 0.75, ease: "inOut(2)", duration: 4200 },
+            opacity: [0.35, 0.75],
+            duration: 4200,
+            ease: "inOut(2)",
             loop: true,
             alternate: true,
           });
         }
+        host.dataset.homeMotion = "played";
       });
       revert = () => scope.revert();
     });
