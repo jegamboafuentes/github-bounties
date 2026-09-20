@@ -124,12 +124,13 @@ const stats = await getPlatformStats(getRuntimeDb());
 
 Server components should call `getPlatformStats()` directly (same helper as the route). Browser clients: `fetch("/api/stats")`.
 
+The homepage (`apps/web/src/app/page.tsx`) loads stats with `getPlatformStats()` and labels them per this file (`apps/web/src/home/stats-display.ts`).
+
 Do not treat this payload as a fee dashboard or a pie-chart series — those are later tickets.
 
 ## Out of scope (this surface)
 
-- Homepage Anime.js / Canva / roadmap UI
-- Bounty pie charts
+- Bounty pie charts (FE-2)
 - Pool manual-Claim behavior
 - Hosted checkout
 - PROD remount of the DEV service

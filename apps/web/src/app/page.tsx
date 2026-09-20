@@ -1,87 +1,34 @@
 import Link from "next/link";
-import { DEFAULT_CURRENCY, FEE_BPS, PRODUCT_NAME } from "@/lib/constants";
-import { fundRailCaption } from "@/bounties/display";
-import { resolveFundWalletRuntime } from "@/wallet/env";
-import {
-  authModule,
-  bountiesModule,
-  claimsModule,
-  escrowModule,
-  webhooksModule,
-} from "@/modules";
+import { getOptionalSession } from "@/auth";
 import { AppHeader } from "@/components/header";
-import { BrandWordmark } from "@/components/brand-wordmark";
-
-const modules = [
-  authModule,
-  bountiesModule,
-  escrowModule,
-  webhooksModule,
-  claimsModule,
-];
+import { HomeCompare } from "@/components/home-compare";
+import { HomeHero } from "@/components/home-hero";
+import { HomeModules } from "@/components/home-modules";
+import { HomeReveal } from "@/components/home-reveal";
+import { HomeRoadmap } from "@/components/home-roadmap";
+import { HomeStats } from "@/components/home-stats";
+import { NOT_LIGHTNING_BOUNTIES, loadHomepageStats } from "@/home";
+import { resolveFundWalletRuntime } from "@/wallet/env";
 
 export const dynamic = "force-dynamic";
 
-export default function Home() {
+export default async function Home() {
+  const [session, stats] = await Promise.all([getOptionalSession(), loadHomepageStats()]);
+  const signedIn = Boolean(session?.user?.id);
+  const fund = resolveFundWalletRuntime();
+
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
       <AppHeader />
-      <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 py-14">
-        <div className="flex flex-col gap-4">
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-            V2-4 parallel hunt
-          </p>
-          <h1>
-            <BrandWordmark size="hero" priority />
-            <span className="sr-only">{PRODUCT_NAME}</span>
-          </h1>
-          <p className="max-w-xl text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            USDC bounties on GitHub issues. Winner is the author of the merged pull
-            request that closes funded issue #N. Parallel hunt; merge is truth.
-          </p>
-        </div>
-        <dl className="grid gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-            <dt className="text-xs uppercase tracking-wide text-zinc-500">Fee</dt>
-            <dd className="mt-1 text-2xl font-semibold">{FEE_BPS / 100}%</dd>
-            <dd className="text-sm text-zinc-500">fee_bps = {FEE_BPS}</dd>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-            <dt className="text-xs uppercase tracking-wide text-zinc-500">
-              Hunt
-            </dt>
-            <dd className="mt-1 text-2xl font-semibold">Parallel</dd>
-            <dd className="text-sm text-zinc-500">optional Working on this, not exclusive</dd>
-          </div>
-          <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-            <dt className="text-xs uppercase tracking-wide text-zinc-500">Rail</dt>
-            <dd className="mt-1 text-2xl font-semibold">{DEFAULT_CURRENCY}</dd>
-            <dd className="text-sm text-zinc-500">
-              {fundRailCaption(resolveFundWalletRuntime().chainName)}
-            </dd>
-          </div>
-        </dl>
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-            Modules
-          </h2>
-          <ul className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
-            {modules.map((mod) => (
-              <li key={mod.name} className="flex items-start justify-between gap-4 px-4 py-3">
-                <div>
-                  <p className="font-medium capitalize">{mod.name}</p>
-                  <p className="text-sm text-zinc-500">{mod.notes}</p>
-                </div>
-                <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                  {mod.wired ? "wired" : mod.nextTicket}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-        <p className="text-sm text-zinc-500">
-          This is not Lightning Bounties, LB1, or “Lightning Bounties 2”. Sign in with
-          Google.{" "}
+      <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-12 px-6 py-14">
+        <HomeReveal className="flex flex-col gap-12">
+          <HomeHero signedIn={signedIn} chainName={fund.chainName} />
+          <HomeStats source={stats} />
+          <HomeCompare />
+          <HomeRoadmap />
+          <HomeModules />
+          <p className="home-reveal-item text-sm text-zinc-500">
+          {NOT_LIGHTNING_BOUNTIES} Sign in with Google.{" "}
           <Link href="/board" className="underline underline-offset-4">
             Board
           </Link>
@@ -99,10 +46,10 @@ export default function Home() {
           </Link>
           . Exclusive claim-lock is retired; merge is still truth. Eligible winners
           claim their share to a BYO Base address. Pool members are paid to Settings
-          wallets when settle runs. Escrow holds face in{" "}
-          <code>gb-escrow</code>; 2% to <code>gb-fee</code> at settlement. Hosted
-          checkout is disabled.
-        </p>
+          wallets when settle runs. Escrow holds face in <code>gb-escrow</code>; 2% to{" "}
+          <code>gb-fee</code> at settlement. Hosted checkout is disabled.
+          </p>
+        </HomeReveal>
       </main>
     </div>
   );

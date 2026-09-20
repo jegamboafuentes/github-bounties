@@ -29,7 +29,7 @@ Residual `claim_locked` rows drain to `funded` on read. Money: `funded` → elig
 | URL | Auth | Role |
 | --- | --- | --- |
 | `/board` | public | List + filter by repo / status. Shows **Working on this** hunters (not “Claimed by X until …”). Poster and paid hunter GitHub avatars when a login is present (`avatars.githubusercontent.com/{login}`) |
-| `GET /api/stats` | public | Versioned platform aggregates (`schemaVersion`). See [stats.md](stats.md) |
+| `GET /api/stats` | public | Versioned platform aggregates (`schemaVersion`). Homepage consumes the same helper. See [stats.md](stats.md) |
 | `/settings` | Google session | Linked GitHub avatar + username. Payout wallet: WalletConnect (same Reown project id as fund) or Advanced paste. Pool members are paid to this wallet when settle runs. |
 | `/bounties/new` | Google session | Create from issue URL. Face chips `$1 / $5 / $10 / $50 / $100` + custom |
 | `/bounties/[id]` | public read; Google for actions | Escrow lock (WalletConnect / Pay face + Advanced paste-hash), Working on this, pool roster, payout breakdown, winner Claim (BYO Base), cancel/refund |
