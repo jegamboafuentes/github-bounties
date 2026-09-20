@@ -42,6 +42,13 @@ export { CLAIM_LABEL, notifyIssueClaimed } from "./notify";
 export { parseGitHubIssueUrl } from "./parse-issue-url";
 export { getPoolRoster, toPoolRosterView, type PoolRosterView } from "./roster";
 export {
+  payoutPiesFromBreakdown,
+  payoutPiesFromFace,
+  pieSliceArcs,
+  type PayoutPie,
+  type PayoutPieSlice,
+} from "./payout-pie";
+export {
   clearWorkSignal,
   listWorkSignalsForBounties,
   signalWorkingOnThis,
