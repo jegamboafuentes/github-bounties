@@ -169,8 +169,9 @@ Poster creates a bounty from a GitHub issue URL (repo must be App-connected). Bo
 | Board | `/board` (filter by repo / status; Working on this, not **Claimed by X until …**) |
 | Post | `/bounties/new` (Google session) |
 | Detail | `/bounties/[id]` — escrow lock, signals, pool roster, payout breakdown, winner Claim, poster cancel/refund |
+| Public stats | `GET /api/stats` — versioned aggregates (`schemaVersion`); no auth. [docs/stats.md](docs/stats.md) |
 | Expiry | `GET\|POST /api/jobs/expire-claim-locks` or `npm run expire-locks` (residual lock drain + `expires_at` refunds) |
-| Docs | [docs/bounties.md](docs/bounties.md), [docs/escrow.md](docs/escrow.md) |
+| Docs | [docs/bounties.md](docs/bounties.md), [docs/escrow.md](docs/escrow.md), [docs/stats.md](docs/stats.md) |
 
 Escrow lock records `escrows.status=funded` (real CDP when secrets exist; otherwise a mock hash plus the exact missing `CDP_*` names). DEV fund without a pasted hash: WalletConnect / Pay face on `/bounties/[id]`, or `GET|POST /api/bounties/:id/x402` (x402 `exact` → `gb-escrow`) then Lock. Settle: `POST /api/bounties/:id/settle`. Hosted checkout stays disabled. Ops: set public `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` for the WalletConnect button.
 
