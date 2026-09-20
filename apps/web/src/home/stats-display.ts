@@ -51,7 +51,7 @@ export function homepageStatCards(stats: PlatformStats): HomepageStatCard[] {
       key: "bounties.completed",
       label: "Completed",
       value: formatStatCount(stats.bounties.completed),
-      hint: "settled + settled_partial — Completed (paid) / Paid (partial).",
+      hint: "settled + settled_partial — Completed (paid) / Winner paid — pool pending.",
     },
     {
       key: "bounties.closed",

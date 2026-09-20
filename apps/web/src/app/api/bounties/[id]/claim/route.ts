@@ -1,13 +1,13 @@
 import { getCurrentPublicUser } from "@/auth/protect";
-import { claimPayout, isClaimError } from "@/claims";
+import { claimPoolPayout, claimPayout, isClaimError } from "@/claims";
 import { getRuntimeDb } from "@/db/runtime";
 import { escrowErrorJson, httpStatusForEscrowCode, isEscrowError, jsonForUnknown } from "@/escrow";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Hunter claim payout (V1-6). Only the eligible merged-PR author.
- * Body: { payoutAddress, persistWallet? }
+ * Winner or pool-member claim. Winner body: { payoutAddress, persistWallet?, claimId? }.
+ * Pool body: { kind: "pool", payoutAddress, participantId?, persistWallet? }.
  */
 export async function POST(
   req: Request,
@@ -18,7 +18,13 @@ export async function POST(
     return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
-  let body: { payoutAddress?: string; persistWallet?: boolean; claimId?: string } = {};
+  let body: {
+    payoutAddress?: string;
+    persistWallet?: boolean;
+    claimId?: string;
+    kind?: "winner" | "pool";
+    participantId?: string;
+  } = {};
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -26,16 +32,28 @@ export async function POST(
   }
 
   try {
-    const result = await claimPayout(
-      id,
-      user.id,
-      {
-        payoutAddress: body.payoutAddress ?? "",
-        persistWallet: body.persistWallet,
-        claimId: body.claimId,
-      },
-      { db: getRuntimeDb() },
-    );
+    const result =
+      body.kind === "pool" || body.participantId
+        ? await claimPoolPayout(
+            id,
+            user.id,
+            {
+              payoutAddress: body.payoutAddress ?? "",
+              persistWallet: body.persistWallet,
+              participantId: body.participantId,
+            },
+            { db: getRuntimeDb() },
+          )
+        : await claimPayout(
+            id,
+            user.id,
+            {
+              payoutAddress: body.payoutAddress ?? "",
+              persistWallet: body.persistWallet,
+              claimId: body.claimId,
+            },
+            { db: getRuntimeDb() },
+          );
     return Response.json(
       { ok: true, ...result },
       { headers: { "cache-control": "no-store" } },
@@ -46,8 +64,10 @@ export async function POST(
         err.code === "unauthorized"
           ? 401
           : err.code === "not_hunter" ||
+              err.code === "not_pool_member" ||
               err.code === "not_eligible" ||
-              err.code === "hunter_not_linked"
+              err.code === "hunter_not_linked" ||
+              err.code === "pool_not_ready"
             ? 403
             : err.code === "bounty_not_found" || err.code === "claim_not_found"
               ? 404

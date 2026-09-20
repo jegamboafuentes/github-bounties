@@ -33,9 +33,9 @@ export default async function BoardPage({
           <p className="text-zinc-600 dark:text-zinc-400">{LOCK_NOT_MONEY_COPY}</p>
           <p className="text-sm text-zinc-500">
             Parallel hunt: optional Working on this is not exclusive. After merge, the
-            winner claims their share to a BYO Base address. Face locks in gb-escrow; 2%
-            is taken at settlement; pool members are paid to Settings wallets that exist.
-            Completed (paid) shows on the card.
+            winner claims winner share + fee. Face locks in gb-escrow; 2% is taken at
+            settlement; each pool member claims their own frozen share. Completed (paid)
+            or Winner paid — pool pending shows on the card.
           </p>
         </div>
 

@@ -32,7 +32,8 @@ describe("public roadmap", () => {
     assert.equal(byId["fe-2"]?.status, "planned");
     assert.equal(byId["fe-2"]?.version, "V3+");
     assert.equal(byId["hosted-checkout"]?.status, "planned");
-    assert.equal(byId["pool-claim"]?.status, "planned");
+    assert.equal(byId["pool-claim"]?.status, "shipped");
+    assert.match(byId["pool-claim"]?.summary ?? "", /winner \+ fee only/i);
   });
 
   it("keeps docs/roadmap.md in sync with the homepage constant", () => {

@@ -5,7 +5,9 @@ import {
   allocationIdempotencyKey,
   attributedFromOutflows,
   confirmedOutflowsFromLegs,
+  isExpectedPoolDefer,
   planSettleLegs,
+  shouldTransferLeg,
 } from "./allocation";
 import { moneyIdempotencyKey } from "./idempotency";
 import { attributedAtomic } from "./reconcile";
@@ -108,6 +110,17 @@ describe("V2-3 allocation legs (ADR 0003)", () => {
     assert.equal(alice?.amountUsdc, "7.350000");
     assert.equal(bob?.deferReason, null);
     assert.equal(legs.filter((leg) => leg.kind === "POOL_PAYOUT").length, 2);
+    const winner = legs.find((leg) => leg.kind === "WINNER_PAYOUT");
+    const fee = legs.find((leg) => leg.kind === "FEE_OUT");
+    assert.equal(shouldTransferLeg(winner!, "winner_and_fee"), true);
+    assert.equal(shouldTransferLeg(fee!, "winner_and_fee"), true);
+    assert.equal(shouldTransferLeg(alice!, "winner_and_fee"), false);
+    assert.equal(shouldTransferLeg(alice!, "pool_member", ALICE), true);
+    assert.equal(shouldTransferLeg(bob!, "pool_member", ALICE), false);
+    assert.equal(shouldTransferLeg(alice!, "all"), true);
+    assert.equal(isExpectedPoolDefer("missing_payout_address"), true);
+    assert.equal(isExpectedPoolDefer("hunter_not_linked"), true);
+    assert.equal(isExpectedPoolDefer("rail_failed"), false);
   });
 
   it("recon: attributed = F − confirmed winner − pool − fee; Settled/Refunded = 0", () => {

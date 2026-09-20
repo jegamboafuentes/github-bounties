@@ -7,7 +7,7 @@ export const claimsModule = {
   wired: true,
   nextTicket: "V2",
   notes:
-    "Merge marks Claim eligible. Hunter claims payout to a BYO Base address via V1-5 escrow release. Poster/board see completed (paid).",
+    "Merge marks Claim eligible. Winner claims winner share + fee only. Frozen pool members claim their own POOL_PAYOUT later.",
 };
 
 export type ClaimsModule = typeof claimsModule;

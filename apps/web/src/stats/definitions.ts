@@ -19,7 +19,7 @@ export const PRODUCT_OPEN_BOUNTY_STATUSES = [
   "claim_locked",
 ] as const satisfies readonly BountyStatus[];
 
-/** Board “Completed (paid)” / “Paid (partial)”. */
+/** Board “Completed (paid)” / “Winner paid — pool pending”. */
 export const COMPLETED_BOUNTY_STATUSES = [
   "settled",
   "settled_partial",

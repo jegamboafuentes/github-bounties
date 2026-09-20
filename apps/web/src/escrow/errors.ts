@@ -3,6 +3,7 @@ export type EscrowErrorCode =
   | "bounty_not_found"
   | "not_poster"
   | "not_settler"
+  | "not_pool_member"
   | "not_fundable"
   | "not_settleable"
   | "not_refundable"

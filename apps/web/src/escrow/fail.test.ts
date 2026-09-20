@@ -33,6 +33,7 @@ describe("Lock fail code + reason", () => {
     assert.equal(httpStatusForEscrowCode("rail_failed"), 400);
     assert.equal(httpStatusForEscrowCode("cdp_sdk_missing"), 400);
     assert.equal(httpStatusForEscrowCode("unauthorized"), 401);
+    assert.equal(httpStatusForEscrowCode("not_pool_member"), 403);
     assert.equal(httpStatusForEscrowCode("bounty_not_found"), 404);
   });
 

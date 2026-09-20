@@ -39,7 +39,10 @@ export { isMockTxHash, moneyIdempotencyKey } from "./idempotency";
 export {
   allocationIdempotencyKey,
   confirmedOutflowsFromLegs,
+  isExpectedPoolDefer,
   planSettleLegs,
+  shouldTransferLeg,
+  type SettleScope,
 } from "./allocation";
 export {
   createCdpRail,

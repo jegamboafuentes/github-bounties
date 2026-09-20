@@ -6,11 +6,11 @@ import { createBountyFromIssueUrl } from "../bounties/create";
 import { fundBounty } from "../bounties/fund";
 import { createDb } from "../db/client";
 import { loadDotenvFiles } from "../db/load-dotenv";
-import { bounties, claims, feeLedger, repos, users } from "../db/schema";
+import { allocationLedger, bounties, claims, feeLedger, poolParticipants, repos, users } from "../db/schema";
 import { createMockRail } from "../escrow/rail";
 import { probeCdpEnv } from "../escrow/env";
 import { ClaimError } from "./errors";
-import { claimPayout } from "./payout";
+import { claimPoolPayout, claimPayout } from "./payout";
 
 loadDotenvFiles();
 
@@ -56,7 +56,7 @@ async function fixture() {
   });
 
   const rail = createMockRail(probeCdpEnv({}));
-  return { db, sql, posterId, hunterId, otherId, fullName, rail };
+  return { db, sql, posterId, hunterId, otherId, suffix, fullName, rail };
 }
 
 async function eligibleBounty(
@@ -196,6 +196,114 @@ describe("V1-6 hunter claim payout (mock rail)", () => {
       );
       assert.equal(second.payoutTxHash, first.payoutTxHash);
       assert.equal(second.bountyStatus, "settled");
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("winner Claim with unwalletted pool hunters succeeds; pool Claim later; double-Claim is safe", async () => {
+    const { db, sql, posterId, hunterId, otherId, suffix, fullName, rail } = await fixture();
+    const aliceId = otherId;
+    const bobId = randomUUID();
+    await db.insert(users).values({
+      id: bobId,
+      googleSub: `bob-${suffix}`,
+      email: `bob-${suffix}@example.com`,
+      displayName: "Bob",
+    });
+    try {
+      const { created, claim } = await eligibleBounty(db, posterId, hunterId, fullName, 36);
+      const frozenAt = new Date("2026-09-17T12:00:00.000Z");
+      await db.insert(poolParticipants).values([
+        {
+          bountyId: created.id,
+          githubId: 2_000_001n,
+          githubLogin: "winner",
+          userId: hunterId,
+          role: "winner",
+          frozenAt,
+          shareUsdc: "83.300000",
+        },
+        {
+          bountyId: created.id,
+          githubId: 2_000_002n,
+          githubLogin: "alice",
+          userId: aliceId,
+          role: "pool",
+          frozenAt,
+          shareUsdc: "7.350000",
+        },
+        {
+          bountyId: created.id,
+          githubId: 2_000_003n,
+          githubLogin: "bob",
+          userId: bobId,
+          role: "pool",
+          frozenAt,
+          shareUsdc: "7.350000",
+        },
+      ]);
+
+      const winner = await claimPayout(
+        created.id,
+        hunterId,
+        { payoutAddress: HUNTER_ADDRESS, claimId: claim?.id },
+        { db, rail },
+      );
+      assert.equal(winner.bountyStatus, "settled_partial");
+      assert.equal(winner.claimStatus, "paid");
+      assert.equal(winner.winnerUsdc, "83.300000");
+      assert.ok(winner.payoutTxHash?.startsWith("mock:"));
+      assert.ok(winner.feeTxHash?.startsWith("mock:"));
+
+      const [bounty] = await db.select().from(bounties).where(eq(bounties.id, created.id));
+      assert.equal(bounty?.status, "settled_partial");
+      const [paid] = await db.select().from(claims).where(eq(claims.id, claim!.id));
+      assert.equal(paid?.status, "paid");
+      const poolLegs = (await db.select().from(allocationLedger).where(eq(allocationLedger.bountyId, created.id)))
+        .filter((row) => row.kind === "POOL_PAYOUT");
+      assert.equal(poolLegs.length, 2);
+      assert.equal(poolLegs.filter((row) => row.txHash).length, 0);
+
+      await assert.rejects(
+        () => claimPoolPayout(created.id, hunterId, { payoutAddress: HUNTER_ADDRESS }, { db, rail }),
+        (err: unknown) => err instanceof ClaimError && err.code === "not_pool_member",
+      );
+
+      const firstPool = await claimPoolPayout(
+        created.id,
+        aliceId,
+        { payoutAddress: OTHER_ADDRESS },
+        { db, rail },
+      );
+      assert.equal(firstPool.bountyStatus, "settled_partial");
+      assert.equal(firstPool.poolShareUsdc, "7.350000");
+      const afterAlice = (await db.select().from(allocationLedger).where(eq(allocationLedger.bountyId, created.id)))
+        .filter((row) => row.kind === "POOL_PAYOUT" && row.txHash);
+      assert.equal(afterAlice.length, 1);
+
+      const replay = await claimPoolPayout(
+        created.id,
+        aliceId,
+        { payoutAddress: OTHER_ADDRESS },
+        { db, rail },
+      );
+      assert.equal(replay.payoutTxHash, firstPool.payoutTxHash);
+      const aliceHash = afterAlice[0]?.txHash;
+      const afterReplay = (await db.select().from(allocationLedger).where(eq(allocationLedger.bountyId, created.id)))
+        .filter((row) => row.kind === "POOL_PAYOUT" && row.participantId === afterAlice[0]?.participantId);
+      assert.equal(afterReplay[0]?.txHash, aliceHash);
+
+      const rest = await claimPoolPayout(
+        created.id,
+        bobId,
+        { payoutAddress: "0x3333333333333333333333333333333333333333" },
+        { db, rail },
+      );
+      assert.equal(rest.bountyStatus, "settled");
+      const paidPool = (await db.select().from(allocationLedger).where(eq(allocationLedger.bountyId, created.id)))
+        .filter((row) => row.kind === "POOL_PAYOUT" && row.txHash);
+      assert.equal(paidPool.length, 2);
     } finally {
       await sql.end({ timeout: 5 });
     }

@@ -13,7 +13,9 @@ import {
   overflowNotPaidLabel,
   PARALLEL_HUNT_COPY,
   poolPayoutBreakdown,
+  POOL_CLAIM_COPY,
   POOL_PAYOUT_COPY,
+  sharePaidLabel,
   unlinkedPoolMemberCaption,
   workingOnThisCaption,
   X402_EXACT_FUND_COPY,
@@ -72,11 +74,13 @@ describe("board display helpers", () => {
     assert.match(LOCK_NOT_MONEY_COPY, /merge is still truth/i);
     assert.match(LOCK_NOT_MONEY_COPY, /not exclusive/i);
     assert.match(ELIGIBILITY_FREEZE_COPY, /freezes at the winning merge/i);
-    assert.match(POOL_PAYOUT_COPY, /Settings/i);
+    assert.match(POOL_PAYOUT_COPY, /Winner Claim pays winner \+ fee only/i);
     assert.equal(bountyStatusLabel("claim_locked"), "Funded (open)");
     assert.equal(bountyStatusLabel("funded"), "Funded (open)");
     assert.equal(bountyStatusLabel("settled"), "Completed (paid)");
+    assert.equal(bountyStatusLabel("settled_partial"), "Winner paid — pool pending");
     assert.match(CLAIM_PAYOUT_COPY, /eligible winner/i);
+    assert.match(CLAIM_PAYOUT_COPY, /do not block the winner/i);
     assert.match(X402_EXACT_FUND_COPY, /x402 exact/i);
     assert.match(X402_EXACT_FUND_COPY, /wallet|WalletConnect/i);
     assert.match(X402_EXACT_FUND_COPY, /no explorer hash|no hash paste|Lock does not need a paste/i);
@@ -112,6 +116,9 @@ describe("board display helpers", () => {
       payoutCaption({ status: "eligible", hunterLabel: "octocat" }),
       "Payout eligible — octocat can claim",
     );
+    assert.equal(sharePaidLabel(true), "Paid");
+    assert.equal(sharePaidLabel(false), "Claim pending");
+    assert.match(POOL_CLAIM_COPY, /frozen pool share/i);
   });
 
   it("splits V2 pool face 100 into winner ≈83.3 and pool ≈14.7", () => {

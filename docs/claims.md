@@ -1,6 +1,6 @@
 # Claim payout (V1-6 / V2-4)
 
-Official name: **GitHub Bounties**. After a merged PR closes funded issue `#N`, V1-3 writes `claims.status=eligible`. The **eligible winner** (merged PR author tied to that claim) claims their share to a bring-your-own Base address. V2 settle also pays frozen pool members whose Settings wallets already exist.
+Official name: **GitHub Bounties**. After a merged PR closes funded issue `#N`, V1-3 writes `claims.status=eligible`. The **eligible winner** (merged PR author tied to that claim) claims **winner share + 2% fee** to a bring-your-own Base address. Frozen pool members each Claim their own equal share later. Winner Claim must succeed even if pool hunters have no Settings wallet.
 
 This ticket does **not** reimplement money rails. It calls V2-3 [`settleEscrow`](../apps/web/src/escrow/service.ts). Mock rail is OK until CDP Secret Manager is filled. Hosted checkout stays **disabled**.
 
@@ -10,16 +10,17 @@ This is not Lightning Bounties / LB1. No custodial wallets. No dispute window. N
 
 | Actor | Result |
 | --- | --- |
-| Eligible hunter (`claims.hunter_user_id` = session user, status `eligible` or already `paid`) | Winner payout (idempotent if already paid). Settle also pays pool wallets that exist. |
-| Poster | **403** `not_hunter` (can still see roster + breakdown; poster settle API remains) |
-| Any other signed-in user | **403** `not_hunter` — cannot claim winner or pool payout they do not own |
+| Eligible hunter (`claims.hunter_user_id` = session user, status `eligible` or already `paid`) | Winner share + fee only (idempotent if already paid). Does **not** pay pool legs. |
+| Frozen pool participant (`pool_participants.role=pool`) | Their frozen `POOL_PAYOUT` only. Wallet required at *their* Claim. **403** `pool_not_ready` until winner payout confirms. |
+| Poster | **403** `not_hunter` / `not_pool_member` (can still see roster + breakdown; poster settle API remains winner+fee) |
+| Any other signed-in user | **403** `not_hunter` / `not_pool_member` — cannot claim winner or pool payout they do not own |
 | Anonymous | **401** — can still see roster + breakdown |
 | No eligible/paid claim | **403** `not_eligible` |
 | Merge recorded but PR author has no `github_links` row | **403** `hunter_not_linked` — Connect GitHub as that login. Working on this is not paid. |
 
 The hunter is the GitHub account that authored the merged PR. V1-3 linked that login to `users` via `github_links`. Exclusive claim-lock is retired; a **Working on this** signal is **not** the winner.
 
-Pool members are not `claims` rows. They are paid from `allocation_ledger` `POOL_PAYOUT` legs to `users.wallet_address` / `pool_participants.payout_address` when the winner (or poster) settles. Missing wallet stays retryable; the share is not redistributed.
+Pool members are not `claims` rows. They Claim `allocation_ledger` `POOL_PAYOUT` legs to `users.wallet_address` / `pool_participants.payout_address`. Missing wallet at winner Claim is expected (`settled_partial` / **Winner paid — pool pending**). The share is not redistributed. Double-Claim reuses the V1-5 / V2-3 idempotency key per leg.
 
 ## Amounts
 
@@ -32,7 +33,7 @@ pool_atomic   = |E| = 0 ? 0 : floor(post_fee × 1500 / 10_000)  // 15% of 98%
 winner        = post_fee − paid pool (includes dust)
 ```
 
-UI shows **face / 2% fee / winner ≈83.3% / pool ≈14.7%** (or **100% of post-fee** when `E` is empty — V1 98%). After success: `claims.status=paid`, `bounties.status=settled` (board label **Completed (paid)**). Each confirmed tx hash is listed on the bounty page.
+UI shows **face / 2% fee / winner ≈83.3% / pool ≈14.7%** (or **100% of post-fee** when `E` is empty — V1 98%). Winner Claim success: `claims.status=paid`. Empty pool → `bounties.status=settled` (**Completed (paid)**). Pool pending → `settled_partial` (**Winner paid — pool pending**). Already-claimed shares show **Paid**. Each confirmed tx hash is listed on the bounty page.
 
 ## BYO Base address
 
@@ -47,10 +48,10 @@ Pool members set the same address on Settings. No custodial wallet is created.
 
 | URL | Auth | Role |
 | --- | --- | --- |
-| `/bounties/[id]` | public read; Google for claim | Roster + breakdown for everyone. Eligible winner enters a Base address and claims |
+| `/bounties/[id]` | public read; Google for claim | Roster + breakdown for everyone. Winner Claim CTA vs per-member pool Claim CTA |
 | `/settings` | Google | Save default BYO Base address. Shows connected GitHub login; **Disconnect** unlinks `github_links` (confirm) so a different login can Connect. |
-| `/board` | public | Eligible / completed (paid) captions + Working on this (not exclusive lock) |
-| `POST /api/bounties/:id/claim` | Google | Same hunter-only path as the form |
+| `/board` | public | Eligible / completed (paid) / winner paid — pool pending + Working on this (not exclusive lock) |
+| `POST /api/bounties/:id/claim` | Google | Winner path, or `{ kind: "pool", participantId? }` for a pool share |
 
 `POST /api/bounties/:id/settle` remains the settle API (poster or hunter). Product claim UX goes through `/claim`.
 
@@ -72,9 +73,10 @@ Mainnet is refused by default. Secrets never belong in git.
 3. Open `/bounties/<id>` for `#42` — empty-pool style winner share 98 (100% of post-fee). Sign-in CTA unless you are the hunter. Open `#50` — face 100 / fee 2 / winner 83.30 / pool 14.70 / each 7.35.
 4. As the **linked hunter** (Google session whose `github_links` matches the merged PR author):
    - Settings → save a Base address, **or** enter one on the bounty form.
-   - Submit **Claim … USDC**. Bounty becomes completed (paid); claim row stores winner share + tx. Pool members with wallets are paid on the same settle.
-5. As poster or any other user: submit (or `POST /api/bounties/:id/claim`) → clear `not_hunter` error. Roster + breakdown stay visible. Bounty stays unpaid unless the winner already claimed.
-6. Without CDP secrets, expect the mock-rail notice. With secrets, hashes are live Sepolia txs (see [escrow.md](escrow.md)).
+   - Submit **Claim winner share … USDC**. Winner + fee pay; pool wallets are not required. Empty pool → completed (paid). Otherwise **Winner paid — pool pending**.
+5. As a frozen pool hunter: **Claim pool share … USDC** after the winner has claimed. Wallet required now. Double-submit does not double-pay.
+6. As poster or any other user: submit (or `POST /api/bounties/:id/claim`) → clear `not_hunter` / `not_pool_member`. Roster + breakdown stay visible.
+7. Without CDP secrets, expect the mock-rail notice. With secrets, hashes are live Sepolia txs (see [escrow.md](escrow.md)).
 
 ## Out of scope
 

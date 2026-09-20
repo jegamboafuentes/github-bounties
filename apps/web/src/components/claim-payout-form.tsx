@@ -44,7 +44,7 @@ export function ClaimPayoutPanel({
     <section className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-          Claim payout
+          Winner claim
         </h2>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{CLAIM_PAYOUT_COPY}</p>
       </div>
@@ -148,11 +148,11 @@ export function ClaimPayoutPanel({
             type="submit"
             className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
           >
-            Claim {formatUsdc(claimAmount)} {currency}
+            Claim winner share {formatUsdc(claimAmount)} {currency}
           </button>
           <p className="text-xs text-zinc-500">
-            Saves this address on your account. Triggers settle (fee + winner + pool wallets that
-            exist). Mock rail until CDP_* is set. {HOSTED_CHECKOUT_DISABLED_COPY}
+            Saves this address on your account. Settles winner share + 2% fee only — pool members
+            claim their own shares. Mock rail until CDP_* is set. {HOSTED_CHECKOUT_DISABLED_COPY}
           </p>
         </form>
       ) : paid ? (

@@ -38,6 +38,12 @@ export type PlannedLeg = {
 };
 
 /**
+ * Winner Claim pays FEE_OUT + WINNER_PAYOUT only. Each pool member later
+ * claims their own POOL_PAYOUT. `all` is the V2-3 ops/poster retry path.
+ */
+export type SettleScope = "winner_and_fee" | "pool_member" | "all";
+
+/**
  * Long-lived per-leg keys (ADR 0003). FEE_OUT and the winner leg reuse the
  * V1-5 `gb-v1-5:` UUIDs so an in-flight hunter/fee retry cannot double-pay.
  * Each pool member gets its own key.
@@ -189,6 +195,23 @@ export function sameParticipant(
   b: string | null | undefined,
 ): boolean {
   return (a ?? null) === (b ?? null);
+}
+
+export function shouldTransferLeg(
+  leg: PlannedLeg,
+  scope: SettleScope,
+  participantId?: string | null,
+): boolean {
+  if (scope === "all") return true;
+  if (scope === "winner_and_fee") {
+    return leg.kind === "WINNER_PAYOUT" || leg.kind === "FEE_OUT";
+  }
+  return leg.kind === "POOL_PAYOUT" && sameParticipant(leg.participantId, participantId ?? null);
+}
+
+/** Missing wallet / unlinked is expected until that hunter Claims — not a rail fail. */
+export function isExpectedPoolDefer(reason: string | null | undefined): boolean {
+  return reason === "missing_payout_address" || reason === CLAIM_SKIP.hunterNotLinked;
 }
 
 export function findLedgerRow(

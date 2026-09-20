@@ -22,6 +22,10 @@ Google sign-in, GitHub App, public board, 2% fee at settlement, winner = author 
 
 V2-0…V2-4: 15% of **post-fee** to at most 10 eligible hunters, optional Working on this, roster + payout breakdown, exclusive 72h claim-lock sunset. ADR 0003.
 
+### Pool member self-claim
+
+Winner Claim pays winner share + platform fee only and succeeds even if pool hunters have no Settings wallet. Each frozen pool participant Claims their own share later. Hosted checkout stays disabled. DEV remount after merge; no PROD remount required.
+
 ## In progress
 
 ### V2-5 — DEV dogfood
@@ -39,10 +43,6 @@ Pie / split visuals on bounty pages. Out of scope for the homepage slice.
 ### Hosted Coinbase checkout
 
 Still **disabled** until settlement fee / net proceeds equal face (ADR 0001). DEV fund remains x402 `exact` to `gb-escrow`.
-
-### Pool member self-claim
-
-Today, settle pays pool members to wallets already saved in Settings. A later per-member claim path is planned, not scheduled.
 
 ## Explicit non-goals for this doc
 

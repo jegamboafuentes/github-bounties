@@ -2,21 +2,31 @@ import Link from "next/link";
 import {
   ELIGIBILITY_FREEZE_COPY,
   formatUsdc,
+  sharePaidLabel,
   unlinkedPoolMemberCaption,
 } from "@/bounties";
 import type { PoolRosterView, RosterMemberView } from "@/bounties/roster";
 import { GitHubAvatar } from "@/components/github-avatar";
+import { PoolClaimForm } from "@/components/pool-claim-form";
 
 function MemberRow({
   member,
   roleLabel,
   currency,
   showShare,
+  canClaimPool,
+  bountyId,
+  defaultAddress,
+  claimAction,
 }: {
   member: RosterMemberView;
   roleLabel: string;
   currency: string;
   showShare: boolean;
+  canClaimPool?: boolean;
+  bountyId?: string;
+  defaultAddress?: string;
+  claimAction?: (formData: FormData) => void | Promise<void>;
 }) {
   return (
     <li className="flex flex-col gap-1 px-3 py-2 text-sm">
@@ -24,6 +34,17 @@ function MemberRow({
         <GitHubAvatar login={member.githubLogin} size={20} />
         <span className="font-medium">{member.githubLogin}</span>
         <span className="text-xs uppercase tracking-wide text-zinc-500">{roleLabel}</span>
+        {showShare ? (
+          <span
+            className={
+              member.paid
+                ? "rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                : "rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+            }
+          >
+            {sharePaidLabel(member.paid)}
+          </span>
+        ) : null}
       </div>
       <div className="text-zinc-600 dark:text-zinc-400">
         {member.qualifyingPrUrl && member.qualifyingPrNumber != null ? (
@@ -59,6 +80,16 @@ function MemberRow({
           as <code>{member.githubLogin}</code>.
         </p>
       ) : null}
+      {canClaimPool && bountyId && claimAction ? (
+        <PoolClaimForm
+          bountyId={bountyId}
+          participantId={member.id}
+          shareUsdc={member.shareUsdc}
+          currency={currency}
+          defaultAddress={defaultAddress ?? ""}
+          action={claimAction}
+        />
+      ) : null}
     </li>
   );
 }
@@ -66,9 +97,25 @@ function MemberRow({
 export function PoolRoster({
   roster,
   currency,
+  bountyId,
+  viewerUserId,
+  viewerGithubId,
+  winnerPaid,
+  signedIn,
+  signInHref,
+  defaultAddress,
+  claimAction,
 }: {
   roster: PoolRosterView;
   currency: string;
+  bountyId?: string;
+  viewerUserId?: string | null;
+  viewerGithubId?: string | null;
+  winnerPaid?: boolean;
+  signedIn?: boolean;
+  signInHref?: string;
+  defaultAddress?: string;
+  claimAction?: (formData: FormData) => void | Promise<void>;
 }) {
   const hasRows =
     Boolean(roster.winner) ||
@@ -76,6 +123,12 @@ export function PoolRoster({
     roster.overflowCount > 0 ||
     Boolean(roster.excludedPoster) ||
     roster.candidates.length > 0;
+  const isViewerMember = (row: RosterMemberView) =>
+    Boolean(
+      (viewerUserId && row.userId === viewerUserId) ||
+        (viewerGithubId && row.githubId === viewerGithubId),
+    );
+  const viewerPool = roster.pool.find(isViewerMember);
 
   return (
     <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -104,15 +157,30 @@ export function PoolRoster({
               showShare
             />
           ) : null}
-          {roster.pool.map((member) => (
-            <MemberRow
-              key={member.id}
-              member={member}
-              roleLabel="Pool"
-              currency={currency}
-              showShare
-            />
-          ))}
+          {roster.pool.map((member) => {
+            const isViewer = isViewerMember(member);
+            const canClaimPool = Boolean(
+              isViewer &&
+                roster.frozen &&
+                !member.paid &&
+                winnerPaid &&
+                claimAction &&
+                bountyId,
+            );
+            return (
+              <MemberRow
+                key={member.id}
+                member={member}
+                roleLabel="Pool"
+                currency={currency}
+                showShare
+                canClaimPool={canClaimPool}
+                bountyId={bountyId}
+                defaultAddress={defaultAddress}
+                claimAction={claimAction}
+              />
+            );
+          })}
           {roster.excludedPoster ? (
             <MemberRow
               member={roster.excludedPoster}
@@ -132,6 +200,21 @@ export function PoolRoster({
           ))}
         </ul>
       )}
+
+      {viewerPool && roster.frozen && !viewerPool.paid && !winnerPaid ? (
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Winner claims first. Your pool share stays reserved until then.
+        </p>
+      ) : null}
+
+      {viewerPool && !signedIn && signInHref ? (
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          <a href={signInHref} className="underline underline-offset-4">
+            Sign in with Google
+          </a>{" "}
+          to claim your pool share.
+        </p>
+      ) : null}
 
       {roster.overflowCaption ? (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">{roster.overflowCaption}</p>

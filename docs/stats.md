@@ -73,7 +73,7 @@ USDC fields are **strings** with 6 decimal places (schema `numeric(20, 6)`). Do 
 | Product bucket | Schema statuses | Notes |
 | --- | --- | --- |
 | `open` | `pending_fund`, `funded`, `claim_locked` | Product open / fundable. Schema has no `draft`; create writes `pending_fund`. Residual `claim_locked` is still an open hunt (V2-4 sunset). |
-| `completed` | `settled`, `settled_partial` | Board: Completed (paid) / Paid (partial). |
+| `completed` | `settled`, `settled_partial` | Board: Completed (paid) / Winner paid — pool pending. |
 | `closed` | `refunded`, `cancelled`, `expired`, `void` | Terminal unpaid / cancelled. |
 | `inFlight` | `settling`, `refunding` | Money in motion; not product-open. |
 

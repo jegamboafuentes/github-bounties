@@ -12,7 +12,7 @@ import {
   fundBounty,
   signalWorkingOnThis,
 } from "@/bounties";
-import { claimPayout, isClaimError } from "@/claims";
+import { claimPoolPayout, claimPayout, isClaimError } from "@/claims";
 import { getRuntimeDb } from "@/db/runtime";
 import { isEscrowError, refundEscrow } from "@/escrow";
 import { INVALID_BASE_ADDRESS_MESSAGE, normalizeBaseAddress } from "@/lib/address";
@@ -124,16 +124,29 @@ export async function claimPayoutAction(formData: FormData): Promise<void> {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
   }
   try {
-    const result = await claimPayout(
-      bountyId,
-      user.id,
-      {
-        payoutAddress: String(formData.get("payoutAddress") ?? ""),
-        claimId: String(formData.get("claimId") ?? "") || undefined,
-        persistWallet: true,
-      },
-      { db: getRuntimeDb() },
-    );
+    const kind = String(formData.get("kind") ?? "winner");
+    const result =
+      kind === "pool"
+        ? await claimPoolPayout(
+            bountyId,
+            user.id,
+            {
+              payoutAddress: String(formData.get("payoutAddress") ?? ""),
+              participantId: String(formData.get("participantId") ?? "") || undefined,
+              persistWallet: true,
+            },
+            { db: getRuntimeDb() },
+          )
+        : await claimPayout(
+            bountyId,
+            user.id,
+            {
+              payoutAddress: String(formData.get("payoutAddress") ?? ""),
+              claimId: String(formData.get("claimId") ?? "") || undefined,
+              persistWallet: true,
+            },
+            { db: getRuntimeDb() },
+          );
     refreshBounty(bountyId);
     if (result.rail === "mock" && result.missingEnv.length) {
       redirect(

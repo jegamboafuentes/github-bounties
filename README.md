@@ -189,7 +189,7 @@ Optional live faucet+release still: `CDP_DRY_RUN_LIVE=1 node scripts/money-path-
 
 ## V1-6 — Claim payout UI
 
-Eligible hunter (merged PR author, `claims.status=eligible`) enters a BYO Base address and claims net-of-fee USDC. This calls V1-5 `settleEscrow` — it does not add a second money rail. Poster and the board show **Completed (paid)** plus face / 2% fee / net / tx. Non-hunters get a clear `not_hunter` error.
+Eligible hunter (merged PR author, `claims.status=eligible`) enters a BYO Base address and claims winner share + 2% fee. This calls `settleEscrow` (`scope=winner_and_fee`) — it does not add a second money rail and does not require pool wallets. Frozen pool members each Claim their own share later. Poster and the board show **Completed (paid)** or **Winner paid — pool pending**. Non-owners get a clear `not_hunter` / `not_pool_member` error.
 
 | Item | Where |
 | --- | --- |
