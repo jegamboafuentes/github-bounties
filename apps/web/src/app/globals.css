@@ -99,8 +99,32 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .home-reveal-item,
   .home-wordmark,
-  .home-aurora {
+  .home-aurora,
+  .home-hero-kicker,
+  .home-hero-copy,
+  .home-hero-ctas,
+  .home-hero-metric,
+  .home-stat-card,
+  .home-diff-card,
+  .home-roadmap-item,
+  .home-module-row,
+  .home-section-heading,
+  .home-footer-note {
     opacity: 1 !important;
     transform: none !important;
   }
+}
+
+[data-home-motion="reduced"] .home-reveal-item,
+[data-home-motion="reduced"] .home-wordmark,
+[data-home-motion="reduced"] .home-aurora,
+[data-home-motion="reduced"] .home-hero-metric,
+[data-home-motion="reduced"] .home-stat-card,
+[data-home-motion="reduced"] .home-diff-card,
+[data-home-motion="reduced"] .home-roadmap-item,
+[data-home-motion="reduced"] .home-module-row,
+[data-home-motion="reduced"] .home-section-heading,
+[data-home-motion="reduced"] .home-footer-note {
+  opacity: 1;
+  transform: none;
 }

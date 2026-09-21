@@ -6,8 +6,8 @@ export function HomeStats({ source }: { source: HomepageStatsSource }) {
   const cards = homepageStatCards(source.stats);
 
   return (
-    <section id="stats" className="home-reveal-item flex flex-col gap-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+    <section id="stats" className="home-section-stats flex flex-col gap-4">
+        <div className="home-section-heading home-reveal-item flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
               Live platform stats
@@ -32,8 +32,8 @@ export function HomeStats({ source }: { source: HomepageStatsSource }) {
               key={card.key}
               className={
                 card.key === "volumeUsdc.transacted"
-                  ? "rounded-xl border border-emerald-200/80 bg-white p-4 dark:border-emerald-900/80 dark:bg-zinc-900 sm:col-span-2"
-                  : "rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+                  ? "home-stat-card home-reveal-item rounded-xl border border-emerald-200/80 bg-white p-4 dark:border-emerald-900/80 dark:bg-zinc-900 sm:col-span-2"
+                  : "home-stat-card home-reveal-item rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
               }
             >
               <dt className="text-xs uppercase tracking-wide text-zinc-500">{card.label}</dt>

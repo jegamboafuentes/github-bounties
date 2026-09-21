@@ -38,36 +38,36 @@ export function HomeHero({
         className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(to_bottom,transparent,transparent_3px,rgb(0_0_0/0.035)_3px,rgb(0_0_0/0.035)_4px)] dark:bg-[repeating-linear-gradient(to_bottom,transparent,transparent_3px,rgb(255_255_255/0.035)_3px,rgb(255_255_255/0.035)_4px)]"
       />
       <div className="relative flex flex-col gap-5">
-        <p className="home-reveal-item text-sm font-medium text-emerald-700 dark:text-emerald-400">
+        <p className="home-hero-kicker home-reveal-item text-sm font-medium text-emerald-700 dark:text-emerald-400">
           V2-4 parallel hunt
         </p>
         <h1 className="home-reveal-item home-wordmark">
           <BrandWordmark size="hero" priority />
           <span className="sr-only">{PRODUCT_NAME}</span>
         </h1>
-        <p className="home-reveal-item max-w-xl text-lg leading-8 text-zinc-600 dark:text-zinc-400">
+        <p className="home-hero-copy home-reveal-item max-w-xl text-lg leading-8 text-zinc-600 dark:text-zinc-400">
           USDC bounties on GitHub issues. Winner is the author of the merged pull
           request that closes funded issue #N. Parallel hunt; merge is truth.
         </p>
-        <div className="home-reveal-item flex flex-wrap items-center gap-3">
+        <div className="home-hero-ctas home-reveal-item flex flex-wrap items-center gap-3">
           {ctas.map((cta) => (
             <Link key={cta.href} href={cta.href} className={ctaClass(cta.kind)}>
               {cta.label}
             </Link>
           ))}
         </div>
-        <dl className="home-reveal-item grid gap-4 sm:grid-cols-3">
-          <div className="rounded-xl border border-zinc-200 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/80">
+        <dl className="grid gap-4 sm:grid-cols-3">
+          <div className="home-hero-metric home-reveal-item rounded-xl border border-zinc-200 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/80">
             <dt className="text-xs uppercase tracking-wide text-zinc-500">Fee</dt>
             <dd className="mt-1 text-2xl font-semibold">{FEE_BPS / 100}%</dd>
             <dd className="text-sm text-zinc-500">fee_bps = {FEE_BPS}</dd>
           </div>
-          <div className="rounded-xl border border-zinc-200 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/80">
+          <div className="home-hero-metric home-reveal-item rounded-xl border border-zinc-200 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/80">
             <dt className="text-xs uppercase tracking-wide text-zinc-500">Hunt</dt>
             <dd className="mt-1 text-2xl font-semibold">Parallel</dd>
             <dd className="text-sm text-zinc-500">optional Working on this, not exclusive</dd>
           </div>
-          <div className="rounded-xl border border-zinc-200 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/80">
+          <div className="home-hero-metric home-reveal-item rounded-xl border border-zinc-200 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/80">
             <dt className="text-xs uppercase tracking-wide text-zinc-500">Rail</dt>
             <dd className="mt-1 text-2xl font-semibold">{DEFAULT_CURRENCY}</dd>
             <dd className="text-sm text-zinc-500">{fundRailCaption(chainName)}</dd>

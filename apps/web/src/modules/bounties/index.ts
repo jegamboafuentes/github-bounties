@@ -5,9 +5,9 @@
 export const bountiesModule = {
   name: "bounties" as const,
   wired: true,
-  nextTicket: "V2-5",
+  nextTicket: "V3-0",
   notes:
-    "Create from GitHub issue URL, board + filters, escrow fund-lock, Working on this signals, pool roster + payout breakdown, hunter claim payout. Signals ≠ money. Detail shows the full GitHub issue + Gemini intelligence (V3-0). Live V2-5 dogfood is pending Enrique (docs/staging-e2e.md).",
+    "Create from GitHub issue URL, board + filters, escrow fund-lock, Working on this signals, pool roster + payout breakdown, hunter claim payout. Signals ≠ money. Detail shows the full GitHub issue + Gemini intelligence (V3-0, DEV). Live V2 dogfood is done.",
 };
 
 export type BountiesModule = typeof bountiesModule;
