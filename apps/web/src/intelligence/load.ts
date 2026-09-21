@@ -163,9 +163,6 @@ export async function loadBountyIntelligence(args: {
     );
   }
 
-  if (generated.ok) {
-    return toReadyView(generated.output, generated.model, now, estimateLabel);
-  }
   return unavailableError(generated.error, estimateLabel);
 }
 
