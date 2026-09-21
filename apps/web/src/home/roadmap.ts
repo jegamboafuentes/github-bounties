@@ -18,7 +18,7 @@ export const PUBLIC_ROADMAP = [
     version: "V1",
     title: "USDC escrow + merge is truth",
     summary:
-      "Google sign-in, GitHub App, board, 2% fee, winner = merged PR author that closes funded #N.",
+      "Google sign-in, GitHub App, public board. 2% fee at settlement. Winner is the merged PR author that closes funded #N. Live on production.",
     status: "shipped",
   },
   {
@@ -26,47 +26,48 @@ export const PUBLIC_ROADMAP = [
     version: "V2",
     title: "Parallel hunt + participation pool",
     summary:
-      "V2-0…V2-4: 15% of post-fee to up to 10 hunters, signals, roster, claim-lock sunset.",
+      "15% of post-fee split among up to 10 hunters. Optional Working on this, roster, and payout breakdown. Exclusive claim-lock retired. Live on production.",
     status: "shipped",
   },
   {
-    id: "v2-5",
-    version: "V2-5",
-    title: "DEV dogfood",
+    id: "pool-claim",
+    version: "V2",
+    title: "Pool member self-claim",
     summary:
-      "Checklist ready. Live multi-hunter dogfood pending Enrique — no public ship date.",
-    status: "in_progress",
+      "Winner Claim pays winner + fee only. Each pool hunter Claims their own share when they have a wallet.",
+    status: "shipped",
+  },
+  {
+    id: "fe",
+    version: "UI",
+    title: "Homepage + payout charts",
+    summary:
+      "Live platform stats, public roadmap, and split pies on bounty pages.",
+    status: "shipped",
   },
   {
     id: "v3-0",
     version: "V3-0",
     title: "Issue body + bounty intelligence",
     summary:
-      "Full GitHub issue on the bounty page; Gemini estimates about/stack/complexity (AI estimates, cached).",
+      "Full GitHub issue on the bounty page. Gemini estimates about, stack, and complexity (AI estimates, cached). Board badges and filters. Live on DEV.",
+    status: "shipped",
+  },
+  {
+    id: "v3-prod",
+    version: "V3",
+    title: "Intelligence on production",
+    summary:
+      "Bring issue body, bounty intelligence, and repos-with-bounties to production. No public date.",
     status: "in_progress",
   },
   {
-    id: "fe-2",
-    version: "V3+",
-    title: "Bounty detail split charts",
-    summary: "Pie / split visuals on bounty pages (FE-2). Not on this homepage slice.",
-    status: "planned",
-  },
-  {
     id: "hosted-checkout",
-    version: "V3+",
+    version: "Next",
     title: "Hosted Coinbase checkout",
     summary:
-      "Still disabled until settlement fee / net proceeds equal face. x402 exact remains the fund rail.",
+      "Still off until settlement fee and net proceeds match face. x402 exact stays the fund rail.",
     status: "planned",
-  },
-  {
-    id: "pool-claim",
-    version: "V2.6",
-    title: "Pool member self-claim",
-    summary:
-      "Winner Claim pays winner + fee only. Each frozen pool hunter Claims their own share when they have a wallet.",
-    status: "shipped",
   },
 ] as const satisfies readonly RoadmapItem[];
 
@@ -75,3 +76,35 @@ export const ROADMAP_STATUS_LABEL: Record<RoadmapStatus, string> = {
   in_progress: "In progress",
   planned: "Planned",
 };
+
+export type RoadmapFocus = {
+  activeId: string | null;
+  activeIndex: number;
+  /** 0–1 rail fill, aligned to the active (or last shipped) node. */
+  railProgress: number;
+};
+
+/** First in-progress item, else the latest shipped item. Drives the rail + highlight. */
+export function roadmapFocus(items: readonly RoadmapItem[] = PUBLIC_ROADMAP): RoadmapFocus {
+  if (items.length === 0) {
+    return { activeId: null, activeIndex: -1, railProgress: 0 };
+  }
+
+  let activeIndex = items.findIndex((item) => item.status === "in_progress");
+  if (activeIndex < 0) {
+    activeIndex = -1;
+    for (let i = 0; i < items.length; i += 1) {
+      if (items[i]?.status === "shipped") activeIndex = i;
+    }
+  }
+  if (activeIndex < 0) {
+    return { activeId: items[0]?.id ?? null, activeIndex: 0, railProgress: 0 };
+  }
+
+  const denom = items.length - 1;
+  return {
+    activeId: items[activeIndex]?.id ?? null,
+    activeIndex,
+    railProgress: denom === 0 ? 1 : activeIndex / denom,
+  };
+}

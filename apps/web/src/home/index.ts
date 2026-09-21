@@ -5,6 +5,8 @@ export {
   PUBLIC_ROADMAP,
   ROADMAP_STATUS_LABEL,
   ROADMAP_STATUSES,
+  roadmapFocus,
+  type RoadmapFocus,
   type RoadmapItem,
   type RoadmapStatus,
 } from "./roadmap";
