@@ -382,6 +382,9 @@ describe("getPlatformStats (empty-or-seeded Postgres)", () => {
         with_bounties: number;
         active_installs: number;
         total: number;
+        bare_has_bounty: boolean;
+        inactive_is_active: boolean;
+        inactive_has_bounty: boolean;
       }[]>`
         select
           (
@@ -397,21 +400,23 @@ describe("getPlatformStats (empty-or-seeded Postgres)", () => {
                 ${repoActiveId}::uuid, ${repoInactiveId}::uuid, ${repoBareId}::uuid
               )
           ) as active_installs,
-          count(*)::int as total
+          count(*)::int as total,
+          exists(select 1 from bounties where repo_id = ${repoBareId}::uuid) as bare_has_bounty,
+          exists(select 1 from repos where id = ${repoInactiveId}::uuid and is_active) as inactive_is_active,
+          exists(select 1 from bounties where repo_id = ${repoInactiveId}::uuid) as inactive_has_bounty
         from repos
         where id in (
           ${repoActiveId}::uuid, ${repoInactiveId}::uuid, ${repoBareId}::uuid
         )
       `;
       // Worked repos: active (4 bounties) + inactive (1 bounty). Bare App install does not count.
+      // Counts can both be 2; membership is what differs from repos.is_active.
       assert.equal(Number(fixtureRepos?.with_bounties), 2);
       assert.equal(Number(fixtureRepos?.active_installs), 2);
       assert.equal(Number(fixtureRepos?.total), 3);
-      assert.notEqual(
-        Number(fixtureRepos?.with_bounties),
-        Number(fixtureRepos?.active_installs),
-        "withBounties must not equal repos.is_active (bare installs)",
-      );
+      assert.equal(Boolean(fixtureRepos?.bare_has_bounty), false);
+      assert.equal(Boolean(fixtureRepos?.inactive_is_active), false);
+      assert.equal(Boolean(fixtureRepos?.inactive_has_bounty), true);
       assert.ok(after.repos.withBounties >= 2);
       assert.ok(usdcToAtomic(after.volumeUsdc.transacted) >= usdcToAtomic("160.000000"));
     } finally {
