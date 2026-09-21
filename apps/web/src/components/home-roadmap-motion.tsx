@@ -91,7 +91,7 @@ export function HomeRoadmapMotion({
                 duration: 620,
                 ease: "out(5)",
                 delay: stagger(105, { start: 90 }),
-                complete: () => settle("played"),
+                onComplete: () => settle("played"),
               });
             } else {
               settle("played");
