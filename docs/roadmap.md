@@ -34,13 +34,11 @@ Live platform stats (`GET /api/stats`), this public roadmap, and vs-Lightning di
 
 Pie / split visuals on bounty payout breakdown. Shipped on bounty pages.
 
-## In progress
-
 ### V3-0 — Issue body + bounty intelligence
 
-**Live on DEV, not PROD.** Full GitHub issue on the bounty detail page. Server-side Gemini card (repo about / stack / complexity S·M·L) as **AI estimates**, cached. Optional `GEMINI_API_KEY`; page degrades without it.
+**Shipped on PROD.** Full GitHub issue on the bounty detail page. Server-side Gemini card (repo about / stack / complexity S·M·L) as **AI estimates**, cached. Optional `GEMINI_API_KEY`; page degrades without it.
 
-V3 polish on DEV (same in-progress slice; no dates): board complexity/language badges + filters, Settings/Post connected-only copy, DEV header pill.
+Related polish on PROD: board complexity/language badges + filters, Settings/Post connected-only copy, homepage motion/roadmap refresh. DEV header pill stays off on PROD.
 
 ## Planned
 
