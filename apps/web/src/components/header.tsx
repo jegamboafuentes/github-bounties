@@ -1,19 +1,35 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { getOptionalSession } from "@/auth";
 import { signOutToHome } from "@/app/actions/auth";
 import { BrandWordmark } from "@/components/brand-wordmark";
 import { PRODUCT_NAME } from "@/lib/constants";
+import { isDevSite } from "@/lib/site-env";
 
 export async function AppHeader() {
   const session = await getOptionalSession();
   const signedIn = Boolean(session?.user?.id);
+  const requestHeaders = await headers();
+  const showDev = isDevSite({
+    host: requestHeaders.get("x-forwarded-host") || requestHeaders.get("host"),
+  });
 
   return (
     <header className="border-b border-zinc-200 dark:border-zinc-800">
       <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-6 py-4">
-        <Link href="/" className="inline-flex items-center" aria-label={PRODUCT_NAME}>
-          <BrandWordmark size="nav" priority />
-        </Link>
+        <div className="inline-flex items-center gap-2">
+          <Link href="/" className="inline-flex items-center" aria-label={PRODUCT_NAME}>
+            <BrandWordmark size="nav" priority />
+          </Link>
+          {showDev ? (
+            <span
+              className="rounded-full border border-amber-300/80 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-800 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-200"
+              title="DEV environment"
+            >
+              DEV
+            </span>
+          ) : null}
+        </div>
         <nav className="flex items-center gap-4 text-sm text-zinc-600 dark:text-zinc-400">
           <Link href="/board" className="underline-offset-4 hover:underline">
             Board

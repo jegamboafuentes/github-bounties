@@ -9,6 +9,26 @@ import {
 import type { BoardBounty } from "@/bounties/list";
 import { GitHubAvatar } from "@/components/github-avatar";
 
+const COMPLEXITY_BADGE: Record<"S" | "M" | "L", string> = {
+  S: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100",
+  M: "border-cyan-200 bg-cyan-50 text-cyan-800 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-100",
+  L: "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100",
+};
+
+function ComplexityDots({ value }: { value: "S" | "M" | "L" }) {
+  const filled = value === "S" ? 1 : value === "M" ? 2 : 3;
+  return (
+    <span aria-hidden className="inline-flex items-center gap-0.5">
+      {([1, 2, 3] as const).map((index) => (
+        <span
+          key={index}
+          className={`h-1.5 w-1.5 rounded-full ${index <= filled ? "bg-current" : "bg-current/25"}`}
+        />
+      ))}
+    </span>
+  );
+}
+
 export function BountyCard({ bounty }: { bounty: BoardBounty }) {
   const signalCaption = workingOnThisCaption(bounty.workSignals);
   return (
@@ -23,6 +43,23 @@ export function BountyCard({ bounty }: { bounty: BoardBounty }) {
               {bounty.title}
             </Link>
           </h2>
+          {bounty.intelligence ? (
+            <p className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${COMPLEXITY_BADGE[bounty.intelligence.complexity]}`}
+                title={`Complexity ${bounty.intelligence.complexity} · AI estimate — not a guarantee`}
+              >
+                <ComplexityDots value={bounty.intelligence.complexity} />
+                {bounty.intelligence.complexity}
+              </span>
+              <span
+                className="inline-flex max-w-full items-center rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[11px] font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                title="Language / stack · AI estimate — not a guarantee"
+              >
+                <span className="truncate">{bounty.intelligence.languageStack}</span>
+              </span>
+            </p>
+          ) : null}
         </div>
         <div className="text-right">
           <p className="text-lg font-semibold">

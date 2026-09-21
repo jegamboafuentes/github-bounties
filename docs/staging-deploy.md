@@ -22,7 +22,7 @@ service + apex `https://githubbounties.xyz`, not a DEV remount):
 | Runtime SA | `github-bounties-runtime@experiment-jegf.iam.gserviceaccount.com` — already has `cloudsql.client` + `secretmanager.secretAccessor` + `logging.logWriter` |
 | Labels | `product=github-bounties,env=staging` |
 | Port | `8080` |
-| Health | `GET /api/health` → 200 JSON `service=github-bounties-web` |
+| Health | `GET /api/health` → 200 JSON `service=github-bounties-web` (`intelligence.configured` is boolean-only for `GEMINI_API_KEY`) |
 
 Live `*.run.app` URL: **do not invent one**. Read it after a successful deploy
 (see [Find the live URL](#4-find-the-live-url)).
@@ -94,6 +94,8 @@ Uses Secret Manager `DATABASE_URL`. **Never** print or paste the value.
 ```
 
 V2-1 (after merge): applies additive `0004_v2_pool_participants` (`pool_participants`, `allocation_ledger`, `work_signals`, `bounties.participation_pool_bps` default **1500** of post-fee). V1 exclusive `claim_locks` index is unchanged. **V2-3 settle adds no migration** — it writes the existing ledger.
+
+**V3-0 remount (DEV):** apply migrate `0005_bounty_intelligence` (`bounty_intelligence` + `bounties.issue_body_synced_at`) **in the same remount** as the web revision. `GEMINI_API_KEY` as a Cloud Run secret is not enough without this table — the intelligence card degrades with `error · missing_table`. See [bounty-intelligence.md](bounty-intelligence.md). **PROD is not wired.**
 
 ### B. Exact laptop + Auth Proxy commands
 

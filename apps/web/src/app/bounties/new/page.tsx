@@ -2,18 +2,19 @@ import Link from "next/link";
 import { requirePageUser } from "@/auth/protect";
 import { AppHeader } from "@/components/header";
 import { CreateBountyForm } from "@/components/create-bounty-form";
-import { listReposForUser } from "@/github/persist";
+import { GitHubAvatar } from "@/components/github-avatar";
 import { getRuntimeDb } from "@/db/runtime";
+import { findGithubLinkByUserId } from "@/github/persist";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewBountyPage() {
   const user = await requirePageUser("/bounties/new");
-  let repos: Awaited<ReturnType<typeof listReposForUser>> = [];
+  let githubLogin: string | null = null;
   try {
-    repos = await listReposForUser(user.id, getRuntimeDb());
+    githubLogin = (await findGithubLinkByUserId(user.id, getRuntimeDb()))?.githubLogin ?? null;
   } catch {
-    repos = [];
+    githubLogin = null;
   }
 
   return (
@@ -29,26 +30,32 @@ export default async function NewBountyPage() {
           </p>
         </div>
 
-        {repos.length > 0 ? (
-          <section className="rounded-xl border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
-              Your connected repos
-            </h2>
-            <ul className="mt-2 list-disc pl-5">
-              {repos.map((repo) => (
-                <li key={repo.id}>{repo.fullName}</li>
-              ))}
-            </ul>
-          </section>
-        ) : (
-          <p className="text-sm text-zinc-500">
-            No repos connected yet.{" "}
-            <Link href="/settings" className="underline underline-offset-4">
-              Connect GitHub
-            </Link>{" "}
-            first, or post against any already-connected repo.
-          </p>
-        )}
+        <section className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+            GitHub connection
+          </h2>
+          {githubLogin ? (
+            <p className="inline-flex items-center gap-2 text-sm font-medium">
+              Connected
+              <GitHubAvatar login={githubLogin} size={24} />
+              <span>{githubLogin}</span>
+            </p>
+          ) : (
+            <p className="text-sm text-zinc-500">Not connected</p>
+          )}
+          {githubLogin ? (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Paste an issue URL for an App-connected repo below.
+            </p>
+          ) : (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Connect GitHub in Settings, then paste an issue URL for an App-connected repo.{" "}
+              <Link href="/settings" className="underline underline-offset-4">
+                Open Settings
+              </Link>
+            </p>
+          )}
+        </section>
 
         <CreateBountyForm />
 

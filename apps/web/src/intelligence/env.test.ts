@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   DEFAULT_GEMINI_MODEL,
   hasGeminiApiKey,
+  intelligenceHealth,
   readGeminiApiKey,
   readGeminiModel,
 } from "./env";
@@ -32,6 +33,16 @@ describe("Gemini env", () => {
     assert.equal(
       readGeminiModel({ NEXT_PUBLIC_GEMINI_MODEL: "should-not-win" }),
       DEFAULT_GEMINI_MODEL,
+    );
+  });
+
+  it("exposes intelligence.configured without the key", () => {
+    assert.deepEqual(intelligenceHealth({}), { configured: false });
+    assert.deepEqual(intelligenceHealth({ GEMINI_API_KEY: "  " }), { configured: false });
+    assert.deepEqual(intelligenceHealth({ GEMINI_API_KEY: "server-key" }), { configured: true });
+    assert.deepEqual(
+      intelligenceHealth({ NEXT_PUBLIC_GEMINI_API_KEY: "leaked-to-client" }),
+      { configured: false },
     );
   });
 });

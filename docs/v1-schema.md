@@ -67,4 +67,4 @@ GitHub App (V1-3) uses Secret Manager keys `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_
 
 CDP / x402 (V1-5) uses Secret Manager keys `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET` (optional `CDP_PROJECT_ID`, `CDP_CLIENT_API_KEY`). See [escrow.md](escrow.md). Never commit values.
 
-Gemini bounty intelligence (V3-0) uses optional Secret Manager key `GEMINI_API_KEY` (server-only, never `NEXT_PUBLIC_*`). Cache table `bounty_intelligence`. See [bounty-intelligence.md](bounty-intelligence.md).
+Gemini bounty intelligence (V3-0) uses optional Secret Manager key `GEMINI_API_KEY` (server-only, never `NEXT_PUBLIC_*`). Cache table `bounty_intelligence` from migrate `0005_bounty_intelligence` — V3-0 DEV remount must apply that migrate. See [bounty-intelligence.md](bounty-intelligence.md).

@@ -1,4 +1,5 @@
 import type { IntelligenceView } from "@/intelligence/load";
+import { intelligenceUnavailableCopy } from "@/intelligence/errors";
 
 const COMPLEXITY_HINT: Record<"S" | "M" | "L", string> = {
   S: "Small — limited scope",
@@ -7,6 +8,11 @@ const COMPLEXITY_HINT: Record<"S" | "M" | "L", string> = {
 };
 
 export function BountyIntelligenceCard({ intelligence }: { intelligence: IntelligenceView }) {
+  const unavailable =
+    intelligence.status === "unavailable"
+      ? intelligenceUnavailableCopy(intelligence)
+      : null;
+
   return (
     <section className="relative overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
       <div
@@ -23,9 +29,12 @@ export function BountyIntelligenceCard({ intelligence }: { intelligence: Intelli
           </div>
         </div>
 
-        {intelligence.status === "unavailable" ? (
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">Intelligence unavailable</p>
-        ) : (
+        {unavailable ? (
+          <div className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p>{unavailable.headline}</p>
+            <p className="mt-1 font-mono text-xs text-zinc-500">{unavailable.detail}</p>
+          </div>
+        ) : intelligence.status === "ready" ? (
           <dl className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-zinc-200 bg-white/80 p-4 dark:border-zinc-800 dark:bg-zinc-950/40 sm:col-span-3">
               <dt className="text-xs uppercase tracking-wide text-zinc-500">Repo about</dt>
@@ -45,7 +54,7 @@ export function BountyIntelligenceCard({ intelligence }: { intelligence: Intelli
               </dd>
             </div>
           </dl>
-        )}
+        ) : null}
       </div>
     </section>
   );
