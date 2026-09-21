@@ -32,6 +32,10 @@ Winner Claim pays winner share + platform fee only and succeeds even if pool hun
 
 Checklist / runbook is in [staging-e2e.md](staging-e2e.md). Live multi-hunter dogfood is pending Enrique. No public ship date.
 
+### V3-0 — Issue body + bounty intelligence
+
+Full GitHub issue on the bounty detail page. Server-side Gemini card (repo about / stack / complexity S·M·L) as **AI estimates**, cached. Optional `GEMINI_API_KEY`; page degrades without it. DEV remount only; PROD not wired.
+
 ## Planned (V3+)
 
 No committed dates. Order may change.

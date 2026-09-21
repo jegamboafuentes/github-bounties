@@ -38,6 +38,14 @@ export const PUBLIC_ROADMAP = [
     status: "in_progress",
   },
   {
+    id: "v3-0",
+    version: "V3-0",
+    title: "Issue body + bounty intelligence",
+    summary:
+      "Full GitHub issue on the bounty page; Gemini estimates about/stack/complexity (AI estimates, cached).",
+    status: "in_progress",
+  },
+  {
     id: "fe-2",
     version: "V3+",
     title: "Bounty detail split charts",

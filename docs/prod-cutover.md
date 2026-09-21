@@ -102,6 +102,7 @@ Suggested SM ids (bind to the env names the app already reads):
 | `AUTH_URL` | `PROD_AUTH_URL` | **after** apex is live; value `https://githubbounties.xyz` |
 | `CDP_WEBHOOK_SECRET` | — | skip (same as staging: do not bind empty) |
 | `CRON_SECRET` | optional later | skip on first deploy |
+| `GEMINI_API_KEY` | — | **skip** on first PROD deploy. V3-0 intelligence is DEV-only for now. Do not bind the DEV `GEMINI_API_KEY` secret onto `github-bounties-web-prod`. |
 
 `--set-secrets=DATABASE_URL=PROD_DATABASE_URL:latest,…` (env = SM id). Values
 stay out of git / chat. Add versions from stdin:

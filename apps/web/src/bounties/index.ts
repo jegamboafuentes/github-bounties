@@ -1,5 +1,6 @@
 export { normalizeBountyAmountUsdc } from "./amount";
 export { createBountyFromIssueUrl } from "./create";
+export { loadBountyIssueBody } from "./issue-body";
 export {
   bountyStatusLabel,
   claimedByUntilLabel,

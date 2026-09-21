@@ -13,7 +13,7 @@ export const HOMEPAGE_STAT_KEYS = [
   "bounties.closed",
   "volumeUsdc.transacted",
   "developers.participated",
-  "repos.connected",
+  "repos.withBounties",
 ] as const;
 
 export type HomepageStatKey = (typeof HOMEPAGE_STAT_KEYS)[number];
@@ -72,10 +72,10 @@ export function homepageStatCards(stats: PlatformStats): HomepageStatCard[] {
       hint: "Distinct hunters. Poster-only users are excluded.",
     },
     {
-      key: "repos.connected",
-      label: "Repos connected",
-      value: formatStatCount(stats.repos.connected),
-      hint: "repos.is_active — App-connected repositories.",
+      key: "repos.withBounties",
+      label: "Repos with bounties",
+      value: formatStatCount(stats.repos.withBounties),
+      hint: "Distinct repos with ≥1 bounty row (any status). Not bare GitHub App installs.",
     },
   ];
 }

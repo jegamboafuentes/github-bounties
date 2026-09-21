@@ -6,6 +6,8 @@
 # First-deploy secret *names* already have enabled versions (Ops preflight 2026-09-10).
 # Do not bind CDP_WEBHOOK_SECRET (enabled_versions=0), CRON_SECRET (not in SM),
 # or AUTH_URL (create after the live origin). AUTH_TRUST_HOST=true is plain env.
+# GEMINI_API_KEY is a WEB_OPTIONAL_SECRET: deploy-web.sh attaches it when an
+# enabled SM version exists (DEV) and skips when absent. Not wired on PROD.
 #
 # Always tags :$BUILD_ID and :latest so manual `gcloud builds submit` works.
 # $COMMIT_SHA is empty on manual submit unless you pass

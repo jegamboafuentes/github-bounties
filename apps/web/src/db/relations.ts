@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
   allocationLedger,
   bounties,
+  bountyIntelligence,
   claimLocks,
   claims,
   escrows,
@@ -54,6 +55,7 @@ export const bountiesRelations = relations(bounties, ({ one, many }) => ({
   poolParticipants: many(poolParticipants),
   allocationLedger: many(allocationLedger),
   workSignals: many(workSignals),
+  intelligence: one(bountyIntelligence),
 }));
 
 export const claimLocksRelations = relations(claimLocks, ({ one }) => ({
@@ -126,5 +128,12 @@ export const workSignalsRelations = relations(workSignals, ({ one }) => ({
   user: one(users, {
     fields: [workSignals.userId],
     references: [users.id],
+  }),
+}));
+
+export const bountyIntelligenceRelations = relations(bountyIntelligence, ({ one }) => ({
+  bounty: one(bounties, {
+    fields: [bountyIntelligence.bountyId],
+    references: [bounties.id],
   }),
 }));

@@ -13,18 +13,23 @@ import {
   getBoardBounty,
   getPoolRoster,
   LOCK_NOT_MONEY_COPY,
+  loadBountyIssueBody,
   pendingHunterLinkCaption,
 } from "@/bounties";
+import { BountyIntelligenceCard } from "@/components/bounty-intelligence-card";
 import { ClaimPayoutPanel } from "@/components/claim-payout-form";
 import { FundLockPanel } from "@/components/fund-lock-panel";
 import { GitHubAvatar } from "@/components/github-avatar";
 import { AppHeader } from "@/components/header";
+import { IssueBodyCard } from "@/components/issue-body";
 import { PayoutBreakdown } from "@/components/payout-breakdown";
 import { PoolRoster } from "@/components/pool-roster";
 import { WorkSignalsPanel } from "@/components/work-signals-panel";
 import { getRuntimeDb } from "@/db/runtime";
 import { githubLinks } from "@/db/schema";
 import { getEscrowSnapshot } from "@/escrow";
+import { loadBountyIntelligence } from "@/intelligence/load";
+import { INTELLIGENCE_ESTIMATE_LABEL } from "@/intelligence/prompt";
 import { walletConnectConfigured } from "@/wallet/env";
 import { eq } from "drizzle-orm";
 
@@ -35,7 +40,7 @@ export default async function BountyDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; notice?: string }>;
+  searchParams: Promise<{ error?: string; notice?: string; refreshIntelligence?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
@@ -72,6 +77,22 @@ export default async function BountyDetailPage({
     );
   }
 
+  const issue = await loadBountyIssueBody(bounty.id, db).catch(() => null);
+  const intelligence = await loadBountyIntelligence({
+    bountyId: bounty.id,
+    repoFullName: bounty.repoFullName,
+    githubIssueNumber: bounty.githubIssueNumber,
+    issueTitle: issue?.title || bounty.title,
+    issueBody: issue?.markdown ?? null,
+    installationId: issue?.installationId ?? BigInt(0),
+    db,
+    forceRefresh: query.refreshIntelligence === "1",
+  }).catch(() => ({
+    status: "unavailable" as const,
+    reason: "error" as const,
+    estimateLabel: INTELLIGENCE_ESTIMATE_LABEL,
+  }));
+
   const isPoster = user?.id === bounty.posterUserId;
   const isEligibleHunter = Boolean(user && bounty.payout && user.id === bounty.payout.hunterUserId);
   const canFund = Boolean(isPoster && bounty.status === "pending_fund");
@@ -102,7 +123,7 @@ export default async function BountyDetailPage({
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
       <AppHeader />
-      <main className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-6 py-14">
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-6 py-14">
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
             {bounty.repoFullName} · #{bounty.githubIssueNumber}
@@ -112,6 +133,9 @@ export default async function BountyDetailPage({
             {formatUsdc(bounty.amountUsdc)} {bounty.currency} · {bountyStatusLabel(bounty.status)}
           </p>
         </div>
+
+        <IssueBodyCard markdown={issue?.markdown ?? null} />
+        <BountyIntelligenceCard intelligence={intelligence} />
 
         <p className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
           {LOCK_NOT_MONEY_COPY}

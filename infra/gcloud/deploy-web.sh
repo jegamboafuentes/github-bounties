@@ -37,6 +37,8 @@ Env (plain, not secrets):
   GB_REGION, GB_WEB_MEMORY, GB_WEB_CPU, GB_WEB_MAX_INSTANCES, CDP_NETWORK
   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID  (optional; Reown Cloud project id, not a secret)
   GB_ATTACH_OPTIONAL_SECRETS=1  (also bind CDP_WEBHOOK_SECRET / CRON_SECRET / AUTH_URL)
+  GEMINI_API_KEY is a WEB_OPTIONAL_SECRET: remounts attach it when SM has a
+  version (DEV already does) and skip when absent. Not wired on PROD.
 EOF
 }
 
@@ -152,7 +154,9 @@ elif [[ "${APPLY}" -eq 1 ]]; then
   echo "Attaching Secret Manager refs that have enabled versions (names only)."
 else
   echo "Would attach first-deploy --set-secrets (auth/GitHub/DB + CDP; skip"
-  echo "CDP_WEBHOOK_SECRET / CRON_SECRET / AUTH_URL). Cloud Build uses --secrets static."
+  echo "CDP_WEBHOOK_SECRET / CRON_SECRET / AUTH_URL). GEMINI_API_KEY attaches when"
+  echo "an enabled SM version exists (optional; skip if absent). Cloud Build uses"
+  echo "--secrets static."
 fi
 echo
 

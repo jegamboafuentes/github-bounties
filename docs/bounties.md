@@ -30,9 +30,9 @@ Residual `claim_locked` rows drain to `funded` on read. Money: `funded` → elig
 | --- | --- | --- |
 | `/board` | public | List + filter by repo / status. Shows **Working on this** hunters (not “Claimed by X until …”). Poster and paid hunter GitHub avatars when a login is present (`avatars.githubusercontent.com/{login}`) |
 | `GET /api/stats` | public | Versioned platform aggregates (`schemaVersion`). Homepage consumes the same helper. See [stats.md](stats.md) |
-| `/settings` | Google session | Linked GitHub avatar + username. Payout wallet: WalletConnect (same Reown project id as fund) or Advanced paste. Pool members are paid to this wallet when settle runs. |
+| `/settings` | Google session | GitHub connection status (connected vs not). Payout wallet: WalletConnect (same Reown project id as fund) or Advanced paste. Pool members are paid to this wallet when settle runs. |
 | `/bounties/new` | Google session | Create from issue URL. Face chips `$1 / $5 / $10 / $50 / $100` + custom |
-| `/bounties/[id]` | public read; Google for actions | Escrow lock (WalletConnect / Pay face + Advanced paste-hash), Working on this, pool roster, payout breakdown, winner Claim (BYO Base), cancel/refund |
+| `/bounties/[id]` | public read; Google for actions | Full GitHub issue body (sanitized markdown), Gemini intelligence card (AI estimates; degrades without `GEMINI_API_KEY`), escrow lock (WalletConnect / Pay face + Advanced paste-hash), Working on this, pool roster, payout breakdown, winner Claim (BYO Base), cancel/refund |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` | Drains residual exclusive locks **and** `expires_at` bounty refunds |
 
 CLI (same function): `cd apps/web && npm run expire-locks`
@@ -53,6 +53,8 @@ Hunter payout after merge: [claims.md](claims.md). Pool roster + split: ADR 0003
 
 ## Secrets
 
-Do not commit `DATABASE_URL`, Google OAuth secrets, GitHub App secrets, or `CRON_SECRET`. Empty placeholders only in `.env.example`.
+Do not commit `DATABASE_URL`, Google OAuth secrets, GitHub App secrets, `GEMINI_API_KEY`, or `CRON_SECRET`. Empty placeholders only in `.env.example`.
 
 `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is a **public** Reown Cloud project id (not SM). Ops must set it on Cloud Run for the WalletConnect QR button. See [docs/spikes/v15-fund-walletconnect.md](spikes/v15-fund-walletconnect.md).
+
+`GEMINI_API_KEY` is server-only (V3-0 intelligence). Never `NEXT_PUBLIC_*`. Optional on DEV; the bounty page degrades the intelligence card when unset. See [bounty-intelligence.md](bounty-intelligence.md).

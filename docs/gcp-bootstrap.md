@@ -180,6 +180,7 @@ GitHub App settings, Cloud SQL, and Google OAuth. Aligns with
 | `GITHUB_APP_CLIENT_ID` | `GITHUB_APP_CLIENT_ID` | GitHub App user-to-server OAuth | Connect GitHub (version may already exist) |
 | `GITHUB_APP_CLIENT_SECRET` | `GITHUB_APP_CLIENT_SECRET` | Same App OAuth client | Connect GitHub |
 | `CRON_SECRET` | `CRON_SECRET` | Optional bearer for expire-locks | Claim-lock cron |
+| `GEMINI_API_KEY` | `GEMINI_API_KEY` | Optional Gemini key (V3-0 bounty intelligence, DEV) | Server-side intelligence card; skip / degrade if unset |
 
 ADR also mentions `CDP_PAYMASTER_URL` (optional, not a V0-C placeholder).
 
@@ -191,7 +192,8 @@ for s in DATABASE_URL AUTH_SECRET AUTH_URL GITHUB_APP_ID GITHUB_APP_SLUG \
   GITHUB_APP_CLIENT_ID GITHUB_APP_CLIENT_SECRET \
   CDP_API_KEY_ID CDP_API_KEY_SECRET CDP_WALLET_SECRET CDP_PROJECT_ID \
   CDP_CLIENT_API_KEY CDP_WEBHOOK_SECRET \
-  GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET CRON_SECRET
+  GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET CRON_SECRET \
+  GEMINI_API_KEY
 do
   gcloud secrets create "$s" --replication-policy=automatic \
     --labels=product=github-bounties,env=staging

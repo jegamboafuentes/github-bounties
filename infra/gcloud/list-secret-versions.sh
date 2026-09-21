@@ -22,10 +22,13 @@ printf "%-32s %-14s %s\n" "NAME" "FIRST_DEPLOY" "ENABLED_VERSION"
 printf "%-32s %-14s %s\n" "----" "------------" "---------------"
 
 first_set=" ${WEB_REQUIRED_SECRETS[*]} ${WEB_CDP_SECRETS[*]} "
+optional_set=" ${WEB_OPTIONAL_SECRETS[*]} "
 for name in "${SECRETS[@]}"; do
   slot="skip"
   if [[ "${first_set}" == *" ${name} "* ]]; then
     slot="yes"
+  elif [[ "${optional_set}" == *" ${name} "* ]]; then
+    slot="optional"
   fi
   if secret_has_enabled_version "${name}"; then
     printf "%-32s %-14s %s\n" "${name}" "${slot}" "yes"

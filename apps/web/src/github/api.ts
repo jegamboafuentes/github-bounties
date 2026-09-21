@@ -330,6 +330,86 @@ export async function fetchIssue(
   };
 }
 
+export const README_BLURB_MAX = 4000;
+
+export type GitHubRepoContext = {
+  description: string | null;
+  language: string | null;
+  languages: string[];
+  readmeBlurb: string | null;
+};
+
+/**
+ * Repo about + languages + README blurb via the GitHub App installation token.
+ * Best-effort: missing README / languages still returns description.
+ */
+export async function fetchRepoContext(
+  owner: string,
+  repo: string,
+  opts: { installationId: InstallationId; http?: GitHubHttp; jwt?: string },
+): Promise<GitHubRepoContext> {
+  const token = await createInstallationToken(opts.installationId, {
+    http: opts.http,
+    jwt: opts.jwt,
+  });
+  const http = opts.http ?? defaultHttp;
+
+  const repoRes = await http(`${GITHUB_API}/repos/${owner}/${repo}`, {
+    headers: apiHeaders(token),
+  });
+  let description: string | null = null;
+  let language: string | null = null;
+  if (repoRes.ok) {
+    const body = (await repoRes.json()) as {
+      description?: string | null;
+      language?: string | null;
+    };
+    description = body.description?.trim() || null;
+    language = body.language?.trim() || null;
+  }
+
+  const langRes = await http(`${GITHUB_API}/repos/${owner}/${repo}/languages`, {
+    headers: apiHeaders(token),
+  });
+  const languages: string[] = [];
+  if (langRes.ok) {
+    const body = (await langRes.json()) as Record<string, number>;
+    languages.push(
+      ...Object.entries(body)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name]) => name)
+        .slice(0, 8),
+    );
+  }
+
+  const readmeRes = await http(`${GITHUB_API}/repos/${owner}/${repo}/readme`, {
+    headers: apiHeaders(token),
+  });
+  let readmeBlurb: string | null = null;
+  if (readmeRes.ok) {
+    const body = (await readmeRes.json()) as {
+      content?: string;
+      encoding?: string;
+    };
+    const decoded = decodeGithubFileContent(body.content, body.encoding);
+    const clipped = decoded.trim().slice(0, README_BLURB_MAX);
+    readmeBlurb = clipped || null;
+  }
+
+  return { description, language, languages, readmeBlurb };
+}
+
+export function decodeGithubFileContent(
+  content?: string,
+  encoding?: string,
+): string {
+  if (!content) return "";
+  if (encoding === "base64") {
+    return Buffer.from(content.replace(/\n/g, ""), "base64").toString("utf8");
+  }
+  return content;
+}
+
 export async function createIssueComment(args: {
   owner: string;
   repo: string;

@@ -36,6 +36,13 @@
       "when": 1789637493943,
       "tag": "0004_v2_pool_participants",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789962067674,
+      "tag": "0005_bounty_intelligence",
+      "breakpoints": true
     }
   ]
 }

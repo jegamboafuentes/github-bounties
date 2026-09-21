@@ -22,7 +22,7 @@ type ScalarRow = {
   transactedUsdc?: unknown;
   participated?: unknown;
   githubLinked?: unknown;
-  connected?: unknown;
+  withBounties?: unknown;
   total?: unknown;
 };
 
@@ -106,7 +106,7 @@ export async function getPlatformStats(
     `),
     db.execute(sql`
       select
-        count(*) filter (where is_active)::int as connected,
+        (select count(distinct repo_id)::int from bounties) as "withBounties",
         count(*)::int as total
       from repos
     `),
@@ -131,7 +131,7 @@ export async function getPlatformStats(
       transactedUsdc: asUsdc(volume?.transactedUsdc),
       developersParticipated: asCount(developers?.participated),
       developersGithubLinked: asCount(developers?.githubLinked),
-      reposConnected: asCount(repos?.connected),
+      reposWithBounties: asCount(repos?.withBounties),
       reposTotal: asCount(repos?.total),
     },
     now,

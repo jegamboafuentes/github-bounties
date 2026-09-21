@@ -24,6 +24,78 @@ body {
   color: var(--foreground);
 }
 
+.issue-body :where(h1, h2, h3, h4) {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 1rem;
+  color: inherit;
+}
+
+.issue-body h1 {
+  font-size: 1.25rem;
+}
+.issue-body h2 {
+  font-size: 1.1rem;
+}
+.issue-body :where(p, ul, ol, blockquote, pre) {
+  margin-top: 0.6rem;
+}
+.issue-body :where(ul, ol) {
+  padding-left: 1.25rem;
+}
+.issue-body ul {
+  list-style: disc;
+}
+.issue-body ol {
+  list-style: decimal;
+}
+.issue-body a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.issue-body pre {
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgb(244 244 245);
+}
+.issue-body code {
+  font-size: 0.85em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.issue-body :not(pre) > code {
+  border-radius: 0.25rem;
+  background: rgb(244 244 245);
+  padding: 0.1rem 0.3rem;
+}
+.issue-body img {
+  max-width: 100%;
+  border-radius: 0.75rem;
+}
+.issue-body blockquote {
+  border-left: 2px solid rgb(212 212 216);
+  padding-left: 0.75rem;
+  color: rgb(82 82 91);
+}
+.issue-body hr {
+  margin: 1rem 0;
+  border-color: rgb(228 228 231);
+}
+
+@media (prefers-color-scheme: dark) {
+  .issue-body pre,
+  .issue-body :not(pre) > code {
+    background: rgb(39 39 42);
+  }
+  .issue-body blockquote {
+    border-left-color: rgb(63 63 70);
+    color: rgb(161 161 170);
+  }
+  .issue-body hr {
+    border-color: rgb(63 63 70);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .home-reveal-item,
   .home-wordmark,

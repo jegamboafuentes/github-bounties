@@ -199,6 +199,11 @@ export const bounties = pgTable(
     status: bountyStatusEnum("status").notNull().default("pending_fund"),
     title: text("title").notNull(),
     descriptionSnapshot: text("description_snapshot"),
+    /** Last successful GitHub issue-body sync (create or detail refresh). */
+    issueBodySyncedAt: timestamp("issue_body_synced_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     fundedAt: timestamp("funded_at", { withTimezone: true, mode: "date" }),
     expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
     /**
@@ -470,6 +475,43 @@ export const workSignals = pgTable(
     index("work_signals_bounty_id_idx").on(table.bountyId),
     index("work_signals_user_id_idx").on(table.userId),
     index("work_signals_bounty_user_idx").on(table.bountyId, table.userId),
+  ],
+);
+
+/**
+ * Cached Gemini bounty intelligence (V3-0). Keyed by bounty.
+ * Refresh: first detail read after create, stale TTL, source fingerprint
+ * change (issue body / repo metadata), or `?refreshIntelligence=1`.
+ * Missing GEMINI_API_KEY does not write a row — UI degrades.
+ */
+export const bountyIntelligence = pgTable(
+  "bounty_intelligence",
+  {
+    bountyId: uuid("bounty_id")
+      .primaryKey()
+      .references(() => bounties.id, { onDelete: "restrict" }),
+    repoAbout: text("repo_about"),
+    languageStack: text("language_stack"),
+    complexity: text("complexity"),
+    model: text("model"),
+    sourceFingerprint: text("source_fingerprint"),
+    status: text("status").notNull().default("ready"),
+    errorReason: text("error_reason"),
+    generatedAt: timestamp("generated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    ...timestamps,
+  },
+  (table) => [
+    index("bounty_intelligence_generated_at_idx").on(table.generatedAt),
+    check(
+      "bounty_intelligence_complexity_sml",
+      sql`${table.complexity} is null or ${table.complexity} in ('S', 'M', 'L')`,
+    ),
+    check(
+      "bounty_intelligence_status",
+      sql`${table.status} in ('ready', 'error')`,
+    ),
   ],
 );
 

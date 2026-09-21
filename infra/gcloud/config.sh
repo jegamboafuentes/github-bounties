@@ -52,6 +52,8 @@ CI_SA="${CI_SA_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
 # Ops preflight 2026-09-10: enabled versions exist for the first-deploy lists
 # below. CDP_WEBHOOK_SECRET exists but enabled_versions=0. CRON_SECRET, AUTH_URL,
 # AUTH_TRUST_HOST are not in SM (AUTH_TRUST_HOST is plain env; AUTH_URL after URL).
+# GEMINI_API_KEY: optional V3-0 intelligence. Already has an enabled version on
+# DEV; attach when present, skip cleanly when absent. Not wired on PROD.
 SECRETS=(
   DATABASE_URL
   AUTH_SECRET
@@ -71,6 +73,7 @@ SECRETS=(
   GOOGLE_OAUTH_CLIENT_ID
   GOOGLE_OAUTH_CLIENT_SECRET
   CRON_SECRET
+  GEMINI_API_KEY
 )
 
 # First-deploy --set-secrets (Ops: enabled versions present).
@@ -104,4 +107,13 @@ WEB_SKIP_SECRETS=(
   CDP_WEBHOOK_SECRET
   CRON_SECRET
   AUTH_URL
+)
+
+# Optional WEB secrets: attach ENV=NAME:latest when an enabled SM version exists
+# (discover and static remounts). Skip cleanly when absent — do not fail deploy.
+# Distinct from WEB_SKIP_SECRETS, which stay off unless GB_ATTACH_OPTIONAL_SECRETS=1.
+# GEMINI_API_KEY is already mounted on DEV github-bounties-web; listing it here
+# keeps remount --set-secrets from dropping it. PROD is not wired.
+WEB_OPTIONAL_SECRETS=(
+  GEMINI_API_KEY
 )
