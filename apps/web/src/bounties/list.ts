@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
   bounties,
+  bountyIntelligence,
   bountyStatusValues,
   escrows,
   githubLinks,
@@ -14,12 +15,20 @@ import {
 } from "../claims/pending-link";
 import { listPayoutClaimsForBounties, type PayoutClaimView } from "../claims/read";
 import { formatEscrowFailLabel } from "../escrow/fail";
+import { isUndefinedTableError, logIntelligenceEvent } from "../intelligence/errors";
 import { expireClaimLocks } from "./expire";
+import {
+  matchesBoardIntelligenceFilter,
+  readyIntelligenceBadge,
+  type BoardIntelligenceBadge,
+} from "./intelligence";
 import { listWorkSignalsForBounties, type WorkSignalView } from "./signals";
 
 export type BoardFilters = {
   repo?: string;
   status?: (typeof bountyStatusValues)[number] | string;
+  complexity?: string;
+  language?: string;
 };
 
 export type BoardBounty = {
@@ -44,9 +53,29 @@ export type BoardBounty = {
   /** Eligible merge recorded, but the PR author has no github_links row. */
   pendingHunterLink: PendingHunterLink | null;
   escrowFail: { code: string; reason: string; label: string } | null;
+  /** Ready Gemini cache only. Null when missing/error — board hides the badge. */
+  intelligence: BoardIntelligenceBadge | null;
 };
 
 const STATUS_SET = new Set<string>(bountyStatusValues);
+
+const BOARD_COLUMNS = {
+  id: bounties.id,
+  title: bounties.title,
+  url: bounties.url,
+  amountUsdc: bounties.amountUsdc,
+  currency: bounties.currency,
+  status: bounties.status,
+  githubIssueNumber: bounties.githubIssueNumber,
+  repoFullName: repos.fullName,
+  posterDisplayName: users.displayName,
+  posterUserId: bounties.posterUserId,
+  posterGithubLogin: githubLinks.githubLogin,
+  fundedAt: bounties.fundedAt,
+  createdAt: bounties.createdAt,
+  escrowFailCode: escrows.failCode,
+  escrowFailReason: escrows.failReason,
+};
 
 /**
  * Board listing. Drains residual exclusive V1 claim-locks first so the board
@@ -66,38 +95,10 @@ export async function listBoardBounties(
       ? (statusFilter as (typeof bountyStatusValues)[number])
       : undefined;
 
-  const rows = await db
-    .select({
-      id: bounties.id,
-      title: bounties.title,
-      url: bounties.url,
-      amountUsdc: bounties.amountUsdc,
-      currency: bounties.currency,
-      status: bounties.status,
-      githubIssueNumber: bounties.githubIssueNumber,
-      repoFullName: repos.fullName,
-      posterDisplayName: users.displayName,
-      posterUserId: bounties.posterUserId,
-      posterGithubLogin: githubLinks.githubLogin,
-      fundedAt: bounties.fundedAt,
-      createdAt: bounties.createdAt,
-      escrowFailCode: escrows.failCode,
-      escrowFailReason: escrows.failReason,
-    })
-    .from(bounties)
-    .innerJoin(repos, eq(repos.id, bounties.repoId))
-    .innerJoin(users, eq(users.id, bounties.posterUserId))
-    .leftJoin(githubLinks, eq(githubLinks.userId, bounties.posterUserId))
-    .leftJoin(escrows, eq(escrows.bountyId, bounties.id))
-    .where(
-      and(
-        repoFilter
-          ? sql`${repos.fullName} ilike ${`%${escapeLike(repoFilter)}%`}`
-          : undefined,
-        status ? eq(bounties.status, status) : undefined,
-      ),
-    )
-    .orderBy(desc(bounties.createdAt));
+  const rows = await queryBoardRows(db, {
+    repoFilter,
+    status,
+  });
 
   const ids = rows.map((row) => row.id);
   const payoutByBounty = await listPayoutClaimsForBounties(db, ids);
@@ -113,14 +114,16 @@ export async function listBoardBounties(
   );
   const signalsByBounty = await listWorkSignalsForBounties(db, ids);
 
-  return rows.map((row) =>
-    toBoardBounty(
-      row,
-      payoutByBounty.get(row.id) ?? null,
-      payoutByBounty.has(row.id) ? null : (pendingByBounty.get(row.id) ?? null),
-      signalsByBounty.get(row.id) ?? [],
-    ),
-  );
+  return rows
+    .map((row) =>
+      toBoardBounty(
+        row,
+        payoutByBounty.get(row.id) ?? null,
+        payoutByBounty.has(row.id) ? null : (pendingByBounty.get(row.id) ?? null),
+        signalsByBounty.get(row.id) ?? [],
+      ),
+    )
+    .filter((bounty) => matchesBoardIntelligenceFilter(bounty.intelligence, filters));
 }
 
 export async function getBoardBounty(
@@ -130,32 +133,8 @@ export async function getBoardBounty(
 ): Promise<BoardBounty | null> {
   await expireClaimLocks(db, now);
 
-  const [row] = await db
-    .select({
-      id: bounties.id,
-      title: bounties.title,
-      url: bounties.url,
-      amountUsdc: bounties.amountUsdc,
-      currency: bounties.currency,
-      status: bounties.status,
-      githubIssueNumber: bounties.githubIssueNumber,
-      repoFullName: repos.fullName,
-      posterDisplayName: users.displayName,
-      posterUserId: bounties.posterUserId,
-      posterGithubLogin: githubLinks.githubLogin,
-      fundedAt: bounties.fundedAt,
-      createdAt: bounties.createdAt,
-      escrowFailCode: escrows.failCode,
-      escrowFailReason: escrows.failReason,
-    })
-    .from(bounties)
-    .innerJoin(repos, eq(repos.id, bounties.repoId))
-    .innerJoin(users, eq(users.id, bounties.posterUserId))
-    .leftJoin(githubLinks, eq(githubLinks.userId, bounties.posterUserId))
-    .leftJoin(escrows, eq(escrows.bountyId, bounties.id))
-    .where(eq(bounties.id, bountyId))
-    .limit(1);
-
+  const rows = await queryBoardRows(db, { bountyId });
+  const row = rows[0];
   if (!row) return null;
 
   const payoutByBounty = await listPayoutClaimsForBounties(db, [row.id]);
@@ -194,7 +173,74 @@ type ListRow = {
   createdAt: Date;
   escrowFailCode: string | null;
   escrowFailReason: string | null;
+  intelStatus: string | null;
+  intelComplexity: string | null;
+  intelLanguageStack: string | null;
 };
+
+async function queryBoardRows(
+  db: Database,
+  opts: {
+    bountyId?: string;
+    repoFilter?: string;
+    status?: (typeof bountyStatusValues)[number];
+  },
+): Promise<ListRow[]> {
+  const whereClause = boardWhere(opts);
+  try {
+    const query = db
+      .select({
+        ...BOARD_COLUMNS,
+        intelStatus: bountyIntelligence.status,
+        intelComplexity: bountyIntelligence.complexity,
+        intelLanguageStack: bountyIntelligence.languageStack,
+      })
+      .from(bounties)
+      .innerJoin(repos, eq(repos.id, bounties.repoId))
+      .innerJoin(users, eq(users.id, bounties.posterUserId))
+      .leftJoin(githubLinks, eq(githubLinks.userId, bounties.posterUserId))
+      .leftJoin(escrows, eq(escrows.bountyId, bounties.id))
+      .leftJoin(bountyIntelligence, eq(bountyIntelligence.bountyId, bounties.id))
+      .where(whereClause);
+    if (opts.bountyId) return await query.limit(1);
+    return await query.orderBy(desc(bounties.createdAt));
+  } catch (err) {
+    if (!isUndefinedTableError(err)) throw err;
+    logIntelligenceEvent("bounty_intelligence_board_query_failed", {
+      error: "missing_table",
+      pgCode: "42P01",
+    });
+    const query = db
+      .select(BOARD_COLUMNS)
+      .from(bounties)
+      .innerJoin(repos, eq(repos.id, bounties.repoId))
+      .innerJoin(users, eq(users.id, bounties.posterUserId))
+      .leftJoin(githubLinks, eq(githubLinks.userId, bounties.posterUserId))
+      .leftJoin(escrows, eq(escrows.bountyId, bounties.id))
+      .where(whereClause);
+    const rows = opts.bountyId ? await query.limit(1) : await query.orderBy(desc(bounties.createdAt));
+    return rows.map((row) => ({
+      ...row,
+      intelStatus: null,
+      intelComplexity: null,
+      intelLanguageStack: null,
+    }));
+  }
+}
+
+function boardWhere(opts: {
+  bountyId?: string;
+  repoFilter?: string;
+  status?: (typeof bountyStatusValues)[number];
+}) {
+  return and(
+    opts.bountyId ? eq(bounties.id, opts.bountyId) : undefined,
+    opts.repoFilter
+      ? sql`${repos.fullName} ilike ${`%${escapeLike(opts.repoFilter)}%`}`
+      : undefined,
+    opts.status ? eq(bounties.status, opts.status) : undefined,
+  );
+}
 
 function toBoardBounty(
   row: ListRow,
@@ -221,6 +267,11 @@ function toBoardBounty(
     payout,
     pendingHunterLink,
     escrowFail: toEscrowFail(row.escrowFailCode, row.escrowFailReason),
+    intelligence: readyIntelligenceBadge({
+      status: row.intelStatus,
+      complexity: row.intelComplexity,
+      languageStack: row.intelLanguageStack,
+    }),
   };
 }
 

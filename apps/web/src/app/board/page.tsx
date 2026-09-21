@@ -10,15 +10,22 @@ export const dynamic = "force-dynamic";
 export default async function BoardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ repo?: string; status?: string }>;
+  searchParams: Promise<{
+    repo?: string;
+    status?: string;
+    complexity?: string;
+    language?: string;
+  }>;
 }) {
   const params = await searchParams;
   const repo = params.repo ?? "";
   const status = params.status ?? "all";
+  const complexity = params.complexity ?? "all";
+  const language = params.language ?? "";
   let bounties: Awaited<ReturnType<typeof listBoardBounties>> = [];
   let loadError: string | null = null;
   try {
-    bounties = await listBoardBounties(getRuntimeDb(), { repo, status });
+    bounties = await listBoardBounties(getRuntimeDb(), { repo, status, complexity, language });
   } catch (err) {
     loadError = err instanceof Error ? err.message : "Could not load the board.";
   }
@@ -41,9 +48,9 @@ export default async function BoardPage({
 
         <form
           method="get"
-          className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 sm:flex-row sm:items-end dark:border-zinc-800 dark:bg-zinc-900"
+          className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 sm:flex-row sm:flex-wrap sm:items-end dark:border-zinc-800 dark:bg-zinc-900"
         >
-          <label className="flex flex-1 flex-col gap-1 text-sm">
+          <label className="flex min-w-[10rem] flex-1 flex-col gap-1 text-sm">
             <span className="text-xs uppercase tracking-wide text-zinc-500">Repo</span>
             <input
               name="repo"
@@ -66,6 +73,28 @@ export default async function BoardPage({
                 </option>
               ))}
             </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs uppercase tracking-wide text-zinc-500">Complexity</span>
+            <select
+              name="complexity"
+              defaultValue={complexity}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+            >
+              <option value="all">All</option>
+              <option value="S">S</option>
+              <option value="M">M</option>
+              <option value="L">L</option>
+            </select>
+          </label>
+          <label className="flex min-w-[10rem] flex-1 flex-col gap-1 text-sm">
+            <span className="text-xs uppercase tracking-wide text-zinc-500">Language</span>
+            <input
+              name="language"
+              defaultValue={language}
+              placeholder="TypeScript"
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+            />
           </label>
           <button
             type="submit"

@@ -29,6 +29,7 @@ import { getRuntimeDb } from "@/db/runtime";
 import { githubLinks } from "@/db/schema";
 import { getEscrowSnapshot } from "@/escrow";
 import { loadBountyIntelligence } from "@/intelligence/load";
+import { classifyIntelligenceFailure } from "@/intelligence/errors";
 import { INTELLIGENCE_ESTIMATE_LABEL } from "@/intelligence/prompt";
 import { walletConnectConfigured } from "@/wallet/env";
 import { eq } from "drizzle-orm";
@@ -87,9 +88,10 @@ export default async function BountyDetailPage({
     installationId: issue?.installationId ?? BigInt(0),
     db,
     forceRefresh: query.refreshIntelligence === "1",
-  }).catch(() => ({
+  }).catch((err) => ({
     status: "unavailable" as const,
     reason: "error" as const,
+    errorReason: classifyIntelligenceFailure(err).code,
     estimateLabel: INTELLIGENCE_ESTIMATE_LABEL,
   }));
 

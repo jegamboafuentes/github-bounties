@@ -67,7 +67,7 @@ CDP_NETWORK=base-sepolia          # default
 # NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 ```
 
-`GET /api/health` → `escrow.walletconnect.configured` is `true` when that public id is set (value is never returned).
+`GET /api/health` → `escrow.walletconnect.configured` is `true` when that public id is set (value is never returned). `intelligence.configured` is `true` when `GEMINI_API_KEY` is set (boolean only).
 
 ## Sepolia dry-run (after Ops stashes CDP_*)
 

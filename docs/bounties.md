@@ -28,10 +28,10 @@ Residual `claim_locked` rows drain to `funded` on read. Money: `funded` → elig
 
 | URL | Auth | Role |
 | --- | --- | --- |
-| `/board` | public | List + filter by repo / status. Shows **Working on this** hunters (not “Claimed by X until …”). Poster and paid hunter GitHub avatars when a login is present (`avatars.githubusercontent.com/{login}`) |
+| `/board` | public | List + filter by repo / status / complexity / language. Ready Gemini intel shows S/M/L + stack badges (hidden when missing). Poster and paid hunter GitHub avatars when a login is present (`avatars.githubusercontent.com/{login}`) |
 | `GET /api/stats` | public | Versioned platform aggregates (`schemaVersion`). Homepage consumes the same helper. See [stats.md](stats.md) |
 | `/settings` | Google session | GitHub connection status (connected vs not). Payout wallet: WalletConnect (same Reown project id as fund) or Advanced paste. Pool members are paid to this wallet when settle runs. |
-| `/bounties/new` | Google session | Create from issue URL. Face chips `$1 / $5 / $10 / $50 / $100` + custom |
+| `/bounties/new` | Google session | Create from issue URL. GitHub **Connected** vs **Not connected** only (no connected-repo dump). Face chips `$1 / $5 / $10 / $50 / $100` + custom |
 | `/bounties/[id]` | public read; Google for actions | Full GitHub issue body (sanitized markdown), Gemini intelligence card (AI estimates; degrades without `GEMINI_API_KEY`), escrow lock (WalletConnect / Pay face + Advanced paste-hash), Working on this, pool roster, payout breakdown, winner Claim (BYO Base), cancel/refund |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` | Drains residual exclusive locks **and** `expires_at` bounty refunds |
 

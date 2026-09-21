@@ -22,3 +22,8 @@ export function hasGeminiApiKey(env: EnvMap = process.env): boolean {
 export function readGeminiModel(env: EnvMap = process.env): string {
   return env[GEMINI_MODEL_ENV]?.trim() || DEFAULT_GEMINI_MODEL;
 }
+
+/** Health probe: whether GEMINI_API_KEY is set. Never returns the key. */
+export function intelligenceHealth(env: EnvMap = process.env): { configured: boolean } {
+  return { configured: hasGeminiApiKey(env) };
+}
