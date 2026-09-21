@@ -30,7 +30,7 @@ As of **2026-09-21**. No invented ship dates. V3-0 is **DEV only** — do not tr
 
 - **V1 core** — Google sign-in, GitHub App, public board, post bounty, 2% fee at settlement
 - **Money** — CDP escrow (`gb-escrow`) + x402 / WalletConnect fund on Base mainnet
-- **V2 multi-hunter pool** ([ADR 0003](docs/adr/0003-v2-multi-hunter-pool.md)) — 15% of **post-fee** to up to 10 eligible hunters; exclusive 72h claim-lock is **retired**
+- **V2 multi-hunter pool** ([ADR 0003](docs/adr/0003-v2-multi-hunter-pool.md)) — 15% of **post-fee** to up to 10 eligible hunters; exclusive 72h claim-lock is **retired**; live DEV dogfood done
 - **Manual pool Claim** ([#47](https://github.com/jegamboafuentes/github-bounties/pull/47)) — winner Claim settles winner + fee only (works without pool wallets); each pool member Claims their own share later
 - **FE** — homepage Anime.js + live stats + differentiators + public roadmap; bounty payout pie charts; public `GET /api/stats` (`schemaVersion` **1**)
 
@@ -38,12 +38,13 @@ As of **2026-09-21**. No invented ship dates. V3-0 is **DEV only** — do not tr
 
 - **V3-0** ([#48](https://github.com/jegamboafuentes/github-bounties/pull/48)) — full GitHub issue body on the bounty page; Gemini intelligence card (repo about / stack / complexity S·M·L) via server-only `GEMINI_API_KEY`
 - Stats: `repos.withBounties` replaces App-install “repos connected” (`schemaVersion` **2** on `main`)
-- Settings shows GitHub **connected vs not** (no repo dump)
+- Settings / Post show GitHub **connected vs not** (no repo dump)
+- Board complexity/language badges + filters; DEV header pill
 
 ### Not shipped / deferred
 
-- V3-0 follow-ups **in flight** (do not claim shipped): post-page connected-only, board complexity/language badges + filters, DEV-only header badge
-- Hosted Coinbase checkout: **disabled**
+- Hosted Coinbase checkout: **planned / deferred** (ADR 0001; parked later)
+- V4 public API + MCP; V5 agent economy — planned, no dates
 - BTC / sats payouts: **deferred**
 - **V3 is not on PROD**
 

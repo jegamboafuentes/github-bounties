@@ -1,15 +1,15 @@
 # Public roadmap
 
-High-level upcoming versions for **GitHub Bounties**. This is not Lightning Bounties / LB1.
+High-level versions for **GitHub Bounties**. This is not Lightning Bounties / LB1.
 
 The homepage reads the same items from [`apps/web/src/home/roadmap.ts`](../apps/web/src/home/roadmap.ts). Edit that constant (and this file) when a version actually ships. **Do not invent ship dates.**
 
-Status words:
+Refreshed **as of 2026-09-21**. Status words only — no Q-dates.
 
 | Status | Meaning |
 | --- | --- |
-| `shipped` | On `main` and in the product |
-| `in_progress` | Work or dogfood is underway; no public date |
+| `shipped` | On `main` and in the product (PROD unless noted) |
+| `in_progress` | Work is underway; no public date |
 | `planned` | Intended; not scheduled |
 
 ## Shipped
@@ -20,33 +20,43 @@ Google sign-in, GitHub App, public board, 2% fee at settlement, winner = author 
 
 ### V2 — Parallel hunt + participation pool
 
-V2-0…V2-4: 15% of **post-fee** to at most 10 eligible hunters, optional Working on this, roster + payout breakdown, exclusive 72h claim-lock sunset. ADR 0003.
+V2-0…V2-5: 15% of **post-fee** to at most 10 eligible hunters, optional Working on this, roster + payout breakdown, exclusive 72h claim-lock sunset. Live DEV dogfood done. ADR 0003.
 
 ### Pool member self-claim
 
-Winner Claim pays winner share + platform fee only and succeeds even if pool hunters have no Settings wallet. Each frozen pool participant Claims their own share later. Hosted checkout stays disabled. DEV remount after merge; no PROD remount required.
+Manual pool Claim ([#47](https://github.com/jegamboafuentes/github-bounties/pull/47)) is on **PROD**. Winner Claim pays winner share + platform fee only and succeeds even if pool hunters have no Settings wallet. Each frozen pool participant Claims their own share later.
 
-## In progress
+### Homepage stats, roadmap, differentiators
 
-### V2-5 — DEV dogfood
-
-Checklist / runbook is in [staging-e2e.md](staging-e2e.md). Live multi-hunter dogfood is pending Enrique. No public ship date.
-
-### V3-0 — Issue body + bounty intelligence
-
-Full GitHub issue on the bounty detail page. Server-side Gemini card (repo about / stack / complexity S·M·L) as **AI estimates**, cached. Optional `GEMINI_API_KEY`; page degrades without it. DEV remount only; PROD not wired.
-
-## Planned (V3+)
-
-No committed dates. Order may change.
+Live platform stats (`GET /api/stats`), this public roadmap, and vs-Lightning differentiators on the homepage.
 
 ### Bounty detail split charts (FE-2)
 
-Pie / split visuals on bounty pages. Out of scope for the homepage slice.
+Pie / split visuals on bounty payout breakdown. Shipped on bounty pages.
+
+## In progress
+
+### V3-0 — Issue body + bounty intelligence
+
+**Live on DEV, not PROD.** Full GitHub issue on the bounty detail page. Server-side Gemini card (repo about / stack / complexity S·M·L) as **AI estimates**, cached. Optional `GEMINI_API_KEY`; page degrades without it.
+
+V3 polish on DEV (same in-progress slice; no dates): board complexity/language badges + filters, Settings/Post connected-only copy, DEV header pill.
+
+## Planned
+
+No committed dates. Order may change.
 
 ### Hosted Coinbase checkout
 
-Still **disabled** until settlement fee / net proceeds equal face (ADR 0001). DEV fund remains x402 `exact` to `gb-escrow`.
+Planned / deferred (parked later). Still **disabled** until settlement fee / net proceeds equal face ([ADR 0001](adr/0001-cdp-x402-wallets.md)). Fund remains x402 `exact` to `gb-escrow`.
+
+### V4 — Public API + MCP
+
+HTTP API and MCP so agents can list, fund, and claim without a browser.
+
+### V5 — Agent economy
+
+Agent-native hunt and settlement on the same merge-is-truth rails. Exploratory.
 
 ## Explicit non-goals for this doc
 

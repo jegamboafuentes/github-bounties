@@ -27,7 +27,7 @@ export default async function Home() {
           <HomeCompare />
           <HomeRoadmap />
           <HomeModules />
-          <p className="home-reveal-item text-sm text-zinc-500">
+          <p className="home-footer-note home-reveal-item text-sm text-zinc-500">
           {NOT_LIGHTNING_BOUNTIES} Sign in with Google.{" "}
           <Link href="/board" className="underline underline-offset-4">
             Board

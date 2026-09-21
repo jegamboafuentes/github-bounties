@@ -12,8 +12,8 @@ function statusClass(status: RoadmapStatus): string {
 
 export function HomeRoadmap() {
   return (
-    <section id="roadmap" className="flex flex-col gap-4">
-        <div className="home-reveal-item">
+    <section id="roadmap" className="home-section-roadmap flex flex-col gap-4">
+        <div className="home-section-heading home-reveal-item">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
             Public roadmap
           </h2>
@@ -24,7 +24,7 @@ export function HomeRoadmap() {
         </div>
         <ol className="relative space-y-3 border-l border-zinc-200 pl-5 dark:border-zinc-800">
           {PUBLIC_ROADMAP.map((item) => (
-            <li key={item.id} className="home-reveal-item relative">
+            <li key={item.id} className="home-roadmap-item home-reveal-item relative">
               <span
                 aria-hidden
                 className="absolute -left-[25px] top-5 h-2.5 w-2.5 rounded-full border border-zinc-300 bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-950"
