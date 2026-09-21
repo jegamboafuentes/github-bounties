@@ -31,7 +31,7 @@ describe("public roadmap", () => {
     assert.deepEqual(ranks, [...ranks].sort((a, b) => a - b));
   });
 
-  it("marks shipped V1–V2 / FE slices and keeps V3-0 DEV-only", () => {
+  it("marks shipped V1–V2 / FE / V3-0 slices and keeps later items planned", () => {
     const byId = Object.fromEntries(PUBLIC_ROADMAP.map((item) => [item.id, item]));
     assert.equal(byId.v1?.status, "shipped");
     assert.equal(byId.v2?.status, "shipped");
@@ -46,10 +46,14 @@ describe("public roadmap", () => {
     assert.equal(byId["fe-2"]?.status, "shipped");
     assert.equal(byId["fe-2"]?.version, "FE-2");
     assert.match(byId["fe-2"]?.summary ?? "", /Shipped on bounty pages/i);
-    assert.equal(byId["v3-0"]?.status, "in_progress");
-    assert.match(byId["v3-0"]?.summary ?? "", /Live on DEV, not PROD/i);
+    assert.equal(byId["v3-0"]?.status, "shipped");
+    assert.match(byId["v3-0"]?.summary ?? "", /Shipped on PROD/i);
+    assert.doesNotMatch(byId["v3-0"]?.summary ?? "", /Live on DEV, not PROD/i);
+    assert.doesNotMatch(byId["v3-0"]?.summary ?? "", /in_progress/i);
     assert.match(byId["v3-0"]?.summary ?? "", /AI estimates/i);
-    assert.match(byId["v3-0"]?.summary ?? "", /DEV pill/i);
+    assert.match(byId["v3-0"]?.summary ?? "", /board badges\/filters/i);
+    assert.match(byId["v3-0"]?.summary ?? "", /Settings\/Post connected-only/i);
+    assert.match(byId["v3-0"]?.summary ?? "", /homepage motion/i);
     assert.equal(byId["hosted-checkout"]?.status, "planned");
     assert.match(byId["hosted-checkout"]?.summary ?? "", /deferred/i);
     assert.match(byId["hosted-checkout"]?.summary ?? "", /ADR 0001/);
@@ -63,6 +67,9 @@ describe("public roadmap", () => {
     assert.match(docsRoadmap, /Do not invent ship dates/i);
     assert.match(docsRoadmap, /as of 2026-09-21/i);
     assert.doesNotMatch(docsRoadmap, /pending Enrique/i);
+    assert.match(docsRoadmap, /Shipped on PROD/i);
+    assert.doesNotMatch(docsRoadmap, /Live on DEV, not PROD/i);
+    assert.doesNotMatch(docsRoadmap, /## In progress/i);
     for (const item of PUBLIC_ROADMAP) {
       assert.match(docsRoadmap, new RegExp(item.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }

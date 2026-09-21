@@ -57,8 +57,8 @@ export const PUBLIC_ROADMAP = [
     version: "V3-0",
     title: "Issue body + bounty intelligence",
     summary:
-      "Live on DEV, not PROD. Full GitHub issue + Gemini about/stack/complexity (AI estimates, cached). V3 polish on DEV: board badges/filters, Settings/Post connected-only, DEV pill.",
-    status: "in_progress",
+      "Shipped on PROD. Full GitHub issue + Gemini about/stack/complexity (AI estimates, cached). Related polish: board badges/filters, Settings/Post connected-only, homepage motion/roadmap refresh.",
+    status: "shipped",
   },
   {
     id: "hosted-checkout",
