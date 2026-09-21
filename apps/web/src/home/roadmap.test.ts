@@ -29,6 +29,8 @@ describe("public roadmap", () => {
     assert.equal(byId.v2?.status, "shipped");
     assert.equal(byId["v2-5"]?.status, "in_progress");
     assert.match(byId["v2-5"]?.summary ?? "", /no public ship date/i);
+    assert.equal(byId["v3-0"]?.status, "in_progress");
+    assert.match(byId["v3-0"]?.summary ?? "", /AI estimates/i);
     assert.equal(byId["fe-2"]?.status, "planned");
     assert.equal(byId["fe-2"]?.version, "V3+");
     assert.equal(byId["hosted-checkout"]?.status, "planned");

@@ -21,9 +21,10 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 | `pool_participants` | V2-1 frozen roster. Unique `(bounty_id, github_id)`. `role` ∈ `winner \| pool \| overflow \| excluded_poster \| excluded_bot`. Nullable `user_id`. Equal `share_usdc` (0 for overflow/excluded). |
 | `allocation_ledger` | V2-1 one row per intended chain movement. `kind` ∈ `FEE_OUT \| WINNER_PAYOUT \| POOL_PAYOUT`. Unique `(bounty_id, kind, participant_id)` (`NULLS NOT DISTINCT`) and unique `idempotency_key`. |
 | `work_signals` | V2-1 non-exclusive “working on this”. Many rows per bounty / `(bounty_id, user_id)`. **No** exclusive unique index. Not a money row. |
+| `bounty_intelligence` | V3-0 Gemini cache keyed by `bounty_id` (repo about, stack, complexity S/M/L, source fingerprint, `generated_at`) |
 | `webhook_deliveries` | GitHub `X-GitHub-Delivery` GUID primary key (V1-3 idempotency); `claim_results` JSON + winner/PR/repo for skip reasons |
 
-`bounties.participation_pool_bps` default **1500 = 15% of post-fee**, not of face (ADR 0003 / V2-1). `participation_pool_usdc` is filled at V2-3 settle when `N` is known. `escrows.payout_tx_hash` remains the **winner** hash for V1 readers; pool hashes live on `allocation_ledger` / `pool_participants`.
+`bounties.participation_pool_bps` default **1500 = 15% of post-fee**, not of face (ADR 0003 / V2-1). `participation_pool_usdc` is filled at V2-3 settle when `N` is known. `escrows.payout_tx_hash` remains the **winner** hash for V1 readers; pool hashes live on `allocation_ledger` / `pool_participants`. `bounties.issue_body_synced_at` records the last GitHub issue-body sync (V3-0).
 
 ## Status enums (ADR 0001 mapping)
 
@@ -65,3 +66,5 @@ Google Sign-In (V1-2) also uses Secret Manager keys `GOOGLE_OAUTH_CLIENT_ID`, `G
 GitHub App (V1-3) uses Secret Manager keys `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_PRIVATE_KEY`, plus App id/slug/client as needed. See [github-app.md](github-app.md). Empty placeholders only in `.env.example`.
 
 CDP / x402 (V1-5) uses Secret Manager keys `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET` (optional `CDP_PROJECT_ID`, `CDP_CLIENT_API_KEY`). See [escrow.md](escrow.md). Never commit values.
+
+Gemini bounty intelligence (V3-0) uses optional Secret Manager key `GEMINI_API_KEY` (server-only, never `NEXT_PUBLIC_*`). Cache table `bounty_intelligence`. See [bounty-intelligence.md](bounty-intelligence.md).

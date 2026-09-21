@@ -16,7 +16,7 @@ describe("homepage stats display", () => {
         byStatus: { pending_fund: 1, funded: 2, settled: 3, refunded: 4 },
         transactedUsdc: "150.5",
         developersParticipated: 6,
-        reposConnected: 2,
+        reposWithBounties: 2,
       },
       new Date("2026-09-20T00:00:00.000Z"),
     );
@@ -42,8 +42,10 @@ describe("homepage stats display", () => {
     assert.match(byKey["volumeUsdc.transacted"]?.hint ?? "", /Excludes fees/);
     assert.equal(byKey["developers.participated"]?.label, "Developers");
     assert.equal(byKey["developers.participated"]?.value, "6");
-    assert.equal(byKey["repos.connected"]?.label, "Repos connected");
-    assert.equal(byKey["repos.connected"]?.value, "2");
+    assert.equal(byKey["repos.withBounties"]?.label, "Repos with bounties");
+    assert.equal(byKey["repos.withBounties"]?.value, "2");
+    assert.match(byKey["repos.withBounties"]?.hint ?? "", /Not bare GitHub App installs/);
+    assert.equal(byKey["repos.connected"], undefined);
   });
 
   it("formats empty-DB zeros the same way GET /api/stats does", () => {

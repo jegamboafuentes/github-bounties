@@ -237,6 +237,7 @@ Cloud Run `--set-secrets=ENV=NAME:latest`. Names only.
 | `CDP_WEBHOOK_SECRET` | `CDP_WEBHOOK_SECRET` | **no** | `enabled_versions=0` |
 | `CRON_SECRET` | `CRON_SECRET` | **no** | Not in SM; optional after smoke |
 | `AUTH_URL` | `AUTH_URL` | **no** | Create after live origin |
+| `GEMINI_API_KEY` | `GEMINI_API_KEY` | **optional** | V3-0 bounty intelligence. **DEV only.** Attach `GEMINI_API_KEY=GEMINI_API_KEY:latest` when an enabled version exists (already mounted on DEV `github-bounties-web`). Skip cleanly when absent — do not add it to the required first-deploy `--set-secrets` list (`--set-secrets` fails if a named secret has 0 versions). Not wired on PROD. |
 
 Plain env (not Secret Manager):
 
@@ -250,6 +251,8 @@ Plain env (not Secret Manager):
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | omit | Public Reown Cloud project id (not SM). Needed for WalletConnect QR on fund / Lock. Browser wallets work without it. Allow `https://dev.githubbounties.xyz` and `http://localhost:3000` in the Reown dashboard. |
 
 `--set-secrets` fails if the named secret has **no enabled version**.
+
+`GEMINI_API_KEY` is a `WEB_OPTIONAL_SECRET` in [`infra/gcloud/config.sh`](../infra/gcloud/config.sh). `deploy-web.sh` (static and discover) attaches it when Secret Manager has an enabled version so a full DEV remount with `--set-secrets` does not drop the existing mount. If the secret is missing, the deploy skips it and the bounty page degrades the intelligence card. **PROD is not wired.**
 
 Rotate: add a new SM version, then deploy a no-op revision (or re-submit this
 build) so instances restart. See [gcp-bootstrap.md](gcp-bootstrap.md#rotate-secrets).

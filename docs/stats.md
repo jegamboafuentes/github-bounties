@@ -10,12 +10,12 @@ After this lands on `main`, remount **DEV** (`github-bounties-web` / `https://de
 
 `GET /api/stats` → `200` JSON, `cache-control: no-store`. No auth.
 
-`schemaVersion` is `1`. Bump it when field names or bucket membership change.
+`schemaVersion` is `2`. Bump it when field names or bucket membership change. V3-0 replaced `repos.connected` (App installs) with `repos.withBounties` (repos that have had real platform work).
 
 ```json
 {
   "ok": true,
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "generatedAt": "2026-09-20T15:00:00.000Z",
   "product": "GitHub Bounties",
   "currency": "USDC",
@@ -56,7 +56,7 @@ After this lands on `main`, remount **DEV** (`github-bounties-web` / `https://de
     "githubLinked": 0
   },
   "repos": {
-    "connected": 0,
+    "withBounties": 0,
     "total": 0
   }
 }
@@ -110,8 +110,8 @@ Each escrow is 1:1 with a bounty, so a bounty is counted once.
 
 | Field | Definition |
 | --- | --- |
-| `connected` | `repos.is_active` (App-connected). |
-| `total` | All `repos` rows. |
+| `withBounties` | Distinct `bounties.repo_id` — repos that have had **real platform work** (≥1 bounty row, any status). Does **not** count bare GitHub App installations. `repos.is_active` alone is the wrong metric. Inactive installs that still have bounty history **do** count. |
+| `total` | All `repos` rows (install records, including unused). Not shown on the homepage. |
 
 ## Consumers
 

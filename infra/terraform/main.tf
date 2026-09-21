@@ -74,6 +74,7 @@ locals {
     "GOOGLE_OAUTH_CLIENT_ID",
     "GOOGLE_OAUTH_CLIENT_SECRET",
     "CRON_SECRET",
+    "GEMINI_API_KEY",
   ]
 }
 

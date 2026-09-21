@@ -8,7 +8,7 @@ import { WalletForm } from "@/components/wallet-form";
 import { signOutToHome } from "@/app/actions/auth";
 import { PRODUCT_NAME } from "@/lib/constants";
 import { getRuntimeDb } from "@/db/runtime";
-import { findGithubLinkByUserId, listReposForUser } from "@/github/persist";
+import { findGithubLinkByUserId } from "@/github/persist";
 import { missingGitHubAppInstallEnv } from "@/webhooks/env";
 import { walletConnectConfigured } from "@/wallet/env";
 
@@ -22,10 +22,7 @@ export default async function SettingsPage({
   const user = await requirePageUser("/settings");
   const query = await searchParams;
   const db = getRuntimeDb();
-  const [link, connectedRepos] = await Promise.all([
-    findGithubLinkByUserId(user.id, db),
-    listReposForUser(user.id, db),
-  ]);
+  const link = await findGithubLinkByUserId(user.id, db);
   const missingApp = missingGitHubAppInstallEnv();
 
   return (
@@ -111,37 +108,30 @@ export default async function SettingsPage({
 
         <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-            {link ? "Connected GitHub" : "Connect GitHub"}
+            GitHub connection
           </h2>
+          <p className="text-sm font-medium">
+            {link ? (
+              <span className="inline-flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
+                Connected
+                <GitHubAvatar login={link.githubLogin} size={24} />
+                <span>{link.githubLogin}</span>
+              </span>
+            ) : (
+              <span className="text-zinc-500">Not connected</span>
+            )}
+          </p>
           {link ? (
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Linked as{" "}
-              <span className="inline-flex items-center gap-2 align-middle font-medium text-zinc-900 dark:text-zinc-100">
-                <GitHubAvatar login={link.githubLogin} size={24} />
-                {link.githubLogin}
-              </span>
-              . Merge payouts match this login. Disconnect to Connect a different
-              GitHub account. Product login stays Google.
+              Merge payouts match this login. Disconnect to Connect a different GitHub
+              account. Product login stays Google.
             </p>
           ) : (
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Product login stays Google. Connecting installs the GitHub App and stores
-              the installation on <code>repos</code>, then links{" "}
+              Product login stays Google. Connecting installs the GitHub App and links{" "}
               <code>github_links</code> so merge authors can claim payouts.
             </p>
           )}
-          {connectedRepos.length > 0 ? (
-            <ul className="list-disc pl-5 text-sm text-zinc-700 dark:text-zinc-300">
-              {connectedRepos.map((repo) => (
-                <li key={repo.id}>
-                  {repo.fullName}{" "}
-                  <span className="text-zinc-500">
-                    (installation {repo.installationId.toString()})
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
           {missingApp.length > 0 ? (
             <ConnectGitHubButton
               blocked

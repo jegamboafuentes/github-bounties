@@ -10,9 +10,8 @@ import { findActiveRepoByFullName } from "../github/persist";
 import { DEFAULT_CHAIN, DEFAULT_CURRENCY } from "../lib/constants";
 import { normalizeBountyAmountUsdc } from "./amount";
 import { BountyError } from "./errors";
+import { clipIssueBody } from "./markdown";
 import { parseGitHubIssueUrl } from "./parse-issue-url";
-
-const DESCRIPTION_MAX = 4000;
 
 export type CreateBountyInput = {
   posterUserId: string;
@@ -95,10 +94,10 @@ export async function createBountyFromIssueUrl(
     }
   }
 
+  const fetchedFromGitHub = !input.title?.trim() && Boolean(snapshot);
   const title = snapshot?.title?.trim() || `${parsed.fullName}#${parsed.issueNumber}`;
-  const descriptionSnapshot = clip(
+  const descriptionSnapshot = clipIssueBody(
     input.description?.trim() || snapshot?.body || null,
-    DESCRIPTION_MAX,
   );
 
   try {
@@ -116,6 +115,7 @@ export async function createBountyFromIssueUrl(
           status: "pending_fund",
           title,
           descriptionSnapshot,
+          issueBodySyncedAt: fetchedFromGitHub ? new Date() : null,
         })
         .returning({
           id: bounties.id,
@@ -156,10 +156,4 @@ export async function createBountyFromIssueUrl(
     }
     throw err;
   }
-}
-
-function clip(value: string | null, max: number): string | null {
-  if (!value) return null;
-  if (value.length <= max) return value;
-  return `${value.slice(0, max - 1)}…`;
 }

@@ -10,6 +10,6 @@ describe("homepage stats loader", () => {
     assert.equal(source.stats.bounties.total, 0);
     assert.equal(source.stats.volumeUsdc.transacted, "0.000000");
     assert.equal(source.stats.developers.participated, 0);
-    assert.equal(source.stats.repos.connected, 0);
+    assert.equal(source.stats.repos.withBounties, 0);
   });
 });

@@ -39,7 +39,21 @@ secret_has_enabled_version() {
   [[ -n "${found}" ]]
 }
 
+# Optional WEB secrets (GEMINI_API_KEY): attach when SM has an enabled version.
+# Skip cleanly when absent. Not gated on GB_ATTACH_OPTIONAL_SECRETS (that's the
+# skip-list: CRON / CDP_WEBHOOK / AUTH_URL). Never prints values.
+append_optional_web_secrets() {
+  local -n _pairs=$1
+  local name
+  for name in "${WEB_OPTIONAL_SECRETS[@]}"; do
+    if secret_has_enabled_version "${name}"; then
+      _pairs+=("${name}=${name}:latest")
+    fi
+  done
+}
+
 # First-deploy static map (Cloud Build). Required + CDP. Never AUTH_URL / CRON / CDP_WEBHOOK.
+# Optional WEB secrets (GEMINI) attach only when an enabled version exists.
 web_static_set_secrets_csv() {
   local pairs=()
   local name
@@ -51,11 +65,13 @@ web_static_set_secrets_csv() {
       pairs+=("${name}=${name}:latest")
     done
   fi
+  append_optional_web_secrets pairs
   local IFS=","
   echo "${pairs[*]}"
 }
 
 # Discover: bind names that have versions, except skip-list (0 versions / not yet).
+# Optional WEB secrets attach when present, independent of GB_ATTACH_OPTIONAL_SECRETS.
 web_set_secrets_csv() {
   local pairs=()
   local name
@@ -71,6 +87,7 @@ web_set_secrets_csv() {
       fi
     done
   fi
+  append_optional_web_secrets pairs
   local IFS=","
   echo "${pairs[*]}"
 }
@@ -98,7 +115,13 @@ web_print_secret_map() {
     echo "    ${name} -> ${name}"
   done
   echo
-  echo "  Do not attach on first deploy:"
+  echo "  Optional WEB (attach ENV=NAME:latest when an enabled SM version exists;"
+  echo "  skip cleanly when absent — not required, not PROD):"
+  for name in "${WEB_OPTIONAL_SECRETS[@]}"; do
+    echo "    ${name} -> ${name}"
+  done
+  echo
+  echo "  Do not attach on first deploy (GB_ATTACH_OPTIONAL_SECRETS=1 to bind if present):"
   echo "    CDP_WEBHOOK_SECRET  (resource exists, enabled_versions=0)"
   echo "    CRON_SECRET         (not in SM; expire-locks open for smoke)"
   echo "    AUTH_URL            (create after live Cloud Run origin)"

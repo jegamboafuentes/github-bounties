@@ -60,8 +60,8 @@ function assertPlatformStatsShape(stats: PlatformStats) {
   }
   assert.ok(stats.developers.participated >= 0);
   assert.ok(stats.developers.githubLinked >= 0);
-  assert.ok(stats.repos.connected >= 0);
-  assert.ok(stats.repos.total >= stats.repos.connected);
+  assert.ok(stats.repos.withBounties >= 0);
+  assert.ok(stats.repos.total >= stats.repos.withBounties);
 }
 
 describe("getPlatformStats (empty-or-seeded Postgres)", () => {
@@ -98,10 +98,13 @@ describe("getPlatformStats (empty-or-seeded Postgres)", () => {
     const extraRepoOwnerId = randomUUID();
     const repoActiveId = randomUUID();
     const repoInactiveId = randomUUID();
+    const repoBareId = randomUUID();
+    const repoBareExtraId = randomUUID();
     const pendingId = randomUUID();
     const fundedId = randomUUID();
     const settledId = randomUUID();
     const refundedId = randomUUID();
+    const inactiveBountyId = randomUUID();
     const pendingEscrowId = randomUUID();
     const fundedEscrowId = randomUUID();
     const settledEscrowId = randomUUID();
@@ -160,6 +163,22 @@ describe("getPlatformStats (empty-or-seeded Postgres)", () => {
           connectedByUserId: extraRepoOwnerId,
           isActive: false,
         },
+        {
+          id: repoBareId,
+          githubRepoId: BigInt(84_000_000 + Number.parseInt(suffix.slice(0, 6), 16)),
+          fullName: `stats/bare-${suffix}`,
+          installationId: BigInt(79),
+          connectedByUserId: extraRepoOwnerId,
+          isActive: true,
+        },
+        {
+          id: repoBareExtraId,
+          githubRepoId: BigInt(85_000_000 + Number.parseInt(suffix.slice(0, 6), 16)),
+          fullName: `stats/bare-extra-${suffix}`,
+          installationId: BigInt(80),
+          connectedByUserId: extraRepoOwnerId,
+          isActive: true,
+        },
       ]);
 
       await db.insert(bounties).values([
@@ -205,6 +224,16 @@ describe("getPlatformStats (empty-or-seeded Postgres)", () => {
           status: "refunded",
           title: "stats refunded",
           fundedAt: NOW,
+        },
+        {
+          id: inactiveBountyId,
+          repoId: repoInactiveId,
+          githubIssueNumber: 201,
+          url: `https://github.com/stats/inactive-${suffix}/issues/201`,
+          posterUserId: posterId,
+          amountUsdc: "1.000000",
+          status: "cancelled",
+          title: "stats inactive-repo bounty",
         },
       ]);
 
@@ -358,15 +387,57 @@ describe("getPlatformStats (empty-or-seeded Postgres)", () => {
       `;
       assert.equal(Number(fixtureDevs?.n), 3);
 
-      const [fixtureRepos] = await sql<{ connected: number; total: number }[]>`
+      const [fixtureRepos] = await sql<{
+        with_bounties: number;
+        active_installs: number;
+        total: number;
+        bare_has_bounty: boolean;
+        bare_extra_has_bounty: boolean;
+        inactive_is_active: boolean;
+        inactive_has_bounty: boolean;
+      }[]>`
         select
-          count(*) filter (where is_active)::int as connected,
-          count(*)::int as total
+          (
+            select count(distinct repo_id)::int from bounties
+            where repo_id in (
+              ${repoActiveId}::uuid, ${repoInactiveId}::uuid, ${repoBareId}::uuid,
+              ${repoBareExtraId}::uuid
+            )
+          ) as with_bounties,
+          (
+            select count(*)::int from repos
+            where is_active
+              and id in (
+                ${repoActiveId}::uuid, ${repoInactiveId}::uuid, ${repoBareId}::uuid,
+                ${repoBareExtraId}::uuid
+              )
+          ) as active_installs,
+          count(*)::int as total,
+          exists(select 1 from bounties where repo_id = ${repoBareId}::uuid) as bare_has_bounty,
+          exists(select 1 from bounties where repo_id = ${repoBareExtraId}::uuid) as bare_extra_has_bounty,
+          exists(select 1 from repos where id = ${repoInactiveId}::uuid and is_active) as inactive_is_active,
+          exists(select 1 from bounties where repo_id = ${repoInactiveId}::uuid) as inactive_has_bounty
         from repos
-        where id in (${repoActiveId}::uuid, ${repoInactiveId}::uuid)
+        where id in (
+          ${repoActiveId}::uuid, ${repoInactiveId}::uuid, ${repoBareId}::uuid,
+          ${repoBareExtraId}::uuid
+        )
       `;
-      assert.equal(Number(fixtureRepos?.connected), 1);
-      assert.equal(Number(fixtureRepos?.total), 2);
+      // Worked repos: active (4 bounties) + inactive (1 bounty). Two bare App installs do not count.
+      // withBounties=2, active installs=3 (active + two bare); membership ≠ repos.is_active.
+      assert.equal(Number(fixtureRepos?.with_bounties), 2);
+      assert.equal(Number(fixtureRepos?.active_installs), 3);
+      assert.equal(Number(fixtureRepos?.total), 4);
+      assert.notEqual(
+        Number(fixtureRepos?.with_bounties),
+        Number(fixtureRepos?.active_installs),
+        "withBounties must not equal repos.is_active (bare installs)",
+      );
+      assert.equal(Boolean(fixtureRepos?.bare_has_bounty), false);
+      assert.equal(Boolean(fixtureRepos?.bare_extra_has_bounty), false);
+      assert.equal(Boolean(fixtureRepos?.inactive_is_active), false);
+      assert.equal(Boolean(fixtureRepos?.inactive_has_bounty), true);
+      assert.ok(after.repos.withBounties >= 2);
       assert.ok(usdcToAtomic(after.volumeUsdc.transacted) >= usdcToAtomic("160.000000"));
     } finally {
       await sql`
@@ -386,11 +457,15 @@ describe("getPlatformStats (empty-or-seeded Postgres)", () => {
       `;
       await sql`
         delete from bounties where id in (
-          ${pendingId}::uuid, ${fundedId}::uuid, ${settledId}::uuid, ${refundedId}::uuid
+          ${pendingId}::uuid, ${fundedId}::uuid, ${settledId}::uuid, ${refundedId}::uuid,
+          ${inactiveBountyId}::uuid
         )
       `;
       await sql`
-        delete from repos where id in (${repoActiveId}::uuid, ${repoInactiveId}::uuid)
+        delete from repos where id in (
+          ${repoActiveId}::uuid, ${repoInactiveId}::uuid, ${repoBareId}::uuid,
+          ${repoBareExtraId}::uuid
+        )
       `;
       await sql`delete from github_links where user_id = ${hunterLinkedId}::uuid`;
       await sql`

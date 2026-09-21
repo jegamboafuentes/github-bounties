@@ -65,7 +65,7 @@ describe("platform stats definitions", () => {
     const stats = assemblePlatformStats(emptyPlatformStatsAggregates(), now);
     assert.equal(stats.ok, true);
     assert.equal(stats.schemaVersion, PLATFORM_STATS_SCHEMA_VERSION);
-    assert.equal(stats.schemaVersion, 1);
+    assert.equal(stats.schemaVersion, 2);
     assert.equal(stats.generatedAt, now.toISOString());
     assert.equal(stats.product, "GitHub Bounties");
     assert.equal(stats.currency, "USDC");
@@ -83,7 +83,7 @@ describe("platform stats definitions", () => {
       completed: "0.000000",
     });
     assert.deepEqual(stats.developers, { participated: 0, githubLinked: 0 });
-    assert.deepEqual(stats.repos, { connected: 0, total: 0 });
+    assert.deepEqual(stats.repos, { withBounties: 0, total: 0 });
   });
 
   it("sums product buckets and open face without adding fee legs", () => {
@@ -116,7 +116,7 @@ describe("platform stats definitions", () => {
         transactedUsdc: "150",
         developersParticipated: 4,
         developersGithubLinked: 7,
-        reposConnected: 2,
+        reposWithBounties: 2,
         reposTotal: 3,
       },
       new Date("2026-09-20T00:00:00.000Z"),
@@ -133,8 +133,13 @@ describe("platform stats definitions", () => {
     assert.equal(stats.volumeUsdc.completed, "55.000000");
     assert.equal(stats.developers.participated, 4);
     assert.equal(stats.developers.githubLinked, 7);
-    assert.equal(stats.repos.connected, 2);
+    assert.equal(stats.repos.withBounties, 2);
     assert.equal(stats.repos.total, 3);
+    assert.equal(
+      "connected" in stats.repos,
+      false,
+      "repos.connected was App-install count; V3-0 uses withBounties",
+    );
   });
 
   it("coerces empty / invalid SQL scalars to zero", () => {

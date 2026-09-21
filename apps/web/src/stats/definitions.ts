@@ -3,7 +3,7 @@ import { DEFAULT_CURRENCY } from "../lib/constants";
 import { atomicToUsdc, usdcToAtomic } from "../lib/money";
 
 /** Public GET /api/stats payload version. Bump when field names or bucket membership change. */
-export const PLATFORM_STATS_SCHEMA_VERSION = 1;
+export const PLATFORM_STATS_SCHEMA_VERSION = 2;
 
 export type BountyStatus = (typeof bountyStatusValues)[number];
 export type EscrowStatus = (typeof escrowStatusValues)[number];
@@ -113,8 +113,8 @@ export type PlatformStats = {
     githubLinked: number;
   };
   repos: {
-    /** `repos.is_active` (App-connected). */
-    connected: number;
+    /** Distinct repos with ≥1 bounty row (any status). Not bare App installs. */
+    withBounties: number;
     total: number;
   };
 };
@@ -125,7 +125,7 @@ export type PlatformStatsAggregates = {
   transactedUsdc: string;
   developersParticipated: number;
   developersGithubLinked: number;
-  reposConnected: number;
+  reposWithBounties: number;
   reposTotal: number;
 };
 
@@ -147,7 +147,7 @@ export function emptyPlatformStatsAggregates(): PlatformStatsAggregates {
     transactedUsdc: "0",
     developersParticipated: 0,
     developersGithubLinked: 0,
-    reposConnected: 0,
+    reposWithBounties: 0,
     reposTotal: 0,
   };
 }
@@ -235,7 +235,7 @@ export function assemblePlatformStats(
       githubLinked: asCount(raw.developersGithubLinked),
     },
     repos: {
-      connected: asCount(raw.reposConnected),
+      withBounties: asCount(raw.reposWithBounties),
       total: asCount(raw.reposTotal),
     },
   };
