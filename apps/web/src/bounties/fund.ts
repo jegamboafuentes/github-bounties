@@ -1,4 +1,5 @@
 import type { Database } from "../db/client";
+import type { DomainEmailDeps } from "../email/events";
 import { EscrowError, lockEscrowFunds, type CdpRail } from "../escrow";
 import { BountyError } from "./errors";
 
@@ -20,7 +21,7 @@ export async function fundBounty(
   actorUserId: string,
   db: Database,
   now: Date = new Date(),
-  opts?: { rail?: CdpRail; fundTxHash?: string | null },
+  opts?: { rail?: CdpRail; fundTxHash?: string | null; email?: DomainEmailDeps },
 ): Promise<FundedBounty> {
   try {
     const locked = await lockEscrowFunds(bountyId, actorUserId, {
@@ -28,6 +29,7 @@ export async function fundBounty(
       now,
       rail: opts?.rail,
       fundTxHash: opts?.fundTxHash,
+      email: opts?.email,
     });
     return {
       id: locked.bountyId,

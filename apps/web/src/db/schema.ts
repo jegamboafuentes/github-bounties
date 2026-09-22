@@ -145,8 +145,8 @@ export const users = pgTable(
 
 /**
  * Transactional email templates. Welcome is enqueued on first signup.
- * The other names are render/enqueue primitives for later events — this
- * migration does not subscribe them to fund, merge, settle, or pool Claim.
+ * The other names are enqueued from confirmed fund lock, winning-merge
+ * eligibility, and winner-share settlement. DEV only — no PROD wiring.
  */
 export const EMAIL_TEMPLATE_VALUES = [
   "welcome",

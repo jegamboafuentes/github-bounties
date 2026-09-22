@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { bounties, claims, githubLinks, poolParticipants, repos, users } from "../db/schema";
+import type { DomainEmailDeps } from "../email/events";
 import { isEscrowError, settleEscrow, type SettleResult } from "../escrow";
 import { loadFrozenSettleSet } from "../escrow/allocation";
 import type { CdpRail } from "../escrow/rail";
@@ -45,6 +46,8 @@ export type ClaimPayoutOpts = {
   db: Database;
   rail?: CdpRail;
   now?: Date;
+  /** Optional. Production uses process.env. A missing Resend key does not fail Claim. */
+  email?: DomainEmailDeps;
 };
 
 /**

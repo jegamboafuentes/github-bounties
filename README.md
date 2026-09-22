@@ -47,7 +47,7 @@ As of **2026-09-21**. No invented ship dates. V3-0 is **DEV only** — do not tr
 - V4 public API + MCP; V5 agent economy — planned, no dates
 - BTC / sats payouts: **deferred**
 - **V3 is not on PROD**
-- **V3.x A1** welcome email is a DEV foundation (migrate `0006`, optional `RESEND_API_KEY`). Not remounted. Not on PROD. Manual pool Claim is unchanged.
+- **V3.x A1–A2** transactional email is a DEV foundation (migrate `0006`, optional `RESEND_API_KEY`). A2 enqueues funder / winner / pool-claimable notes from the existing lock, eligibility, and winner-settlement writes. Not remounted. Not on PROD. Manual pool Claim is unchanged.
 
 Public roadmap copy: [docs/roadmap.md](docs/roadmap.md).
 
@@ -80,7 +80,7 @@ Decisions, sequences, and failure modes:
 | Escrow, 2% fee, x402 Lock | [docs/escrow.md](docs/escrow.md) |
 | Winner + pool Claim | [docs/claims.md](docs/claims.md) |
 | Issue body + Gemini intelligence (DEV) | [docs/bounty-intelligence.md](docs/bounty-intelligence.md) |
-| Sign-in identity + welcome email (DEV, not remounted) | [docs/email.md](docs/email.md) |
+| Sign-in identity + DEV transactional email (welcome and domain events, not remounted) | [docs/email.md](docs/email.md) |
 | Public stats (`GET /api/stats`) | [docs/stats.md](docs/stats.md) |
 | Google sign-in | [docs/google-signin.md](docs/google-signin.md) |
 | GitHub App + webhooks | [docs/github-app.md](docs/github-app.md), [docs/webhooks.md](docs/webhooks.md) |

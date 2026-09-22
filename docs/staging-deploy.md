@@ -97,7 +97,7 @@ V2-1 (after merge): applies additive `0004_v2_pool_participants` (`pool_particip
 
 **V3-0 remount (DEV):** apply migrate `0005_bounty_intelligence` (`bounty_intelligence` + `bounties.issue_body_synced_at`) **in the same remount** as the web revision. `GEMINI_API_KEY` as a Cloud Run secret is not enough without this table — the intelligence card degrades with `error · missing_table`. See [bounty-intelligence.md](bounty-intelligence.md). **PROD is not wired.**
 
-**V3.x A1 (DEV only):** apply migrate `0006_user_identity_email_outbox` (`users.avatar_url`, `users.last_seen_at`, `users.welcome_enqueued_at`, `email_outbox`) with the web revision. Optional `RESEND_API_KEY` (server-only). Sign-in still works when the secret is absent; welcome stays `pending`. Do **not** migrate or remount PROD for this change. See [email.md](email.md).
+**V3.x A1–A2 (DEV only):** apply migrate `0006_user_identity_email_outbox` (`users.avatar_url`, `users.last_seen_at`, `users.welcome_enqueued_at`, `email_outbox`) with the web revision. Optional `RESEND_API_KEY` (server-only). Sign-in, funding, and Claim still work when the secret is absent; mail stays `pending`. A2 does not add a migration. Do **not** migrate or remount PROD for this change. See [email.md](email.md).
 
 ### B. Exact laptop + Auth Proxy commands
 
@@ -242,7 +242,7 @@ Cloud Run `--set-secrets=ENV=NAME:latest`. Names only.
 | `CRON_SECRET` | `CRON_SECRET` | **no** | Not in SM; optional after smoke |
 | `AUTH_URL` | `AUTH_URL` | **no** | Create after live origin |
 | `GEMINI_API_KEY` | `GEMINI_API_KEY` | **optional** | V3-0 bounty intelligence. **DEV only.** Attach `GEMINI_API_KEY=GEMINI_API_KEY:latest` when an enabled version exists (already mounted on DEV `github-bounties-web`). Skip cleanly when absent — do not add it to the required first-deploy `--set-secrets` list (`--set-secrets` fails if a named secret has 0 versions). Not wired on PROD. |
-| `RESEND_API_KEY` | `RESEND_API_KEY` | **optional** | V3.x A1 transactional email. **DEV only.** Same attach/skip rule as `GEMINI_API_KEY`. Never `NEXT_PUBLIC_*`. Not wired on PROD. See [email.md](email.md). |
+| `RESEND_API_KEY` | `RESEND_API_KEY` | **optional** | V3.x A1–A2 transactional email. **DEV only.** Same attach/skip rule as `GEMINI_API_KEY`. Never `NEXT_PUBLIC_*`. Not wired on PROD. See [email.md](email.md). |
 
 Plain env (not Secret Manager):
 

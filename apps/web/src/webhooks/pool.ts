@@ -7,6 +7,7 @@
 
 import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
+import { notifyPoolSharesIfClaimable, type DomainEmailDeps } from "../email/events";
 import { isUniqueViolation } from "../db/errors";
 import { bounties, githubLinks, poolParticipants } from "../db/schema";
 import {
@@ -351,12 +352,14 @@ export async function ingestLiveRoster(
 export async function backfillUnlinkedPoolParticipants(
   hunter: { userId: string; githubLogin: string; githubId?: bigint },
   db: Database,
+  email?: DomainEmailDeps,
 ): Promise<number> {
   const login = hunter.githubLogin.trim().toLowerCase();
   if (!login && hunter.githubId == null) return 0;
 
   const rows = await db.select().from(poolParticipants).where(isNull(poolParticipants.userId));
   let updated = 0;
+  const touchedBounties = new Set<string>();
   for (const row of rows) {
     const idMatch =
       hunter.githubId != null && row.githubId === hunter.githubId;
@@ -372,7 +375,11 @@ export async function backfillUnlinkedPoolParticipants(
         updatedAt: new Date(),
       })
       .where(eq(poolParticipants.id, row.id));
+    touchedBounties.add(row.bountyId);
     updated += 1;
+  }
+  for (const bountyId of touchedBounties) {
+    await notifyPoolSharesIfClaimable(db, bountyId, email);
   }
   return updated;
 }

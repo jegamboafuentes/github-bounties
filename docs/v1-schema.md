@@ -11,7 +11,7 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 | Table | Role |
 | --- | --- |
 | `users` | Google identity (`google_sub` unique), email, display name, nullable https `avatar_url`, `last_seen_at`, nullable `welcome_enqueued_at`, nullable BYO Base `wallet_address` (V1-6). Sign-in upserts this row. No second user table. |
-| `email_outbox` | V3.x A1 transactional mail. Unique `idempotency_key`. Recipient is `users.email` only. Status `pending` \| `sending` \| `sent` \| `failed` |
+| `email_outbox` | V3.x A1–A2 transactional mail. Unique `idempotency_key`. Recipient is `users.email` only. Status `pending` \| `sending` \| `sent` \| `failed` |
 | `github_links` | One GitHub account per user (`github_id`, `github_login`). Unique on `user_id` and `github_id`. Settings Disconnect deletes this row only. |
 | `repos` | Connected repo (`github_repo_id`, `full_name`, `installation_id`, `connected_by_user_id`, `is_active`) |
 | `bounties` | Issue bounty; `amount_usdc`, `currency` default USDC, `chain` default `base` |
@@ -70,4 +70,4 @@ CDP / x402 (V1-5) uses Secret Manager keys `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET
 
 Gemini bounty intelligence (V3-0) uses optional Secret Manager key `GEMINI_API_KEY` (server-only, never `NEXT_PUBLIC_*`). Cache table `bounty_intelligence` from migrate `0005_bounty_intelligence` — V3-0 DEV remount must apply that migrate. See [bounty-intelligence.md](bounty-intelligence.md).
 
-Transactional email (V3.x A1) uses optional Secret Manager key `RESEND_API_KEY` (server-only, never `NEXT_PUBLIC_*`) and plain env `EMAIL_FROM`. Tables change in migrate `0006_user_identity_email_outbox` (`users.avatar_url`, `users.last_seen_at`, `users.welcome_enqueued_at`, `email_outbox`). DEV remount only. See [email.md](email.md).
+Transactional email (V3.x A1–A2) uses optional Secret Manager key `RESEND_API_KEY` (server-only, never `NEXT_PUBLIC_*`) and plain env `EMAIL_FROM`. Tables change in migrate `0006_user_identity_email_outbox` (`users.avatar_url`, `users.last_seen_at`, `users.welcome_enqueued_at`, `email_outbox`). A2 enqueues domain templates from fund lock, winning-merge eligibility, and winner settlement. No further migration. DEV remount only. See [email.md](email.md).
