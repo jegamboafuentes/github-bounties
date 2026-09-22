@@ -107,11 +107,32 @@ body {
   .home-stat-card,
   .home-diff-card,
   .home-roadmap-item,
-  .home-module-row,
+  .home-story-step,
+  .home-story-panel,
+  .home-story-card,
+  .home-story-rail-fill,
   .home-section-heading,
   .home-footer-note {
     opacity: 1 !important;
     transform: none !important;
+  }
+
+  .home-story-layout {
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  .home-story-stage,
+  .home-story-rail {
+    display: none !important;
+  }
+
+  .home-story-inline {
+    display: block !important;
+  }
+
+  .home-story-step {
+    min-height: 0 !important;
   }
 }
 
@@ -122,9 +143,138 @@ body {
 [data-home-motion="reduced"] .home-stat-card,
 [data-home-motion="reduced"] .home-diff-card,
 [data-home-motion="reduced"] .home-roadmap-item,
-[data-home-motion="reduced"] .home-module-row,
+[data-home-motion="reduced"] .home-story-step,
+[data-home-motion="reduced"] .home-story-panel,
 [data-home-motion="reduced"] .home-section-heading,
 [data-home-motion="reduced"] .home-footer-note {
   opacity: 1;
   transform: none;
+}
+
+[data-home-motion="reduced"] .home-story-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+[data-home-motion="reduced"] .home-story-stage,
+[data-home-motion="reduced"] .home-story-rail {
+  display: none;
+}
+
+[data-home-motion="reduced"] .home-story-inline {
+  display: block;
+}
+
+[data-home-motion="reduced"] .home-story-step {
+  min-height: 0;
+}
+
+/* Desktop scroll story. Text stays in the list; the stage is decorative.
+   Phones keep the inline figures. Reduced motion above forces that stack. */
+.home-story-stage {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .home-story-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(15rem, 0.92fr);
+    column-gap: 1.5rem;
+    align-items: start;
+  }
+
+  .home-story-stage {
+    display: block;
+    position: sticky;
+    top: 1.5rem;
+    order: 2;
+    align-self: start;
+    height: min(28rem, calc(100vh - 3rem));
+  }
+
+  .home-story-stage-frame {
+    position: relative;
+    height: 100%;
+    min-height: 22rem;
+    overflow: hidden;
+    border-radius: 1rem;
+    border: 1px solid rgb(228 228 231);
+    background: white;
+    padding: 1.25rem;
+  }
+
+  .home-story-panel {
+    position: absolute;
+    inset: 0;
+    padding: 1.25rem;
+    background: white;
+  }
+
+  .home-story-panel:not(:first-child) {
+    opacity: 0;
+  }
+
+  .home-story-inline {
+    display: none;
+  }
+
+  .home-story-step {
+    display: flex;
+    align-items: center;
+    min-height: min(68vh, 34rem);
+  }
+
+  .home-story-steps {
+    position: relative;
+    order: 1;
+  }
+
+  .home-story-rail {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 2px;
+    background: rgb(228 228 231);
+    pointer-events: none;
+  }
+
+  .home-story-rail-fill {
+    height: 100%;
+    width: 100%;
+    transform: scaleY(0);
+    transform-origin: top;
+    background: rgb(5 150 105);
+  }
+
+  .home-story-steps ol {
+    padding-left: 1rem;
+  }
+
+  .home-story-step[data-active="true"] .home-story-card {
+    border-color: rgb(16 185 129 / 0.65);
+  }
+}
+
+@media (max-width: 899px) {
+  .home-story-rail {
+    display: none;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .home-story-stage-frame,
+  .home-story-panel {
+    border-color: rgb(39 39 42);
+    background: rgb(24 24 27);
+  }
+
+  .home-story-rail {
+    background: rgb(63 63 70);
+  }
+
+  .home-story-rail-fill {
+    background: rgb(52 211 153);
+  }
 }

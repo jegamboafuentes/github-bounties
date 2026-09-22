@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { HOMEPAGE_DIFFERENTIATORS, NOT_LIGHTNING_BOUNTIES } from "@/home/differentiators";
 
 export function HomeCompare() {
@@ -7,7 +8,12 @@ export function HomeCompare() {
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
             vs Lightning Bounties
           </h2>
-          <p className="mt-1 text-sm text-zinc-500">{NOT_LIGHTNING_BOUNTIES}</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            {NOT_LIGHTNING_BOUNTIES}{" "}
+            <Link href="/about" className="underline underline-offset-4">
+              About the team
+            </Link>
+          </p>
         </div>
         <ul className="grid gap-3 sm:grid-cols-3">
           {HOMEPAGE_DIFFERENTIATORS.map((item) => (

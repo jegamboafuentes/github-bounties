@@ -99,6 +99,8 @@ V2-1 (after merge): applies additive `0004_v2_pool_participants` (`pool_particip
 
 **V3.x A1–A2 (DEV only):** apply migrate `0006_user_identity_email_outbox` (`users.avatar_url`, `users.last_seen_at`, `users.welcome_enqueued_at`, `email_outbox`) with the web revision. Optional `RESEND_API_KEY` (server-only). Sign-in, funding, and Claim still work when the secret is absent; mail stays `pending`. A2 does not add a migration. Do **not** migrate or remount PROD for this change. See [email.md](email.md).
 
+**V3.x B (DEV only):** public `/about` and the homepage scroll story (the Modules list is gone). UI only — no migration, no new secret, no escrow / fee / pool / claim change. Crowdfunding is not part of this revision. Remount DEV `github-bounties-web` when those pages should be live. Do **not** remount PROD (`github-bounties-web-prod`, apex `githubbounties.xyz`).
+
 ### B. Exact laptop + Auth Proxy commands
 
 ```bash
