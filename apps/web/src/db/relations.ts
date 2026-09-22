@@ -7,6 +7,7 @@ import {
   claims,
   escrows,
   feeLedger,
+  emailOutbox,
   githubLinks,
   poolParticipants,
   repos,
@@ -22,6 +23,14 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   claims: many(claims),
   poolParticipants: many(poolParticipants),
   workSignals: many(workSignals),
+  emailOutbox: many(emailOutbox),
+}));
+
+export const emailOutboxRelations = relations(emailOutbox, ({ one }) => ({
+  user: one(users, {
+    fields: [emailOutbox.userId],
+    references: [users.id],
+  }),
 }));
 
 export const githubLinksRelations = relations(githubLinks, ({ one }) => ({

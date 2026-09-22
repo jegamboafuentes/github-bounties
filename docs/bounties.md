@@ -53,7 +53,7 @@ Hunter payout after merge: [claims.md](claims.md). Pool roster + split: ADR 0003
 
 ## Secrets
 
-Do not commit `DATABASE_URL`, Google OAuth secrets, GitHub App secrets, `GEMINI_API_KEY`, or `CRON_SECRET`. Empty placeholders only in `.env.example`.
+Do not commit `DATABASE_URL`, Google OAuth secrets, GitHub App secrets, `GEMINI_API_KEY`, `RESEND_API_KEY`, or `CRON_SECRET`. Empty placeholders only in `.env.example`.
 
 `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` is a **public** Reown Cloud project id (not SM). Ops must set it on Cloud Run for the WalletConnect QR button. See [docs/spikes/v15-fund-walletconnect.md](spikes/v15-fund-walletconnect.md).
 

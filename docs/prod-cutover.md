@@ -103,6 +103,7 @@ Suggested SM ids (bind to the env names the app already reads):
 | `CDP_WEBHOOK_SECRET` | — | skip (same as staging: do not bind empty) |
 | `CRON_SECRET` | optional later | skip on first deploy |
 | `GEMINI_API_KEY` | — | **skip** on first PROD deploy. V3-0 intelligence is DEV-only for now. Do not bind the DEV `GEMINI_API_KEY` secret onto `github-bounties-web-prod`. |
+| `RESEND_API_KEY` | — | **skip**. Transactional email is DEV-only. Do not bind the DEV secret onto `github-bounties-web-prod`. Do not set `RESEND_FROM` on PROD. Dispatch also refuses this service. |
 
 `--set-secrets=DATABASE_URL=PROD_DATABASE_URL:latest,…` (env = SM id). Values
 stay out of git / chat. Add versions from stdin:

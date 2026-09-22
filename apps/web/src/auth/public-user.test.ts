@@ -13,7 +13,9 @@ describe("authz JSON helpers", () => {
       googleSub: "google-sub-99",
       email: "user@example.com",
       displayName: "Pat",
+      avatarUrl: null,
       walletAddress: null,
+      lastSeenAt: new Date("2026-09-09T00:00:00.000Z"),
       createdAt: new Date("2026-09-09T00:00:00.000Z"),
       updatedAt: new Date("2026-09-09T00:00:00.000Z"),
     });

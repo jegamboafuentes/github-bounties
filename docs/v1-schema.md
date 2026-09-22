@@ -10,7 +10,7 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 
 | Table | Role |
 | --- | --- |
-| `users` | Google identity (`google_sub` unique), email, display name, nullable BYO Base `wallet_address` (V1-6) |
+| `users` | Google identity (`google_sub` unique), email, display name, nullable Google `avatar_url`, `last_seen_at` (last sign-in; wallet edits do not bump it), nullable BYO Base `wallet_address` (V1-6). Includes users with zero bounties. |
 | `github_links` | One GitHub account per user (`github_id`, `github_login`). Unique on `user_id` and `github_id`. Settings Disconnect deletes this row only. |
 | `repos` | Connected repo (`github_repo_id`, `full_name`, `installation_id`, `connected_by_user_id`, `is_active`) |
 | `bounties` | Issue bounty; `amount_usdc`, `currency` default USDC, `chain` default `base` |
@@ -22,6 +22,7 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 | `allocation_ledger` | V2-1 one row per intended chain movement. `kind` ∈ `FEE_OUT \| WINNER_PAYOUT \| POOL_PAYOUT`. Unique `(bounty_id, kind, participant_id)` (`NULLS NOT DISTINCT`) and unique `idempotency_key`. |
 | `work_signals` | V2-1 non-exclusive “working on this”. Many rows per bounty / `(bounty_id, user_id)`. **No** exclusive unique index. Not a money row. |
 | `bounty_intelligence` | V3-0 Gemini cache keyed by `bounty_id` (repo about, stack, complexity S/M/L, source fingerprint, `generated_at`) |
+| `email_outbox` | V3.x transactional outbox. Unique `idempotency_key` (`welcome:user:<users.id>` for the one welcome). Recipient is `users.email` only. Status `pending` \| `sending` \| `sent` \| `failed`. |
 | `webhook_deliveries` | GitHub `X-GitHub-Delivery` GUID primary key (V1-3 idempotency); `claim_results` JSON + winner/PR/repo for skip reasons |
 
 `bounties.participation_pool_bps` default **1500 = 15% of post-fee**, not of face (ADR 0003 / V2-1). `participation_pool_usdc` is filled at V2-3 settle when `N` is known. `escrows.payout_tx_hash` remains the **winner** hash for V1 readers; pool hashes live on `allocation_ledger` / `pool_participants`. `bounties.issue_body_synced_at` records the last GitHub issue-body sync (V3-0).
@@ -56,6 +57,7 @@ This is not Lightning Bounties / LB1. Winner later: author of the merged PR that
 - Unique `(bounty_id, pr_number)` on claims when `pr_number` is present (idempotent merge).
 - Unique `fee_ledger.bounty_id`.
 - Unique `webhook_deliveries.delivery_id` (GitHub redelivery GUID).
+- Unique `email_outbox.idempotency_key` (welcome once per user).
 
 ## Secrets
 
@@ -68,3 +70,5 @@ GitHub App (V1-3) uses Secret Manager keys `GITHUB_WEBHOOK_SECRET`, `GITHUB_APP_
 CDP / x402 (V1-5) uses Secret Manager keys `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET` (optional `CDP_PROJECT_ID`, `CDP_CLIENT_API_KEY`). See [escrow.md](escrow.md). Never commit values.
 
 Gemini bounty intelligence (V3-0) uses optional Secret Manager key `GEMINI_API_KEY` (server-only, never `NEXT_PUBLIC_*`). Cache table `bounty_intelligence` from migrate `0005_bounty_intelligence` — V3-0 DEV remount must apply that migrate. See [bounty-intelligence.md](bounty-intelligence.md).
+
+Transactional email (V3.x, DEV) uses optional Secret Manager key `RESEND_API_KEY` plus plain env `RESEND_FROM` (not a secret). Migrate `0006_user_identity_email_outbox` adds `users.avatar_url`, `users.last_seen_at`, and `email_outbox`. Missing key does not block sign-in. Not wired on PROD. See [transactional-email.md](transactional-email.md).

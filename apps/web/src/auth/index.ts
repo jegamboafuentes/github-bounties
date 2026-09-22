@@ -5,7 +5,8 @@ import { identityFromGoogleProfile, upsertUserByGoogleSub } from "./users";
 
 /**
  * Auth.js (NextAuth v5) + Google provider.
- * JWT session cookie (httpOnly; Secure in production). On login, upsert `users` by google_sub.
+ * JWT session cookie (httpOnly; Secure in production). On login, upsert `users` by google_sub
+ * (email, display name, avatar, last_seen_at) and enqueue the welcome email at most once.
  */
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,

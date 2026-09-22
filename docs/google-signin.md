@@ -15,7 +15,7 @@ Why this boring choice:
 - Encrypted JWT session cookie is **httpOnly**, `SameSite=lax`, and **Secure in production**
 - No extra accounts/sessions tables; we upsert our own `users` row
 
-On login the jwt callback creates or updates `users` keyed by `google_sub` and stores `email` + `display_name`.
+On login the jwt callback creates or updates `users` keyed by `google_sub` and stores `email`, `display_name`, Google `avatar_url` when it is an `http(s)` picture, and `last_seen_at`. The first insert also enqueues one welcome email (`email_outbox`, idempotency key `welcome:user:<id>`). Repeat login does not insert a second user or a second welcome. See [transactional-email.md](transactional-email.md). Missing `RESEND_API_KEY` does not block sign-in.
 
 | Piece | Path |
 | --- | --- |

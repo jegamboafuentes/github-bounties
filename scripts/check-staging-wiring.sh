@@ -58,6 +58,7 @@ echo "${SET_LINE}" | grep -q "CDP_API_KEY_ID=CDP_API_KEY_ID:latest" || fail "fir
 echo "${SET_LINE}" | grep -q "CDP_WEBHOOK_SECRET" && fail "first-deploy --set-secrets must not bind CDP_WEBHOOK_SECRET"
 echo "${SET_LINE}" | grep -q "CRON_SECRET" && fail "first-deploy --set-secrets must not bind CRON_SECRET"
 echo "${SET_LINE}" | grep -q "AUTH_URL" && fail "first-deploy --set-secrets must not bind AUTH_URL"
+echo "${SET_LINE}" | grep -q "RESEND_API_KEY" && fail "first-deploy dry-run must not require RESEND_API_KEY"
 
 echo "Checking optional GEMINI_API_KEY WEB secret (attach if SM version exists)..."
 # shellcheck source=infra/gcloud/config.sh
@@ -69,21 +70,30 @@ printf '%s\n' "${SECRETS[@]}" | grep -qx GEMINI_API_KEY || fail "GEMINI_API_KEY 
 printf '%s\n' "${WEB_REQUIRED_SECRETS[@]}" | grep -qx GEMINI_API_KEY && fail "GEMINI_API_KEY must not be a required WEB secret"
 printf '%s\n' "${WEB_CDP_SECRETS[@]}" | grep -qx GEMINI_API_KEY && fail "GEMINI_API_KEY must not be a CDP WEB secret"
 printf '%s\n' "${WEB_SKIP_SECRETS[@]}" | grep -qx GEMINI_API_KEY && fail "GEMINI_API_KEY must not sit on WEB_SKIP_SECRETS (would drop on remount unless GB_ATTACH_OPTIONAL_SECRETS=1)"
+printf '%s\n' "${WEB_OPTIONAL_SECRETS[@]}" | grep -qx RESEND_API_KEY || fail "RESEND_API_KEY must be in WEB_OPTIONAL_SECRETS"
+printf '%s\n' "${SECRETS[@]}" | grep -qx RESEND_API_KEY || fail "RESEND_API_KEY must be in SECRETS inventory"
+printf '%s\n' "${WEB_REQUIRED_SECRETS[@]}" | grep -qx RESEND_API_KEY && fail "RESEND_API_KEY must not be a required WEB secret"
+printf '%s\n' "${WEB_CDP_SECRETS[@]}" | grep -qx RESEND_API_KEY && fail "RESEND_API_KEY must not be a CDP WEB secret"
+printf '%s\n' "${WEB_SKIP_SECRETS[@]}" | grep -qx RESEND_API_KEY && fail "RESEND_API_KEY must not sit on WEB_SKIP_SECRETS"
 
-secret_has_enabled_version() { [[ "$1" == "GEMINI_API_KEY" ]]; }
+secret_has_enabled_version() { [[ "$1" == "GEMINI_API_KEY" || "$1" == "RESEND_API_KEY" ]]; }
 GEMINI_PRESENT="$(web_static_set_secrets_csv)"
 echo "${GEMINI_PRESENT}" | grep -q "GEMINI_API_KEY=GEMINI_API_KEY:latest" || fail "static remount must attach GEMINI_API_KEY when SM version exists"
+echo "${GEMINI_PRESENT}" | grep -q "RESEND_API_KEY=RESEND_API_KEY:latest" || fail "static remount must attach RESEND_API_KEY when SM version exists"
 echo "${GEMINI_PRESENT}" | grep -q "GITHUB_APP_ID=GITHUB_APP_ID:latest" || fail "static remount with GEMINI must still include required secrets"
 echo "${GEMINI_PRESENT}" | grep -q "CDP_WEBHOOK_SECRET" && fail "GEMINI optional attach must not bind CDP_WEBHOOK_SECRET"
 GEMINI_DISC="$(web_set_secrets_csv)"
 echo "${GEMINI_DISC}" | grep -q "GEMINI_API_KEY=GEMINI_API_KEY:latest" || fail "discover remount must attach GEMINI_API_KEY when SM version exists"
+echo "${GEMINI_DISC}" | grep -q "RESEND_API_KEY=RESEND_API_KEY:latest" || fail "discover remount must attach RESEND_API_KEY when SM version exists"
 
 secret_has_enabled_version() { return 1; }
 GEMINI_ABSENT="$(web_static_set_secrets_csv)"
 echo "${GEMINI_ABSENT}" | grep -q "GEMINI_API_KEY" && fail "static remount must skip GEMINI_API_KEY when SM version is absent"
+echo "${GEMINI_ABSENT}" | grep -q "RESEND_API_KEY" && fail "static remount must skip RESEND_API_KEY when SM version is absent"
 echo "${GEMINI_ABSENT}" | grep -q "GITHUB_APP_ID=GITHUB_APP_ID:latest" || fail "static remount without GEMINI must still include required secrets"
 GEMINI_DISC_ABSENT="$(web_set_secrets_csv)"
 echo "${GEMINI_DISC_ABSENT}" | grep -q "GEMINI_API_KEY" && fail "discover remount must skip GEMINI_API_KEY when SM version is absent"
+echo "${GEMINI_DISC_ABSENT}" | grep -q "RESEND_API_KEY" && fail "discover remount must skip RESEND_API_KEY when SM version is absent"
 
 echo "Checking deploy-web.sh equals-form flags (Ops recovery)..."
 infra/gcloud/deploy-web.sh --secrets=static --image=us-central1-docker.pkg.dev/experiment-jegf/github-bounties/github-bounties-web:testbuild --service=github-bounties-web >/tmp/gb-deploy-web-eq.txt

@@ -47,6 +47,7 @@ As of **2026-09-21**. No invented ship dates. V3-0 is **DEV only** — do not tr
 - V4 public API + MCP; V5 agent economy — planned, no dates
 - BTC / sats payouts: **deferred**
 - **V3 is not on PROD**
+- Transactional email foundation (welcome outbox) is in the repo for a later DEV remount. It does not send until Ops mounts optional `RESEND_API_KEY` and sets `RESEND_FROM`. Not on PROD.
 
 Public roadmap copy: [docs/roadmap.md](docs/roadmap.md).
 
@@ -81,6 +82,7 @@ Decisions, sequences, and failure modes:
 | Issue body + Gemini intelligence (DEV) | [docs/bounty-intelligence.md](docs/bounty-intelligence.md) |
 | Public stats (`GET /api/stats`) | [docs/stats.md](docs/stats.md) |
 | Google sign-in | [docs/google-signin.md](docs/google-signin.md) |
+| Transactional email (DEV foundation) | [docs/transactional-email.md](docs/transactional-email.md) |
 | GitHub App + webhooks | [docs/github-app.md](docs/github-app.md), [docs/webhooks.md](docs/webhooks.md) |
 | Schema | [docs/v1-schema.md](docs/v1-schema.md) |
 | DEV deploy / E2E | [docs/staging-deploy.md](docs/staging-deploy.md), [docs/staging-e2e.md](docs/staging-e2e.md) |

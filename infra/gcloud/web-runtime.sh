@@ -39,7 +39,7 @@ secret_has_enabled_version() {
   [[ -n "${found}" ]]
 }
 
-# Optional WEB secrets (GEMINI_API_KEY): attach when SM has an enabled version.
+# Optional WEB secrets (GEMINI_API_KEY, RESEND_API_KEY): attach when SM has an enabled version.
 # Skip cleanly when absent. Not gated on GB_ATTACH_OPTIONAL_SECRETS (that's the
 # skip-list: CRON / CDP_WEBHOOK / AUTH_URL). Never prints values.
 append_optional_web_secrets() {

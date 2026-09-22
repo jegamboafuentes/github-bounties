@@ -18,7 +18,7 @@ import {
 import { POOL_BPS_OF_POST_FEE } from "../lib/constants";
 
 /**
- * V1 domain schema plus additive V2-1 pool tables.
+ * V1 domain schema plus additive V2 pool tables and V3 sign-in / email outbox.
  *
  * ORM: Drizzle (SQL-first, typed migrations, no runtime query engine).
  * Status names map to ADR 0001 money/coordination states where those exist.
@@ -106,6 +106,12 @@ export const allocationLedgerStatusEnum = pgEnum("allocation_ledger_status", [
   "failed",
 ]);
 
+/**
+ * Product identity is Google (`google_sub`), including people with zero bounties.
+ * `last_seen_at` is the last successful sign-in. Wallet edits bump `updated_at` only.
+ * `avatar_url` is the Google picture when the provider sends one.
+ * GitHub avatars stay on `github_links`.
+ */
 export const users = pgTable(
   "users",
   {
@@ -113,13 +119,78 @@ export const users = pgTable(
     googleSub: text("google_sub").notNull(),
     email: text("email").notNull(),
     displayName: text("display_name").notNull(),
+    avatarUrl: text("avatar_url"),
     walletAddress: text("wallet_address"),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
     ...timestamps,
   },
   (table) => [
     uniqueIndex("users_google_sub_uidx").on(table.googleSub),
     index("users_email_idx").on(table.email),
     index("users_wallet_address_idx").on(table.walletAddress),
+  ],
+);
+
+/** Templates the outbox may store. Later domain events reuse these names without a new migration. */
+export const emailOutboxTemplateValues = [
+  "welcome",
+  "bounty_funded",
+  "bounty_merged",
+  "bounty_settled",
+  "pool_claimable",
+] as const;
+
+export type EmailOutboxTemplate = (typeof emailOutboxTemplateValues)[number];
+
+export const emailOutboxStatusValues = ["pending", "sending", "sent", "failed"] as const;
+
+export type EmailOutboxStatus = (typeof emailOutboxStatusValues)[number];
+
+/**
+ * Durable transactional outbox. Unique `idempotency_key` so retries cannot insert a second send.
+ * `to_email` is copied from `users.email` at enqueue time (signed-up Google identity only).
+ */
+export const emailOutbox = pgTable(
+  "email_outbox",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    template: text("template").notNull(),
+    toEmail: text("to_email").notNull(),
+    subject: text("subject").notNull(),
+    html: text("html").notNull(),
+    bodyText: text("body_text").notNull(),
+    status: text("status").notNull().default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    lastError: text("last_error"),
+    provider: text("provider"),
+    providerMessageId: text("provider_message_id"),
+    lockedAt: timestamp("locked_at", { withTimezone: true, mode: "date" }),
+    lockedBy: text("locked_by"),
+    sentAt: timestamp("sent_at", { withTimezone: true, mode: "date" }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("email_outbox_idempotency_key_uidx").on(table.idempotencyKey),
+    index("email_outbox_status_created_idx").on(table.status, table.createdAt),
+    index("email_outbox_user_id_idx").on(table.userId),
+    check(
+      "email_outbox_template",
+      sql`${table.template} in ('welcome', 'bounty_funded', 'bounty_merged', 'bounty_settled', 'pool_claimable')`,
+    ),
+    check(
+      "email_outbox_status",
+      sql`${table.status} in ('pending', 'sending', 'sent', 'failed')`,
+    ),
+    check(
+      "email_outbox_to_email_present",
+      sql`length(btrim(${table.toEmail})) > 0 and position('@' in ${table.toEmail}) > 1`,
+    ),
   ],
 );
 
