@@ -16,7 +16,7 @@ export async function AppHeader() {
 
   return (
     <header className="border-b border-zinc-200 dark:border-zinc-800">
-      <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-6 py-4">
+      <div className="mx-auto flex w-full max-w-3xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-6 py-4">
         <div className="inline-flex items-center gap-2">
           <Link href="/" className="inline-flex items-center" aria-label={PRODUCT_NAME}>
             <BrandWordmark size="nav" priority />
@@ -30,12 +30,15 @@ export async function AppHeader() {
             </span>
           ) : null}
         </div>
-        <nav className="flex items-center gap-4 text-sm text-zinc-600 dark:text-zinc-400">
+        <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-zinc-600 dark:text-zinc-400">
           <Link href="/board" className="underline-offset-4 hover:underline">
             Board
           </Link>
           <Link href="/bounties/new" className="underline-offset-4 hover:underline">
             Post
+          </Link>
+          <Link href="/about" className="underline-offset-4 hover:underline">
+            About
           </Link>
           <Link href="/api/health" className="underline-offset-4 hover:underline">
             Health

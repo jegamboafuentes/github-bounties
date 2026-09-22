@@ -3,7 +3,7 @@ import { getOptionalSession } from "@/auth";
 import { AppHeader } from "@/components/header";
 import { HomeCompare } from "@/components/home-compare";
 import { HomeHero } from "@/components/home-hero";
-import { HomeModules } from "@/components/home-modules";
+import { HomeStory } from "@/components/home-story";
 import { HomeReveal } from "@/components/home-reveal";
 import { HomeRoadmap } from "@/components/home-roadmap";
 import { HomeStats } from "@/components/home-stats";
@@ -26,9 +26,13 @@ export default async function Home() {
           <HomeStats source={stats} />
           <HomeCompare />
           <HomeRoadmap />
-          <HomeModules />
+          <HomeStory />
           <p className="home-footer-note home-reveal-item text-sm text-zinc-500">
           {NOT_LIGHTNING_BOUNTIES} Sign in with Google.{" "}
+          <Link href="/about" className="underline underline-offset-4">
+            About
+          </Link>
+          {" · "}
           <Link href="/board" className="underline underline-offset-4">
             Board
           </Link>

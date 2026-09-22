@@ -15,7 +15,8 @@ const EASE = "out(3)";
 /**
  * Anime.js island. Content stays SSR; motion is a client enhancement.
  * Queries are scoped to this root. Respects prefers-reduced-motion
- * (`data-home-motion=reduced` skips animations).
+ * (`data-home-motion=reduced` skips animations). The story rail and
+ * stage crossfade run only at ≥900px. They never hide the step text.
  */
 export function HomeReveal({
   children,
@@ -46,12 +47,15 @@ export function HomeReveal({
           root,
           mediaQueries: {
             reduceMotion: "(prefers-reduced-motion: reduce)",
+            storyPin: "(min-width: 900px)",
           },
         }).add((self) => {
           const host = root.current;
           if (!host) return;
+          for (const observer of observers.splice(0, observers.length)) observer.revert();
           if (!self || self.matches.reduceMotion) {
             host.dataset.homeMotion = "reduced";
+            for (const step of select(host, ".home-story-step")) delete step.dataset.active;
             return;
           }
 
@@ -187,16 +191,101 @@ export function HomeReveal({
             );
           }
 
-          const modules = select(host, ".home-section-modules")[0];
-          if (modules) {
-            playOnEnter(
-              modules,
-              [
-                ...select(modules, ".home-section-heading"),
-                ...select(modules, ".home-module-row"),
-              ],
-              45,
-            );
+          const story = select(host, ".home-section-story")[0];
+          if (story) {
+            const steps = select(story, ".home-story-step");
+            if (self.matches.storyPin) {
+              const panels = select(story, ".home-story-panel");
+              let current = -1;
+              const activate = (index: number) => {
+                if (index === current || index < 0 || index >= steps.length) return;
+                current = index;
+                steps.forEach((step, i) => {
+                  if (i === index) step.dataset.active = "true";
+                  else delete step.dataset.active;
+                });
+                panels.forEach((panel, i) => {
+                  animate(panel, {
+                    opacity: i === index ? 1 : 0,
+                    duration: 380,
+                    ease: EASE,
+                    composition: "replace",
+                  });
+                });
+              };
+
+              utils.set(steps, { opacity: 1, y: 0 });
+              panels.forEach((panel, i) => utils.set(panel, { opacity: i === 0 ? 1 : 0 }));
+
+              const closestStep = () => {
+                const mid = window.innerHeight / 2;
+                let best = 0;
+                let bestDist = Number.POSITIVE_INFINITY;
+                steps.forEach((step, index) => {
+                  const rect = step.getBoundingClientRect();
+                  const dist = Math.abs(rect.top + rect.height / 2 - mid);
+                  if (dist < bestDist) {
+                    best = index;
+                    bestDist = dist;
+                  }
+                });
+                activate(best);
+              };
+              closestStep();
+
+              const fill = select(story, ".home-story-rail-fill")[0];
+              const stepsHost = select(story, ".home-story-steps")[0];
+              if (stepsHost) {
+                observers.push(
+                  onScroll({
+                    target: stepsHost,
+                    enter: "bottom top",
+                    leave: "top bottom",
+                    onUpdate: closestStep,
+                  }),
+                );
+              }
+              if (fill && stepsHost) {
+                utils.set(fill, { scaleY: 0 });
+                animate(fill, {
+                  scaleY: [0, 1],
+                  ease: "linear",
+                  autoplay: onScroll({
+                    target: stepsHost,
+                    enter: "bottom top",
+                    leave: "top bottom",
+                    sync: true,
+                  }),
+                });
+              }
+            } else {
+              const items = [...select(story, ".home-section-heading"), ...steps];
+              items.forEach((item, index) => {
+                let started = false;
+                const motion = animate(item, {
+                  y: [12, 0],
+                  duration: 640,
+                  ease: EASE,
+                  delay: index * 40,
+                  autoplay: false,
+                });
+                const play = () => {
+                  if (started) return;
+                  started = true;
+                  motion.play();
+                };
+                observers.push(
+                  onScroll({
+                    target: item,
+                    enter: "bottom-=48 top",
+                    repeat: false,
+                    onEnter: play,
+                  }),
+                );
+                const rect = item.getBoundingClientRect();
+                if (rect.top < window.innerHeight - 24 && rect.bottom > 0) play();
+              });
+            }
           }
 
           const footer = select(host, ".home-footer-note")[0];

@@ -40,6 +40,7 @@ As of **2026-09-21**. No invented ship dates. V3-0 is **DEV only** — do not tr
 - Stats: `repos.withBounties` replaces App-install “repos connected” (`schemaVersion` **2** on `main`)
 - Settings / Post show GitHub **connected vs not** (no repo dump)
 - Board complexity/language badges + filters; DEV header pill
+- **V3.x B** — public About page (next chapter of Lightning Bounties, same cofounders) and a homepage scroll story instead of the Modules list. UI only. No migration, no fee or escrow change. Not a PROD remount.
 
 ### Not shipped / deferred
 
