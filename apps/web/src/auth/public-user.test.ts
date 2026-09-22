@@ -14,6 +14,9 @@ describe("authz JSON helpers", () => {
       email: "user@example.com",
       displayName: "Pat",
       walletAddress: null,
+      avatarUrl: null,
+      lastSeenAt: new Date("2026-09-09T00:00:00.000Z"),
+      welcomeEnqueuedAt: new Date("2026-09-09T00:00:00.000Z"),
       createdAt: new Date("2026-09-09T00:00:00.000Z"),
       updatedAt: new Date("2026-09-09T00:00:00.000Z"),
     });

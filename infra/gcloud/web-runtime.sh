@@ -23,6 +23,10 @@ web_plain_env_pairs() {
   if [[ -n "${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:-}" ]]; then
     pairs+=("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=${NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}")
   fi
+  # Optional verified sender. Not a secret. App default is used when unset.
+  if [[ -n "${EMAIL_FROM:-}" ]]; then
+    pairs+=("EMAIL_FROM=${EMAIL_FROM}")
+  fi
   local IFS=","
   echo "${pairs[*]}"
 }
@@ -132,4 +136,6 @@ web_print_secret_map() {
   echo "    PORT=8080 (Cloud Run). PUBLIC_BASE_URL optional after live origin."
   echo "    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID  (optional; Reown Cloud project id,"
   echo "      not SM. Export before deploy-web.sh so WalletConnect QR works on DEV.)"
+  echo "    EMAIL_FROM  (optional plain env; verified Resend sender. Not SM."
+  echo "      Unset uses the app default. DEV only — not wired on PROD.)"
 }

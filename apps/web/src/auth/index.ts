@@ -1,7 +1,8 @@
 import NextAuth from "next-auth";
 import { authConfig } from "./config";
 import { hasSessionSecret } from "./env";
-import { identityFromGoogleProfile, upsertUserByGoogleSub } from "./users";
+import { persistGoogleSignIn } from "../email/sign-in";
+import { identityFromGoogleProfile } from "./users";
 
 /**
  * Auth.js (NextAuth v5) + Google provider.
@@ -18,7 +19,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (account?.provider === "google" && profile) {
         const identity = identityFromGoogleProfile(profile);
         if (!identity) return token;
-        const user = await upsertUserByGoogleSub(identity);
+        const user = await persistGoogleSignIn(identity);
         token.userId = user.id;
         token.googleSub = user.googleSub;
         token.email = user.email;

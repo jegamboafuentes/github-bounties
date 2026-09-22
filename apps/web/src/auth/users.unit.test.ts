@@ -18,11 +18,32 @@ describe("Google profile → User identity", () => {
         name: "Ada",
         email_verified: true,
       }),
-      { googleSub: "abc", email: "a@b.c", displayName: "Ada" },
+      { googleSub: "abc", email: "a@b.c", displayName: "Ada", avatarUrl: null },
     );
     assert.deepEqual(
       identityFromGoogleProfile({ sub: "abc", email: "pat@example.com" }),
-      { googleSub: "abc", email: "pat@example.com", displayName: "pat" },
+      { googleSub: "abc", email: "pat@example.com", displayName: "pat", avatarUrl: null },
+    );
+    assert.deepEqual(
+      identityFromGoogleProfile({
+        sub: "abc",
+        email: "pat@example.com",
+        picture: "https://lh3.googleusercontent.com/a/example",
+      }),
+      {
+        googleSub: "abc",
+        email: "pat@example.com",
+        displayName: "pat",
+        avatarUrl: "https://lh3.googleusercontent.com/a/example",
+      },
+    );
+    assert.equal(
+      identityFromGoogleProfile({
+        sub: "abc",
+        email: "pat@example.com",
+        picture: "http://insecure.example/a.png",
+      })?.avatarUrl,
+      null,
     );
   });
 });

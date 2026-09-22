@@ -39,6 +39,8 @@ Env (plain, not secrets):
   GB_ATTACH_OPTIONAL_SECRETS=1  (also bind CDP_WEBHOOK_SECRET / CRON_SECRET / AUTH_URL)
   GEMINI_API_KEY is a WEB_OPTIONAL_SECRET: remounts attach it when SM has a
   version (DEV already does) and skip when absent. Not wired on PROD.
+  RESEND_API_KEY is optional the same way (V3.x A1 email). Skip when absent.
+  EMAIL_FROM is plain env, not a secret. Not wired on PROD.
 EOF
 }
 

@@ -98,10 +98,12 @@ gcloud builds submit --project=experiment-jegf --config=cloudbuild.web.yaml .
 First deploy sets `AUTH_TRUST_HOST=true` (plain env) and binds SM names that
 already have versions (including `GITHUB_APP_ID` / `GITHUB_APP_SLUG` / CDP keys).
 It does **not** bind `CDP_WEBHOOK_SECRET` (0 versions), `CRON_SECRET` (not in SM),
-or `AUTH_URL` (add after the live origin). `GEMINI_API_KEY` is optional: attached
-when Secret Manager has an enabled version (DEV), skipped when absent. See
-[docs/staging-deploy.md](../../docs/staging-deploy.md) and
-[docs/bounty-intelligence.md](../../docs/bounty-intelligence.md).
+or `AUTH_URL` (add after the live origin). `GEMINI_API_KEY` and `RESEND_API_KEY`
+are optional: attached when Secret Manager has an enabled version (DEV), skipped
+when absent. Not wired on PROD. See
+[docs/staging-deploy.md](../../docs/staging-deploy.md),
+[docs/bounty-intelligence.md](../../docs/bounty-intelligence.md), and
+[docs/email.md](../../docs/email.md).
 
 Do not point `cloudbuild.yaml` at this app. Closed-beta checklist: [docs/staging-e2e.md](../../docs/staging-e2e.md).
 
@@ -110,11 +112,11 @@ Do not point `cloudbuild.yaml` at this app. Closed-beta checklist: [docs/staging
 | Script | Purpose |
 | --- | --- |
 | `npm run db:generate` | `drizzle-kit generate` after schema edits (diff from `drizzle/meta/*_snapshot.json`) |
-| `npm run db:migrate` | apply `drizzle/` SQL to `DATABASE_URL` (`0005_bounty_intelligence.sql` + snapshots) |
+| `npm run db:migrate` | apply `drizzle/` SQL to `DATABASE_URL` (`0006_user_identity_email_outbox.sql` + snapshots) |
 | `npm run db:seed` | sample user / repo / pending_fund + funded + open funded bounty + V2 pool fixtures (no exclusive lock) |
 | `npm run expire-locks` | drain residual exclusive claim-locks + `expires_at` refunds (same function as the cron route) |
 | `npm run test:unit` | fee 2% + Base address + escrow state machine + CDP env/mainnet guard + claim-lock sunset copy + auth + V0-B eligibility fixtures + HMAC + webhook replay + board helpers + V2 pool invariants + V2-2 freeze rows + V2-4 roster + public stats definitions + homepage stats/roadmap/differentiator copy + issue markdown sanitize + Gemini intelligence cache/prompt (no live GitHub, no database) |
-| `npm run test:db` | unique indexes + `users.google_sub` upsert + eligible Claim + claim-lock sunset drain + work signals + escrow fund/settle/refund + hunter-only payout mocks + GitHub unlink + V2-1 pool schema + V2-2 pool freeze + public `/api/stats` aggregates (needs `DATABASE_URL`) |
+| `npm run test:db` | unique indexes + `users.google_sub` upsert (repeat-login dedupe) + welcome-once outbox + eligible Claim + claim-lock sunset drain + work signals + escrow fund/settle/refund + hunter-only payout mocks + GitHub unlink + V2-1 pool schema + V2-2 pool freeze + public `/api/stats` aggregates (needs `DATABASE_URL`) |
 | `npm run build` | Next.js standalone |
 
 ## Google Sign-In (V1-2)
