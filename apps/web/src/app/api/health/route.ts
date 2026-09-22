@@ -1,3 +1,4 @@
+import { emailHealth } from "@/email/env";
 import { escrowHealth } from "@/escrow";
 import { intelligenceHealth } from "@/intelligence/env";
 import { CLAIM_LOCK_HOURS, CLAIM_LOCK_SUNSET, FEE_BPS, PRODUCT_NAME } from "@/lib/constants";
@@ -12,6 +13,7 @@ export function GET() {
       claim_lock_hours: CLAIM_LOCK_HOURS,
       claim_lock_sunset: CLAIM_LOCK_SUNSET,
       intelligence: intelligenceHealth(),
+      email: emailHealth(),
       escrow: escrowHealth(),
     },
     { headers: { "cache-control": "no-store" } },

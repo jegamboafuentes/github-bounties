@@ -106,6 +106,12 @@ export const allocationLedgerStatusEnum = pgEnum("allocation_ledger_status", [
   "failed",
 ]);
 
+/**
+ * Product identity. One row per Google `google_sub` (unique).
+ * Do not add a second user table — sign-in upserts this row in place.
+ * `created_at` is the first successful sign-in. `last_seen_at` advances on
+ * every successful sign-in. `avatar_url` is the Google picture when it is https.
+ */
 export const users = pgTable(
   "users",
   {
@@ -114,12 +120,97 @@ export const users = pgTable(
     email: text("email").notNull(),
     displayName: text("display_name").notNull(),
     walletAddress: text("wallet_address"),
+    avatarUrl: text("avatar_url"),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    /**
+     * Set when the one welcome outbox row is inserted (or permanently skipped).
+     * Null only for a signup that has not finished enqueue yet.
+     * Migration 0006 stamps existing rows to `created_at` so they are not
+     * welcomed retroactively.
+     */
+    welcomeEnqueuedAt: timestamp("welcome_enqueued_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
     ...timestamps,
   },
   (table) => [
     uniqueIndex("users_google_sub_uidx").on(table.googleSub),
     index("users_email_idx").on(table.email),
     index("users_wallet_address_idx").on(table.walletAddress),
+  ],
+);
+
+/**
+ * Transactional email templates. Welcome is enqueued on first signup.
+ * The other names are render/enqueue primitives for later events — this
+ * migration does not subscribe them to fund, merge, settle, or pool Claim.
+ */
+export const EMAIL_TEMPLATE_VALUES = [
+  "welcome",
+  "bounty_funded",
+  "pr_merged",
+  "bounty_settled",
+  "pool_claimable",
+] as const;
+
+export type EmailTemplateName = (typeof EMAIL_TEMPLATE_VALUES)[number];
+
+export const EMAIL_OUTBOX_STATUSES = ["pending", "sending", "sent", "failed"] as const;
+
+export type EmailOutboxStatus = (typeof EMAIL_OUTBOX_STATUSES)[number];
+
+/** JSON stored on an outbox row. Recipients are not stored here. */
+export type EmailOutboxPayload = {
+  displayName?: string;
+  bountyTitle?: string;
+  bountyUrl?: string;
+  amountLabel?: string;
+  repoFullName?: string;
+  issueNumber?: number;
+};
+
+/**
+ * Durable send queue. Unique `idempotency_key` so retries and repeat logins
+ * cannot insert a second welcome (or a second copy of a later event).
+ * `to_email` is copied from `users.email` at enqueue time — never a scraped
+ * GitHub address.
+ */
+export const emailOutbox = pgTable(
+  "email_outbox",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    toEmail: text("to_email").notNull(),
+    template: text("template").notNull(),
+    payload: jsonb("payload").$type<EmailOutboxPayload>().notNull().default({}),
+    status: text("status").notNull().default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    claimedAt: timestamp("claimed_at", { withTimezone: true, mode: "date" }),
+    claimedBy: text("claimed_by"),
+    sentAt: timestamp("sent_at", { withTimezone: true, mode: "date" }),
+    providerMessageId: text("provider_message_id"),
+    lastError: text("last_error"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("email_outbox_idempotency_key_uidx").on(table.idempotencyKey),
+    index("email_outbox_status_created_idx").on(table.status, table.createdAt),
+    index("email_outbox_user_id_idx").on(table.userId),
+    check(
+      "email_outbox_status",
+      sql`${table.status} in ('pending', 'sending', 'sent', 'failed')`,
+    ),
+    check(
+      "email_outbox_template",
+      sql`${table.template} in ('welcome', 'bounty_funded', 'pr_merged', 'bounty_settled', 'pool_claimable')`,
+    ),
+    check("email_outbox_to_email_present", sql`length(trim(${table.toEmail})) > 0`),
   ],
 );
 

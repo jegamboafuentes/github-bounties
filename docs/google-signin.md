@@ -15,7 +15,7 @@ Why this boring choice:
 - Encrypted JWT session cookie is **httpOnly**, `SameSite=lax`, and **Secure in production**
 - No extra accounts/sessions tables; we upsert our own `users` row
 
-On login the jwt callback creates or updates `users` keyed by `google_sub` and stores `email` + `display_name`.
+On login the jwt callback creates or updates `users` keyed by `google_sub` and stores `email`, `display_name`, an `https` avatar when Google sends one, and `last_seen_at`. `created_at` is the first successful sign-in and does not move. Repeat login hits the same row (`users_google_sub_uidx`). The first signup enqueues one welcome email; see [email.md](email.md). Pre-existing rows are not welcomed retroactively.
 
 | Piece | Path |
 | --- | --- |

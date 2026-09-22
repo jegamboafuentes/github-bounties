@@ -43,6 +43,13 @@
       "when": 1789962067674,
       "tag": "0005_bounty_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790040297385,
+      "tag": "0006_user_identity_email_outbox",
+      "breakpoints": true
     }
   ]
 }

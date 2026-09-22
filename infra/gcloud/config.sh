@@ -54,6 +54,8 @@ CI_SA="${CI_SA_ID}@${PROJECT_ID}.iam.gserviceaccount.com"
 # AUTH_TRUST_HOST are not in SM (AUTH_TRUST_HOST is plain env; AUTH_URL after URL).
 # GEMINI_API_KEY: optional V3-0 intelligence. Already has an enabled version on
 # DEV; attach when present, skip cleanly when absent. Not wired on PROD.
+# RESEND_API_KEY: optional V3.x A1 transactional email. Attach on DEV when an
+# enabled version exists; skip cleanly when absent. Not wired on PROD.
 SECRETS=(
   DATABASE_URL
   AUTH_SECRET
@@ -74,6 +76,7 @@ SECRETS=(
   GOOGLE_OAUTH_CLIENT_SECRET
   CRON_SECRET
   GEMINI_API_KEY
+  RESEND_API_KEY
 )
 
 # First-deploy --set-secrets (Ops: enabled versions present).
@@ -114,6 +117,9 @@ WEB_SKIP_SECRETS=(
 # Distinct from WEB_SKIP_SECRETS, which stay off unless GB_ATTACH_OPTIONAL_SECRETS=1.
 # GEMINI_API_KEY is already mounted on DEV github-bounties-web; listing it here
 # keeps remount --set-secrets from dropping it. PROD is not wired.
+# RESEND_API_KEY is the same shape: optional DEV email. Skip when the secret
+# has no enabled version. Do not add it to WEB_REQUIRED_SECRETS.
 WEB_OPTIONAL_SECRETS=(
   GEMINI_API_KEY
+  RESEND_API_KEY
 )

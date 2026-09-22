@@ -22,7 +22,7 @@ service + apex `https://githubbounties.xyz`, not a DEV remount):
 | Runtime SA | `github-bounties-runtime@experiment-jegf.iam.gserviceaccount.com` — already has `cloudsql.client` + `secretmanager.secretAccessor` + `logging.logWriter` |
 | Labels | `product=github-bounties,env=staging` |
 | Port | `8080` |
-| Health | `GET /api/health` → 200 JSON `service=github-bounties-web` (`intelligence.configured` is boolean-only for `GEMINI_API_KEY`) |
+| Health | `GET /api/health` → 200 JSON `service=github-bounties-web` (`intelligence.configured` is boolean-only for `GEMINI_API_KEY`; `email.configured` is boolean-only for `RESEND_API_KEY`) |
 
 Live `*.run.app` URL: **do not invent one**. Read it after a successful deploy
 (see [Find the live URL](#4-find-the-live-url)).
@@ -96,6 +96,8 @@ Uses Secret Manager `DATABASE_URL`. **Never** print or paste the value.
 V2-1 (after merge): applies additive `0004_v2_pool_participants` (`pool_participants`, `allocation_ledger`, `work_signals`, `bounties.participation_pool_bps` default **1500** of post-fee). V1 exclusive `claim_locks` index is unchanged. **V2-3 settle adds no migration** — it writes the existing ledger.
 
 **V3-0 remount (DEV):** apply migrate `0005_bounty_intelligence` (`bounty_intelligence` + `bounties.issue_body_synced_at`) **in the same remount** as the web revision. `GEMINI_API_KEY` as a Cloud Run secret is not enough without this table — the intelligence card degrades with `error · missing_table`. See [bounty-intelligence.md](bounty-intelligence.md). **PROD is not wired.**
+
+**V3.x A1 (DEV only):** apply migrate `0006_user_identity_email_outbox` (`users.avatar_url`, `users.last_seen_at`, `users.welcome_enqueued_at`, `email_outbox`) with the web revision. Optional `RESEND_API_KEY` (server-only). Sign-in still works when the secret is absent; welcome stays `pending`. Do **not** migrate or remount PROD for this change. See [email.md](email.md).
 
 ### B. Exact laptop + Auth Proxy commands
 
@@ -240,6 +242,7 @@ Cloud Run `--set-secrets=ENV=NAME:latest`. Names only.
 | `CRON_SECRET` | `CRON_SECRET` | **no** | Not in SM; optional after smoke |
 | `AUTH_URL` | `AUTH_URL` | **no** | Create after live origin |
 | `GEMINI_API_KEY` | `GEMINI_API_KEY` | **optional** | V3-0 bounty intelligence. **DEV only.** Attach `GEMINI_API_KEY=GEMINI_API_KEY:latest` when an enabled version exists (already mounted on DEV `github-bounties-web`). Skip cleanly when absent — do not add it to the required first-deploy `--set-secrets` list (`--set-secrets` fails if a named secret has 0 versions). Not wired on PROD. |
+| `RESEND_API_KEY` | `RESEND_API_KEY` | **optional** | V3.x A1 transactional email. **DEV only.** Same attach/skip rule as `GEMINI_API_KEY`. Never `NEXT_PUBLIC_*`. Not wired on PROD. See [email.md](email.md). |
 
 Plain env (not Secret Manager):
 
@@ -251,10 +254,11 @@ Plain env (not Secret Manager):
 | `PORT` | `8080` | Cloud Run |
 | `PUBLIC_BASE_URL` | omit | Optional env after live origin (GitHub URL helpers) |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | omit | Public Reown Cloud project id (not SM). Needed for WalletConnect QR on fund / Lock. Browser wallets work without it. Allow `https://dev.githubbounties.xyz` and `http://localhost:3000` in the Reown dashboard. |
+| `EMAIL_FROM` | omit | Optional plain env (not SM). Verified Resend sender. Unset uses `GitHub Bounties <noreply@githubbounties.xyz>`. DEV only. |
 
 `--set-secrets` fails if the named secret has **no enabled version**.
 
-`GEMINI_API_KEY` is a `WEB_OPTIONAL_SECRET` in [`infra/gcloud/config.sh`](../infra/gcloud/config.sh). `deploy-web.sh` (static and discover) attaches it when Secret Manager has an enabled version so a full DEV remount with `--set-secrets` does not drop the existing mount. If the secret is missing, the deploy skips it and the bounty page degrades the intelligence card. **PROD is not wired.**
+`GEMINI_API_KEY` and `RESEND_API_KEY` are `WEB_OPTIONAL_SECRETS` in [`infra/gcloud/config.sh`](../infra/gcloud/config.sh). `deploy-web.sh` (static and discover) attaches each when Secret Manager has an enabled version so a full DEV remount with `--set-secrets` does not drop an existing mount. If a secret is missing, the deploy skips it: the bounty page degrades the intelligence card, and welcome mail stays pending. **PROD is not wired** for either key.
 
 Rotate: add a new SM version, then deploy a no-op revision (or re-submit this
 build) so instances restart. See [gcp-bootstrap.md](gcp-bootstrap.md#rotate-secrets).
