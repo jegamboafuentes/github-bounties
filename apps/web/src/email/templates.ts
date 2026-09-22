@@ -82,47 +82,53 @@ function copyFor(template: EmailTemplateName, input: RenderEmailInput): Template
       };
     case "bounty_funded":
       return {
-        subject: `Bounty funded${titleBit}`,
-        preheader: "A bounty you can act on was funded.",
-        headline: "Bounty funded",
+        subject: `Your bounty is funded${titleBit}`,
+        preheader: "Face USDC is locked. This is not a payment challenge.",
+        headline: "Your bounty is funded",
         paragraphs: [
-          `Hi ${name} — a bounty is funded${bounty.title ? ` (${bounty.title})` : ""}${bounty.amount ? ` for ${bounty.amount}` : ""}${bounty.where ? ` on ${bounty.where}` : ""}.`,
-          "This note is ready for a later funded event. Opening the bounty does not move USDC by itself.",
+          `Hi ${name} — your bounty is funded and the face amount is locked${bounty.amount ? ` for ${bounty.amount}` : ""}${bounty.title ? `: ${bounty.title}` : ""}${bounty.where ? ` (${bounty.where})` : ""}.`,
+          "This note goes only to you, the funder, after the lock is confirmed. It is not sent for a pending payment or an x402 challenge. Opening this email does not move USDC.",
         ],
         ctaLabel: "View bounty",
         ctaHref: bounty.href,
       };
     case "pr_merged":
       return {
-        subject: `Pull request merged${titleBit}`,
-        preheader: "Merge is the winner signal.",
-        headline: "Pull request merged",
+        subject: `You won the bounty${titleBit}`,
+        preheader: "Your merged pull request is the winning eligibility.",
+        headline: "You won",
         paragraphs: [
-          `Hi ${name} — a pull request merged${bounty.title ? ` on ${bounty.title}` : ""}${bounty.where ? ` (${bounty.where})` : ""}.`,
-          "Merge is truth. This template does not settle or pay anyone.",
+          `Hi ${name} — you won. Your merged pull request is the winning eligibility${bounty.title ? ` for ${bounty.title}` : ""}${bounty.where ? ` on ${bounty.where}` : ""}.`,
+          "You won the main reward. Open the bounty and Claim it when you are ready. This email does not settle or pay anyone.",
         ],
         ctaLabel: "View bounty",
         ctaHref: bounty.href,
       };
     case "bounty_settled":
       return {
-        subject: `Bounty settled${titleBit}`,
-        preheader: "Settlement finished for this bounty.",
-        headline: "Bounty settled",
+        subject: `Your winner share was paid${bounty.amount ? `: ${bounty.amount}` : titleBit}`,
+        preheader: "The net winner share reached your wallet.",
+        headline: "Your winner share was paid",
         paragraphs: [
-          `Hi ${name} — settlement finished${bounty.title ? ` for ${bounty.title}` : ""}${bounty.amount ? ` (${bounty.amount})` : ""}.`,
-          "Pool members still Claim their own share when one is waiting. This template does not submit a payout.",
+          `Hi ${name} — wallet settlement of your winner share succeeded${bounty.title ? ` for ${bounty.title}` : ""}${bounty.where ? ` (${bounty.where})` : ""}.`,
+          bounty.amount
+            ? `The net amount paid to your wallet is ${bounty.amount}.`
+            : "The net amount paid to your wallet is your winner share.",
+          "Pool participants still Claim their own shares when one is waiting. This email does not submit another payout.",
         ],
         ctaLabel: "View bounty",
         ctaHref: bounty.href,
       };
     case "pool_claimable":
       return {
-        subject: `Pool share ready to Claim${titleBit}`,
-        preheader: "Manual pool Claim is unchanged.",
-        headline: "Your pool share is ready",
+        subject: `You did not win — pool share ready to Claim${titleBit}`,
+        preheader: "You did not win the main reward. Your pool share is ready to Claim.",
+        headline: "You did not win the main reward",
         paragraphs: [
-          `Hi ${name} — your participation-pool share is ready to Claim${bounty.title ? ` on ${bounty.title}` : ""}${bounty.amount ? ` (${bounty.amount})` : ""}.`,
+          `Hi ${name} — you did not win the main reward${bounty.title ? ` on ${bounty.title}` : ""}${bounty.where ? ` (${bounty.where})` : ""}.`,
+          bounty.amount
+            ? `Your earned participation-pool amount is ${bounty.amount}. It is ready for you to Claim.`
+            : "Your earned participation-pool share is ready for you to Claim.",
           "Manual pool Claim is unchanged. Open the bounty and Claim your own share. Nothing in this email moves USDC.",
         ],
         ctaLabel: "Claim your share",
@@ -206,4 +212,24 @@ export function renderEmail(template: EmailTemplateName, input: RenderEmailInput
 
 export function welcomeIdempotencyKey(userId: string): string {
   return `welcome:${userId}`;
+}
+
+/** One funder note per bounty, after lock is confirmed. */
+export function bountyFundedIdempotencyKey(bountyId: string): string {
+  return `bounty_funded:${bountyId}`;
+}
+
+/** One win note per eligible claim row. */
+export function prMergedIdempotencyKey(claimId: string): string {
+  return `pr_merged:${claimId}`;
+}
+
+/** One winner-paid note per claim, after the winner wallet leg confirms. */
+export function bountySettledIdempotencyKey(claimId: string): string {
+  return `bounty_settled:${claimId}`;
+}
+
+/** One claimable note per frozen pool participant. */
+export function poolClaimableIdempotencyKey(bountyId: string, participantId: string): string {
+  return `pool_claimable:${bountyId}:${participantId}`;
 }

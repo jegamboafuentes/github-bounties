@@ -1,8 +1,8 @@
-# Transactional email (V3.x A1)
+# Transactional email (V3.x A1–A2)
 
-DEV foundation. Sign-in still upserts the existing `users` row by Google `google_sub`. There is no second user table. PROD is not wired: do not mount `RESEND_API_KEY` on `github-bounties-web-prod`, and do not treat this as a PROD remount.
+DEV only. Sign-in still upserts the existing `users` row by Google `google_sub`. There is no second user table. PROD is not wired: do not mount `RESEND_API_KEY` on `github-bounties-web-prod`, and do not treat this as a PROD remount.
 
-Manual pool Claim is unchanged. This PR does not subscribe fund, merge, settle, or pool-claim events, and it does not move USDC.
+A1 built identity columns, the outbox, the Resend adapter, welcome-once, and render primitives. A2 enqueues `bounty_funded`, `pr_merged`, `bounty_settled`, and `pool_claimable` from the existing fund-lock, winning-merge, and winner-settlement writes. Manual pool Claim and payout math are unchanged. This does not start an About page, a homepage story, or crowdfunding.
 
 ## Identity
 
@@ -37,19 +37,32 @@ Recipients are `users.email` from the Google signup. The enqueue API has no `to`
 
 Server-rendered HTML (responsive, max-width 560px, wordmark at `/logo-wordmark.png`) plus plain text.
 
-| Template | Wired in this PR |
-| --- | --- |
-| `welcome` | Yes — once, after the first successful signup (not backfilled) |
-| `bounty_funded` | Primitive only |
-| `pr_merged` | Primitive only |
-| `bounty_settled` | Primitive only |
-| `pool_claimable` | Primitive only. Copy says manual pool Claim is unchanged |
+| Template | When it enqueues | Recipient | Idempotency key |
+| --- | --- | --- | --- |
+| `welcome` | First successful signup (not backfilled) | That new user | `welcome:<user id>` |
+| `bounty_funded` | After fund lock commits `bounties.status = funded` | Poster (funder) only | `bounty_funded:<bounty id>` |
+| `pr_merged` | When `markEligibleClaims` writes the claim as `eligible` | Winning developer | `pr_merged:<claim id>` |
+| `bounty_settled` | After the winner wallet leg has `escrows.payout_tx_hash` | Winning developer | `bounty_settled:<claim id>` |
+| `pool_claimable` | When that winner payout hash exists and a frozen pool share is still unpaid | Each non-winning pool participant with `user_id` | `pool_claimable:<bounty id>:<participant id>` |
 
-Delivery runs on that user’s sign-in (their pending rows only). There is no Cloud Scheduler sweeper in this PR. Later events can call `enqueueEmailForUser` and `deliverOutbox` when those domain writes exist.
+Copy names the bounty (title, `owner/repo`, issue number, link) and the relevant amount. `bounty_settled` states the net amount paid to the winner wallet. `pool_claimable` states that they did not win the main reward, the earned pool amount, and a Claim link. The email does not submit the Claim.
+
+Delivery is attempted inline for that user after enqueue (`deliverOutbox`). There is still no Cloud Scheduler sweeper. A row left `pending` because `RESEND_API_KEY` is missing is sent on a later sign-in for that user, or on a later idempotent re-entry of the same hook. Missing key, blank mail, noreply mail, and provider errors do not fail sign-in, funding, webhook eligibility, or Claim.
+
+## Hook points
+
+| Event | Function | Why this moment |
+| --- | --- | --- |
+| `bounty_funded` | `lockEscrowFunds` after the funded transaction commits, and again if Lock is repeated while status is still `funded` | x402 `402` and a pending inbound record do not lock. The bounty stays `pending_fund` until this commit. |
+| `pr_merged` | `markEligibleClaims` after an insert or update that leaves the claim `eligible` | That is the same write that makes the winner Claim-eligible, including the Connect GitHub backfill. |
+| `bounty_settled` and `pool_claimable` | `settleEscrow` after a successful return (`notifyAfterWinnerPayout`) | Winner Claim (`scope=winner_and_fee`) and the settle API both land here. Pool shares become claimable once the winner payout hash exists. |
+| `pool_claimable` late link | `backfillUnlinkedPoolParticipants` | Connect GitHub can stamp `user_id` after the share is already claimable. The same idempotency key prevents a second send. |
+
+`claimPoolPayout` still calls `settleEscrow` for that one participant. It does not pay anyone else and does not change share amounts. A repeat only re-enters the outbox.
 
 ## Provider
 
-[Resend](https://resend.com) over HTTPS from the server (`POST https://api.resend.com/emails`). No SDK. The key is read from `process.env.RESEND_API_KEY` only — never `NEXT_PUBLIC_*`. If the key is unset, send is skipped and sign-in continues. `GET /api/health` exposes `email.configured` as a boolean only.
+[Resend](https://resend.com) over HTTPS from the server (`POST https://api.resend.com/emails`). No SDK. The key is read from `process.env.RESEND_API_KEY` only — never `NEXT_PUBLIC_*`. If the key is unset, send is skipped and sign-in, funding, and Claim continue. `GET /api/health` exposes `email.configured` as a boolean only.
 
 ## DEV secrets (names only)
 
@@ -77,6 +90,13 @@ Then remount DEV with `./infra/gcloud/deploy-web.sh` so the optional secret atta
 ## Product notes
 
 - Welcome is not backfilled to accounts that existed before `0006`.
-- There is no background worker. A welcome left `pending` because the secret was missing is sent on a later sign-in for that user.
-- `bounty_funded`, `pr_merged`, `bounty_settled`, and `pool_claimable` do not fire from escrow, webhooks, or Claim.
-- Pool Claim semantics and accounting are untouched.
+- There is no background worker. Pending mail for a user is attempted on their next sign-in and when a domain hook for that user runs again.
+- Recipients are `users.email` only. Private GitHub emails are never read. Blank and `*@users.noreply.github.com` / `*@noreply.github.com` addresses are skipped and the money or claim write still succeeds.
+- Pool Claim stays manual and per participant. These emails do not move USDC.
+
+### Not invented
+
+- **No mail before lock.** A payment challenge or a recorded inbound with `pending_fund` does not enqueue `bounty_funded`. After the bounty leaves `funded` (claim lock, settling, settled), a missed funder enqueue is not retried. A repeated Lock while status is still `funded` retries the enqueue and still returns `not_fundable`.
+- **Winner mail follows the winner wallet leg.** `bounty_settled` enqueue needs `escrows.payout_tx_hash`. The amount is `claims.payout_usdc` when settlement stamped it, otherwise the `WINNER_PAYOUT` ledger amount. A settle call with no `claims` row has no signed-up winner to email.
+- **Pool mail is not a payout.** It goes only to frozen `role = pool` rows with a positive `share_usdc`, no `payout_tx_hash`, and a `user_id`. Overflow, excluded, and winner-role rows are not recipients. A `user_id` that is still null at that moment is skipped until Connect GitHub backfill, and only if the share is still unpaid. `scope=all` that pays pool legs in the same settle does not email shares that already have a payout hash.
+- **No second money path.** Fee, winner, and pool amounts stay on the existing split. Claim still requires the participant’s own wallet.

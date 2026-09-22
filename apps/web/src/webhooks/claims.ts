@@ -1,5 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
+import { notifyPullRequestWon, type DomainEmailDeps } from "../email/events";
 import { findGithubLinkByIdOrLogin } from "../github/persist";
 import { bounties, claims, repos, webhookDeliveries } from "../db/schema";
 import { CLAIM_SKIP } from "./outcome";
@@ -39,6 +40,7 @@ export async function markEligibleClaims(
   decision: EligibilityDecision,
   payload: GitHubWebhookPayload,
   db: Database,
+  email?: DomainEmailDeps,
 ): Promise<ClaimWriteResult[]> {
   if (!decision.eligible || decision.closedIssueNumbers.length === 0) {
     return [];
@@ -154,13 +156,18 @@ export async function markEligibleClaims(
         })
         .where(eq(claims.id, existing.id))
         .returning({ id: claims.id, status: claims.status });
+      const updatedId = updated?.id ?? existing.id;
+      const updatedStatus = updated?.status ?? "eligible";
       results.push({
         issueNumber,
         bountyId: bounty.id,
-        claimId: updated?.id ?? existing.id,
-        status: updated?.status ?? "eligible",
+        claimId: updatedId,
+        status: updatedStatus,
         ...meta,
       });
+      if (updatedStatus === "eligible") {
+        await notifyPullRequestWon(db, updatedId, email);
+      }
       continue;
     }
 
@@ -179,13 +186,18 @@ export async function markEligibleClaims(
       })
       .returning({ id: claims.id, status: claims.status });
 
+    const insertedId = inserted?.id;
+    const insertedStatus = inserted?.status ?? "eligible";
     results.push({
       issueNumber,
       bountyId: bounty.id,
-      claimId: inserted?.id,
-      status: inserted?.status ?? "eligible",
+      claimId: insertedId,
+      status: insertedStatus,
       ...meta,
     });
+    if (insertedId && insertedStatus === "eligible") {
+      await notifyPullRequestWon(db, insertedId, email);
+    }
   }
 
   return results;

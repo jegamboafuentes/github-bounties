@@ -36,6 +36,7 @@ import {
   type SettleScope,
 } from "./allocation";
 import { resolveRail, type CdpRail } from "./rail";
+import { notifyAfterWinnerPayout, notifyBountyFunded, type DomainEmailDeps } from "../email/events";
 import { walletConnectStatus } from "../wallet/env";
 import { x402ExactStatus } from "./x402";
 import { reconcileBountyNotes, type EscrowReconRow } from "./reconcile";
@@ -52,6 +53,8 @@ export type EscrowServiceOpts = {
   db: Database;
   rail?: CdpRail;
   now?: Date;
+  /** Optional. Production uses process.env. Missing RESEND_API_KEY does not fail the money call. */
+  email?: DomainEmailDeps;
 };
 
 function railOf(opts: EscrowServiceOpts): CdpRail {
@@ -127,6 +130,9 @@ export async function lockEscrowFunds(
     throw new EscrowError("not_poster", "Only the poster can lock escrow for this bounty.");
   }
   if (bounty.status !== "pending_fund") {
+    if (bounty.status === "funded") {
+      await notifyBountyFunded(opts.db, bountyId, opts.email);
+    }
     throw new EscrowError("not_fundable", `Bounty is ${bounty.status}, not pending_fund.`);
   }
 
@@ -203,6 +209,8 @@ export async function lockEscrowFunds(
 
   const escrow = await loadEscrow(opts.db, bountyId);
   if (!escrow) throw new EscrowError("bounty_not_found", "Escrow row missing after lock.");
+
+  await notifyBountyFunded(opts.db, bountyId, opts.email);
 
   return {
     bountyId,
@@ -307,7 +315,7 @@ export async function settleEscrow(
   ) {
     const wallets = await rail.ensureWallets();
     const legs = await loadAllocationLegs(opts.db, bountyId);
-    return finishSettleResult({
+    const result = finishSettleResult({
       bountyId,
       faceUsdc: bounty.amountUsdc,
       escrow,
@@ -318,6 +326,8 @@ export async function settleEscrow(
       hunterAddress: "",
       legs,
     });
+    await notifyAfterWinnerPayout(opts.db, bountyId, opts.email);
+    return result;
   }
 
   const settleable =
@@ -627,6 +637,7 @@ export async function settleEscrow(
     hunterAddress: hunter.address,
     legs: ledgerRows,
   });
+  await notifyAfterWinnerPayout(opts.db, bountyId, opts.email);
   return result;
 }
 

@@ -116,7 +116,7 @@ Do not point `cloudbuild.yaml` at this app. Closed-beta checklist: [docs/staging
 | `npm run db:seed` | sample user / repo / pending_fund + funded + open funded bounty + V2 pool fixtures (no exclusive lock) |
 | `npm run expire-locks` | drain residual exclusive claim-locks + `expires_at` refunds (same function as the cron route) |
 | `npm run test:unit` | fee 2% + Base address + escrow state machine + CDP env/mainnet guard + claim-lock sunset copy + auth + V0-B eligibility fixtures + HMAC + webhook replay + board helpers + V2 pool invariants + V2-2 freeze rows + V2-4 roster + public stats definitions + homepage stats/roadmap/differentiator copy + issue markdown sanitize + Gemini intelligence cache/prompt (no live GitHub, no database) |
-| `npm run test:db` | unique indexes + `users.google_sub` upsert (repeat-login dedupe) + welcome-once outbox + eligible Claim + claim-lock sunset drain + work signals + escrow fund/settle/refund + hunter-only payout mocks + GitHub unlink + V2-1 pool schema + V2-2 pool freeze + public `/api/stats` aggregates (needs `DATABASE_URL`) |
+| `npm run test:db` | unique indexes + `users.google_sub` upsert (repeat-login dedupe) + welcome-once outbox + domain email enqueue + eligible Claim + claim-lock sunset drain + work signals + escrow fund/settle/refund + hunter-only payout mocks + GitHub unlink + V2-1 pool schema + V2-2 pool freeze + public `/api/stats` aggregates (needs `DATABASE_URL`) |
 | `npm run build` | Next.js standalone |
 
 ## Google Sign-In (V1-2)
