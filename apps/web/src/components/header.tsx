@@ -37,6 +37,9 @@ export async function AppHeader() {
           <Link href="/bounties/new" className="underline-offset-4 hover:underline">
             Post
           </Link>
+          <Link href="/roadmap" className="underline-offset-4 hover:underline">
+            Roadmap
+          </Link>
           <Link href="/about" className="underline-offset-4 hover:underline">
             About
           </Link>

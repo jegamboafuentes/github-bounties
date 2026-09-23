@@ -2,7 +2,7 @@
 
 High-level versions for **GitHub Bounties**. This is not Lightning Bounties / LB1.
 
-The homepage reads the same items from [`apps/web/src/home/roadmap.ts`](../apps/web/src/home/roadmap.ts). Edit that constant (and this file) when a version actually ships. **Do not invent ship dates.**
+The public `/roadmap` page reads the same items from [`apps/web/src/home/roadmap.ts`](../apps/web/src/home/roadmap.ts). Edit that constant (and this file) when a version actually ships. **Do not invent ship dates.**
 
 Refreshed **as of 2026-09-21**. Status words only — no Q-dates.
 

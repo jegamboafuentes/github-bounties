@@ -41,6 +41,7 @@ As of **2026-09-21**. No invented ship dates. V3-0 is **DEV only** — do not tr
 - Settings / Post show GitHub **connected vs not** (no repo dump)
 - Board complexity/language badges + filters; DEV header pill
 - **V3.x B** — public About page (next chapter of Lightning Bounties, same cofounders) and a homepage scroll story instead of the Modules list. UI only. No migration, no fee or escrow change. Not a PROD remount.
+- **Public `/roadmap`** — same `PUBLIC_ROADMAP` items as [docs/roadmap.md](docs/roadmap.md). Homepage keeps live stats, differentiators, and the scroll story; the roadmap block is not on home. About links the roadmap, the MIT Devpost, the Medium win story, and local cofounder photos. UI only. No migration. Remount DEV after merge. Do **not** remount PROD.
 
 ### Not shipped / deferred
 

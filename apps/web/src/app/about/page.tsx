@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { AppHeader } from "@/components/header";
 import { BrandWordmark } from "@/components/brand-wordmark";
+import { TeamSocialLinks } from "@/components/team-social-links";
 import {
   ABOUT_BIOS_NOTE,
   ABOUT_CHAPTER,
@@ -9,6 +11,7 @@ import {
   ABOUT_CONTINUES,
   ABOUT_DISTINCTION,
   ABOUT_LINKS,
+  ABOUT_ROADMAP_CTA,
 } from "@/home/about";
 import { PRODUCT_NAME } from "@/lib/constants";
 
@@ -70,6 +73,11 @@ export default function AboutPage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <OriginLink href={ABOUT_LINKS.mit.href} label={ABOUT_LINKS.mit.label} kind="primary" />
               <OriginLink
+                href={ABOUT_LINKS.mitStory.href}
+                label={ABOUT_LINKS.mitStory.label}
+                kind="secondary"
+              />
+              <OriginLink
                 href={ABOUT_LINKS.original.href}
                 label={ABOUT_LINKS.original.label}
                 kind="secondary"
@@ -80,6 +88,9 @@ export default function AboutPage() {
                 {ABOUT_LINKS.mit.detail}
               </li>
               <li className="rounded-xl border border-zinc-200 bg-white/80 p-4 text-sm leading-6 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-400">
+                {ABOUT_LINKS.mitStory.detail}
+              </li>
+              <li className="rounded-xl border border-zinc-200 bg-white/80 p-4 text-sm leading-6 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/80 dark:text-zinc-400 sm:col-span-2">
                 {ABOUT_LINKS.original.detail}
               </li>
             </ul>
@@ -102,19 +113,46 @@ export default function AboutPage() {
                 key={person.name}
                 className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
               >
-                <div className="flex items-center gap-3">
-                  <span
-                    aria-hidden="true"
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-sm font-semibold text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200"
-                  >
-                    {person.initials}
-                  </span>
-                  <h3 className="text-lg font-semibold tracking-tight">{person.name}</h3>
+                <div className="flex items-start gap-3">
+                  <Image
+                    src={person.photo}
+                    alt={person.photoAlt}
+                    width={391}
+                    height={292}
+                    className="h-20 w-[6.75rem] shrink-0 rounded-lg bg-zinc-100 object-contain dark:bg-zinc-800"
+                  />
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-semibold tracking-tight">{person.name}</h3>
+                    <TeamSocialLinks person={person} />
+                  </div>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{person.bio}</p>
               </li>
             ))}
           </ul>
+        </section>
+
+        <section
+          aria-labelledby="roadmap-cta-heading"
+          className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="max-w-xl">
+            <h2
+              id="roadmap-cta-heading"
+              className="text-sm font-semibold uppercase tracking-wide text-zinc-500"
+            >
+              {ABOUT_ROADMAP_CTA.heading}
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+              {ABOUT_ROADMAP_CTA.body}
+            </p>
+          </div>
+          <Link
+            href={ABOUT_ROADMAP_CTA.href}
+            className="inline-flex items-center justify-center rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+          >
+            {ABOUT_ROADMAP_CTA.label}
+          </Link>
         </section>
       </main>
       <footer className="border-t border-zinc-200 dark:border-zinc-800">
@@ -124,6 +162,9 @@ export default function AboutPage() {
         >
           <Link href="/" className="underline-offset-4 hover:underline">
             Home
+          </Link>
+          <Link href="/roadmap" className="underline-offset-4 hover:underline">
+            Roadmap
           </Link>
           <Link href="/board" className="underline-offset-4 hover:underline">
             Board
@@ -135,6 +176,15 @@ export default function AboutPage() {
             rel="noopener noreferrer"
           >
             MIT genesis / win
+            <span className="sr-only"> (opens in a new tab)</span>
+          </a>
+          <a
+            href={ABOUT_LINKS.mitStory.href}
+            className="underline-offset-4 hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Medium story
             <span className="sr-only"> (opens in a new tab)</span>
           </a>
           <a

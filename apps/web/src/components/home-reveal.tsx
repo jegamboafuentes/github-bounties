@@ -179,18 +179,6 @@ export function HomeReveal({
             );
           }
 
-          const roadmap = select(host, ".home-section-roadmap")[0];
-          if (roadmap) {
-            playOnEnter(
-              roadmap,
-              [
-                ...select(roadmap, ".home-section-heading"),
-                ...select(roadmap, ".home-roadmap-item"),
-              ],
-              55,
-            );
-          }
-
           const story = select(host, ".home-section-story")[0];
           if (story) {
             const steps = select(story, ".home-story-step");
