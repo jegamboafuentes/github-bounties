@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
-import { PUBLIC_ROADMAP, ROADMAP_STATUS_LABEL, ROADMAP_STATUSES } from "./roadmap";
+import { PUBLIC_ROADMAP, ROADMAP_INTRO, ROADMAP_STATUS_LABEL, ROADMAP_STATUSES } from "./roadmap";
 
 const docsRoadmap = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "../../../../docs/roadmap.md"),
@@ -63,8 +63,11 @@ describe("public roadmap", () => {
     assert.match(byId.v5?.summary ?? "", /Agent-native/i);
   });
 
-  it("keeps docs/roadmap.md in sync with the homepage constant", () => {
+  it("keeps docs/roadmap.md in sync with the public roadmap constant", () => {
+    assert.match(ROADMAP_INTRO, /No invented ship dates/);
+    assert.doesNotMatch(ROADMAP_INTRO, /\bQ[1-4]\b|\b20\d{2}-\d{2}-\d{2}\b/);
     assert.match(docsRoadmap, /Do not invent ship dates/i);
+    assert.match(docsRoadmap, /public `\/roadmap` page/);
     assert.match(docsRoadmap, /as of 2026-09-21/i);
     assert.doesNotMatch(docsRoadmap, /pending Enrique/i);
     assert.match(docsRoadmap, /Shipped on PROD/i);

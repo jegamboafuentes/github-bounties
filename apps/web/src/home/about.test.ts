@@ -7,8 +7,10 @@ import {
   ABOUT_CONTINUES,
   ABOUT_DISTINCTION,
   ABOUT_LINKS,
+  ABOUT_ROADMAP_CTA,
 } from "./about";
 import { NOT_LIGHTNING_BOUNTIES } from "./differentiators";
+import { ROADMAP_INTRO } from "./roadmap";
 
 describe("about page copy", () => {
   it("frames the next chapter without inventing a new origin", () => {
@@ -55,13 +57,72 @@ describe("about page copy", () => {
     assert.match(mike, /Figma and Canva power user/);
   });
 
-  it("links the MIT win and the original product", () => {
+  it("links the MIT win, the Medium story, and the original product", () => {
     assert.equal(ABOUT_LINKS.mit.href, "https://devpost.com/software/lightning-bounty");
     assert.equal(ABOUT_LINKS.mit.label, "MIT genesis / win");
     assert.match(ABOUT_LINKS.mit.detail, /MIT Bitcoin Hackathon Scaling Up/);
     assert.match(ABOUT_LINKS.mit.detail, /Track 1: Bitcoin, Lightning & Taproot/);
     assert.match(ABOUT_LINKS.mit.detail, /Zero Hash/);
+    assert.equal(
+      ABOUT_LINKS.mitStory.href,
+      "https://jegamboafuentes.medium.com/our-epic-win-at-the-mit-bitcoin-hackathon-2024-34fab944e78d",
+    );
+    assert.equal(ABOUT_LINKS.mitStory.label, "Medium story");
+    assert.match(ABOUT_LINKS.mitStory.detail, /MIT Bitcoin hackathon 2024/);
     assert.equal(ABOUT_LINKS.original.href, "https://www.lightningbounties.com/");
     assert.equal(ABOUT_LINKS.original.label, "Original product");
+  });
+
+  it("points at the public roadmap without inventing dates", () => {
+    assert.equal(ABOUT_ROADMAP_CTA.href, "/roadmap");
+    assert.equal(ABOUT_ROADMAP_CTA.label, "See the roadmap");
+    assert.equal(ABOUT_ROADMAP_CTA.body, ROADMAP_INTRO);
+    assert.match(ABOUT_ROADMAP_CTA.body, /No invented ship dates/);
+    assert.doesNotMatch(ABOUT_ROADMAP_CTA.body, /\bQ[1-4]\b|\b20\d{2}-\d{2}-\d{2}\b/);
+  });
+
+  it("uses local headshots and the given profile URLs", () => {
+    const byName = Object.fromEntries(ABOUT_COFOUNDERS.map((person) => [person.name, person]));
+    const hrefs = (name: string) => (byName[name]?.links ?? []).map((link) => link.href);
+
+    assert.equal(byName["Enrique Gamboa"]?.photo, "/team/enrique.png");
+    assert.equal(byName["Enrique Gamboa"]?.photoAlt, "Photo of Enrique Gamboa");
+    assert.deepEqual(hrefs("Enrique Gamboa"), [
+      "https://github.com/jegamboafuentes",
+      "https://www.linkedin.com/in/jegamboafuentes",
+      "https://twitter.com/jegamboafuentes",
+      "https://jegamboafuentes.medium.com",
+    ]);
+
+    assert.equal(byName["Will Sutton"]?.photo, "/team/will.png");
+    assert.deepEqual(hrefs("Will Sutton"), [
+      "https://github.com/sutt",
+      "https://www.linkedin.com/in/willsutton17",
+      "https://twitter.com/WillSuttonCodes",
+    ]);
+
+    assert.equal(byName["Pavel Kononov"]?.photo, "/team/pavel.png");
+    assert.deepEqual(hrefs("Pavel Kononov"), [
+      "https://github.com/super-jaba",
+      "https://www.linkedin.com/in/kononovp",
+    ]);
+
+    assert.equal(byName["Mike Abramo"]?.photo, "/team/mike.png");
+    assert.deepEqual(hrefs("Mike Abramo"), [
+      "https://github.com/SonnyMonroe",
+      "https://www.linkedin.com/in/michael-abramo",
+      "https://twitter.com/SonnyTheDegen",
+      "https://medium.com/@mabramo11",
+      "https://mabramo-linktree.vercel.app",
+    ]);
+
+    for (const person of ABOUT_COFOUNDERS) {
+      assert.match(person.photo, /^\/team\/[a-z]+\.png$/);
+      assert.doesNotMatch(person.photo, /^https?:/i);
+      assert.doesNotMatch(JSON.stringify(person), /wixstatic|wix\.com/i);
+      for (const link of person.links) {
+        assert.match(link.href, /^https:\/\//);
+      }
+    }
   });
 });

@@ -5,7 +5,6 @@ import { HomeCompare } from "@/components/home-compare";
 import { HomeHero } from "@/components/home-hero";
 import { HomeStory } from "@/components/home-story";
 import { HomeReveal } from "@/components/home-reveal";
-import { HomeRoadmap } from "@/components/home-roadmap";
 import { HomeStats } from "@/components/home-stats";
 import { NOT_LIGHTNING_BOUNTIES, loadHomepageStats } from "@/home";
 import { resolveFundWalletRuntime } from "@/wallet/env";
@@ -25,12 +24,15 @@ export default async function Home() {
           <HomeHero signedIn={signedIn} chainName={fund.chainName} />
           <HomeStats source={stats} />
           <HomeCompare />
-          <HomeRoadmap />
           <HomeStory />
           <p className="home-footer-note home-reveal-item text-sm text-zinc-500">
           {NOT_LIGHTNING_BOUNTIES} Sign in with Google.{" "}
           <Link href="/about" className="underline underline-offset-4">
             About
+          </Link>
+          {" · "}
+          <Link href="/roadmap" className="underline underline-offset-4">
+            Roadmap
           </Link>
           {" · "}
           <Link href="/board" className="underline underline-offset-4">

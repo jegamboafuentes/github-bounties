@@ -5,6 +5,7 @@ export {
   ABOUT_CONTINUES,
   ABOUT_DISTINCTION,
   ABOUT_LINKS,
+  ABOUT_ROADMAP_CTA,
   type AboutCofounder,
 } from "./about";
 export { homepageCtas, type HomepageCta, type HomepageCtaKind } from "./ctas";
@@ -12,6 +13,7 @@ export { HOMEPAGE_DIFFERENTIATORS, NOT_LIGHTNING_BOUNTIES } from "./differentiat
 export { emptyHomepageStats, loadHomepageStats, type HomepageStatsSource } from "./load-stats";
 export {
   PUBLIC_ROADMAP,
+  ROADMAP_INTRO,
   ROADMAP_STATUS_LABEL,
   ROADMAP_STATUSES,
   type RoadmapItem,

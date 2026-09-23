@@ -165,8 +165,9 @@ If Google env is missing, `/signin` lists the unset variable names. Home and `/a
 
 | URL | Auth |
 | --- | --- |
-| `/` | public homepage: live stats, differentiators, roadmap, scroll story |
-| `/about` | public origin page (Lightning Bounties lineage, cofounders). No session. |
+| `/` | public homepage: live stats, differentiators, scroll story |
+| `/about` | public origin page (Lightning Bounties lineage, cofounders, local photos). No session. |
+| `/roadmap` | public roadmap (`PUBLIC_ROADMAP` / [docs/roadmap.md](../../docs/roadmap.md)). No session. |
 | `/board` | public list + repo/status filters (Working on this; no exclusive lock caption) |
 | `GET /api/stats` | public platform aggregates (`schemaVersion`); no session. [docs/stats.md](../../docs/stats.md) |
 | `/bounties/new` | Google session; issue URL must match an App-connected repo |

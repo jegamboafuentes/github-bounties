@@ -101,6 +101,8 @@ V2-1 (after merge): applies additive `0004_v2_pool_participants` (`pool_particip
 
 **V3.x B (DEV only):** public `/about` and the homepage scroll story (the Modules list is gone). UI only — no migration, no new secret, no escrow / fee / pool / claim change. Crowdfunding is not part of this revision. Remount DEV `github-bounties-web` when those pages should be live. Do **not** remount PROD (`github-bounties-web-prod`, apex `githubbounties.xyz`).
 
+**Public roadmap page (DEV only):** `/roadmap` renders `PUBLIC_ROADMAP` (`apps/web/src/home/roadmap.ts`, kept in sync with `docs/roadmap.md`). The homepage no longer includes that block. About links `/roadmap`, keeps the MIT Devpost, and adds the Medium win story plus vendored cofounder photos. UI only — no migration, no new secret, no escrow / fee / pool / claim change. Crowdfunding is not part of this revision. Remount DEV `github-bounties-web` after merge. Do **not** remount PROD (`github-bounties-web-prod`, apex `githubbounties.xyz`).
+
 ### B. Exact laptop + Auth Proxy commands
 
 ```bash

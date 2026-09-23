@@ -1,4 +1,7 @@
-/** Public homepage roadmap. Keep in sync with docs/roadmap.md. No invented ship dates. */
+/** Public /roadmap copy. Keep in sync with docs/roadmap.md. No invented ship dates. */
+
+export const ROADMAP_INTRO =
+  "Upcoming versions, marked honestly. No invented ship dates.";
 
 export const ROADMAP_STATUSES = ["shipped", "in_progress", "planned"] as const;
 
