@@ -321,7 +321,7 @@ const errorResponses = {
     headers: {
       Allow: {
         description: "RFC 9110 Allow. These routes accept GET and OPTIONS.",
-        schema: { type: "string", enum: ["GET, OPTIONS"] },
+        schema: { type: "string", example: "GET, OPTIONS" },
       },
     },
     content: { "application/json": { schema: apiErrorSchema } },
