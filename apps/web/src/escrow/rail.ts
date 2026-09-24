@@ -44,14 +44,18 @@ export type CdpRail = {
   probe: CdpProbe;
   ensureWallets(): Promise<RailWallets>;
   /**
-   * Credit face F into gb-escrow (lock). Mock always succeeds.
-   * Live + CDP_DRY_RUN_LIVE faucets Sepolia test USDC.
-   * Live without inbound confirmation (x402 record or pasted hash) throws `inbound_unconfirmed`.
+   * Credit face F into gb-escrow (lock). Mock always succeeds and may echo a pasted hash.
+   * Live + CDP_DRY_RUN_LIVE faucets Sepolia test USDC when no hash is supplied.
+   * Live accepts a fund hash only when the caller has set `verifiedInbound`
+   * (the x402 settle hash for this bounty). Any other hash throws `fund_hash_not_verified`.
+   * Live with no hash and no dry-run faucet throws `inbound_unconfirmed`.
    */
   lockFace(input: {
     amountAtomic: bigint;
     idempotencyKey: string;
     fundTxHash?: string | null;
+    /** Set only after the service matched this hash to an x402 settle for the bounty. */
+    verifiedInbound?: boolean;
   }): Promise<RailTransferResult & RailWallets>;
   transferUsdc(input: RailTransferInput): Promise<RailTransferResult>;
 };
@@ -197,8 +201,15 @@ export function createCdpRail(env: EnvMap = process.env, probe = probeCdpEnv(env
     },
     async lockFace(input) {
       const wallets = await loadWallets();
-      if (input.fundTxHash?.trim()) {
-        return { ...wallets, txHash: input.fundTxHash.trim() };
+      const pasted = input.fundTxHash?.trim() || "";
+      if (pasted) {
+        if (!input.verifiedInbound) {
+          throw new EscrowError(
+            "fund_hash_not_verified",
+            "Live rail will not treat a pasted fund tx hash as inbound. Pay via x402 exact, then Lock the recorded hash.",
+          );
+        }
+        return { ...wallets, txHash: pasted };
       }
       if (isDryRunLive(env) && !probe.unsafeNetwork) {
         return {
@@ -211,7 +222,7 @@ export function createCdpRail(env: EnvMap = process.env, probe = probeCdpEnv(env
       }
       throw new EscrowError(
         "inbound_unconfirmed",
-        `Pay exact face USDC via GET|POST /api/bounties/{id}/x402 (x402 exact → gb-escrow ${wallets.escrowAddress} on ${probe.network}), then Lock without a hash. Or send USDC to that address and paste the tx hash. Hosted checkout is disabled (ADR 0001 fee-skim open Q).`,
+        `Pay exact face USDC via GET|POST /api/bounties/{id}/x402 (x402 exact → gb-escrow ${wallets.escrowAddress} on ${probe.network}), then Lock without a hash. Paste-hash Lock is mock/local only. Hosted checkout is disabled (ADR 0001 fee-skim open Q).`,
         { details: { escrowAddress: wallets.escrowAddress, network: probe.network } },
       );
     },

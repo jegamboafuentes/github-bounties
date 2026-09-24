@@ -103,8 +103,6 @@ export async function claimPayout(
       bountyId,
       {
         actorUserId,
-        hunterUserId: claim.hunterUserId,
-        hunterPayoutAddress: address,
         claimId: claim.id,
         scope: "winner_and_fee",
       },

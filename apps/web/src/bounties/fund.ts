@@ -1,6 +1,15 @@
 import type { Database } from "../db/client";
 import type { DomainEmailDeps } from "../email/events";
-import { EscrowError, lockEscrowFunds, topUpFundedBounty, type CdpRail, type TopUpResult } from "../escrow";
+import {
+  assertCallerLockHash,
+  assertCallerTopUpHash,
+  EscrowError,
+  lockEscrowFunds,
+  probeCdpEnv,
+  topUpFundedBounty,
+  type CdpRail,
+  type TopUpResult,
+} from "../escrow";
 import { BountyError } from "./errors";
 
 export type FundedBounty = {
@@ -24,6 +33,8 @@ export async function fundBounty(
   opts?: { rail?: CdpRail; fundTxHash?: string | null; email?: DomainEmailDeps },
 ): Promise<FundedBounty> {
   try {
+    const railMode = opts?.rail?.mode ?? probeCdpEnv().mode;
+    await assertCallerLockHash(db, bountyId, opts?.fundTxHash, railMode);
     const locked = await lockEscrowFunds(bountyId, actorUserId, {
       db,
       now,
@@ -57,6 +68,8 @@ export async function topUpBounty(
   opts?: { rail?: CdpRail },
 ): Promise<TopUpResult> {
   try {
+    const railMode = opts?.rail?.mode ?? probeCdpEnv().mode;
+    assertCallerTopUpHash(input.fundTxHash, railMode);
     return await topUpFundedBounty(bountyId, actorUserId, input, {
       db,
       now,

@@ -11,11 +11,12 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
- * Minimal settle API (V1-5). V1-6 owns payout UI polish.
- * Poster or winning hunter. Body: { hunterPayoutAddress?, hunterUserId?, claimId? }
+ * Settle API. Poster or the winning hunter from the GitHub merge claim.
+ * The body cannot choose hunterUserId, hunterPayoutAddress, or claimId.
+ * Payee is claims.payout_address or that hunter's saved wallet.
  */
 export async function POST(
-  req: Request,
+  _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
   const user = await getCurrentPublicUser();
@@ -23,26 +24,11 @@ export async function POST(
     return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
-  let body: {
-    hunterPayoutAddress?: string;
-    hunterUserId?: string;
-    claimId?: string;
-  } = {};
-  try {
-    body = (await req.json()) as typeof body;
-  } catch {
-    body = {};
-  }
 
   try {
     const result = await settleEscrow(
       id,
-      {
-        actorUserId: user.id,
-        hunterPayoutAddress: body.hunterPayoutAddress,
-        hunterUserId: body.hunterUserId,
-        claimId: body.claimId,
-      },
+      { actorUserId: user.id },
       { db: getRuntimeDb() },
     );
     return Response.json(

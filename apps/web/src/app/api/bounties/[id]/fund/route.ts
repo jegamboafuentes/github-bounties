@@ -2,11 +2,13 @@ import { getCurrentPublicUser } from "@/auth/protect";
 import { fundBounty, isBountyError } from "@/bounties";
 import { getRuntimeDb } from "@/db/runtime";
 import {
+  assertCallerLockHash,
   escrowErrorJson,
   getEscrowSnapshot,
   httpStatusForEscrowCode,
   isEscrowError,
   jsonForUnknown,
+  probeCdpEnv,
 } from "@/escrow";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +45,7 @@ export async function POST(
   }
 
   try {
+    await assertCallerLockHash(getRuntimeDb(), id, fundTxHash, probeCdpEnv().mode);
     const funded = await fundBounty(id, user.id, getRuntimeDb(), new Date(), {
       fundTxHash,
     });

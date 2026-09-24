@@ -15,7 +15,13 @@ import {
 } from "@/bounties";
 import { claimPoolPayout, claimPayout, isClaimError } from "@/claims";
 import { getRuntimeDb } from "@/db/runtime";
-import { isEscrowError, refundEscrow } from "@/escrow";
+import {
+  assertCallerLockHash,
+  assertCallerTopUpHash,
+  isEscrowError,
+  probeCdpEnv,
+  refundEscrow,
+} from "@/escrow";
 import { INVALID_BASE_ADDRESS_MESSAGE, normalizeBaseAddress } from "@/lib/address";
 import { setUserWalletAddress } from "@/auth/users";
 
@@ -75,6 +81,7 @@ export async function fundBountyAction(formData: FormData): Promise<void> {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
   }
   try {
+    await assertCallerLockHash(getRuntimeDb(), bountyId, fundTxHash, probeCdpEnv().mode);
     const funded = await fundBounty(bountyId, user.id, getRuntimeDb(), new Date(), { fundTxHash });
     refreshBounty(bountyId);
     if (funded.rail === "mock" && funded.missingEnv?.length) {
@@ -99,6 +106,7 @@ export async function topUpBountyAction(formData: FormData): Promise<void> {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
   }
   try {
+    assertCallerTopUpHash(fundTxHash, probeCdpEnv().mode);
     await topUpBounty(
       bountyId,
       user.id,

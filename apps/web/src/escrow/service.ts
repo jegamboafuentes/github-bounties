@@ -13,7 +13,10 @@ import {
   VOIDED_UNFUNDED_REASON,
 } from "./fail";
 import { hostedCheckoutStatus } from "./hosted";
+import { assertCallerLockHash, assertFundTxHashAvailable } from "./fund-hash";
 import { resolveLockFundTxHash } from "./inbound";
+import { requireBasePayoutAddress } from "./payout-address";
+import { assertPayoutCovered } from "./payout-guard";
 import { moneyIdempotencyKey } from "./idempotency";
 import {
   confirmedOutflowsFromLegs,
@@ -118,9 +121,9 @@ export type LockResult = {
 
 /**
  * pending → locked (`escrows.status=funded`). Poster-only.
- * Mock rail records a mock fund hash and lists exact missing CDP_*.
- * Live rail requires a confirmed inbound (x402 exact record or pasted hash)
- * or CDP_DRY_RUN_LIVE faucet.
+ * Mock rail records a mock fund hash (or a pasted hash) and lists exact missing CDP_*.
+ * Live rail requires the x402 settle hash already recorded for this bounty,
+ * or CDP_DRY_RUN_LIVE faucet. A pasted hash that is not that record is rejected.
  */
 export async function lockEscrowFunds(
   bountyId: string,
@@ -145,20 +148,32 @@ export async function lockEscrowFunds(
   const split = splitFaceUsdc(bounty.amountUsdc);
   const fundKey = moneyIdempotencyKey(bountyId, "FUND_IN");
   const existingBeforeLock = await loadEscrow(opts.db, bountyId);
-  const fundTxHash = resolveLockFundTxHash({
-    pasted: opts.fundTxHash,
-    recorded: existingBeforeLock?.fundTxHash,
-  });
 
   let rail: CdpRail;
   let locked: Awaited<ReturnType<CdpRail["lockFace"]>>;
   try {
     rail = railOf(opts);
+    const recordedByX402 = Boolean(existingBeforeLock?.x402PaymentId?.trim());
+    await assertCallerLockHash(opts.db, bountyId, opts.fundTxHash, rail.mode);
+    const fundTxHash = resolveLockFundTxHash({
+      pasted: opts.fundTxHash,
+      recorded: existingBeforeLock?.fundTxHash,
+      railMode: rail.mode,
+      recordedByX402,
+    });
+    if (fundTxHash) {
+      await assertFundTxHashAvailable(opts.db, fundTxHash, bountyId);
+    }
     locked = await rail.lockFace({
       amountAtomic: split.faceAtomic,
       idempotencyKey: fundKey,
       fundTxHash,
+      verifiedInbound: rail.mode === "cdp" && recordedByX402 && Boolean(fundTxHash),
     });
+    const lockedHash = locked.txHash.trim();
+    if (lockedHash && lockedHash !== fundTxHash) {
+      await assertFundTxHashAvailable(opts.db, lockedHash, bountyId);
+    }
   } catch (err) {
     const failure = toPersistedLockFailure(err);
     await persistEscrowFail(opts.db, bountyId, {
@@ -174,8 +189,9 @@ export async function lockEscrowFunds(
     .from(users)
     .where(eq(users.id, actorUserId))
     .limit(1);
+  // Keep the x402 payer when settle already stored it. Never take a caller address.
   const funderAddress =
-    opts.funderAddress?.trim() || poster?.walletAddress?.trim() || locked.escrowAddress;
+    existingBeforeLock?.funderAddress?.trim() || poster?.walletAddress?.trim() || null;
 
   await opts.db.transaction(async (tx) => {
     const [updated] = await tx
@@ -303,11 +319,14 @@ export async function settleEscrow(
   bountyId: string,
   input: {
     actorUserId?: string;
-    hunterUserId?: string;
-    hunterPayoutAddress?: string | null;
+    /**
+     * Optional eligible-claim id from the hunter's own Claim.
+     * Hunter user id and payout address are never taken from the caller.
+     */
     claimId?: string;
     scope?: SettleScope;
     participantId?: string | null;
+    /** Pool member's own Claim address. Ignored unless scope is pool_member. */
     poolPayoutAddress?: string | null;
   },
   opts: EscrowServiceOpts,
@@ -478,11 +497,15 @@ export async function settleEscrow(
       continue;
     }
 
+    const toAddress =
+      leg.kind === "FEE_OUT" ? leg.toAddress : requireBasePayoutAddress(leg.toAddress);
+    await assertPayoutCovered(opts.db, bountyId, leg.amountAtomic, rail.mode);
+
     await markLegSubmitted(opts.db, row.id, now);
     const idempotencyKey = row.idempotencyKey || leg.idempotencyKey;
     try {
       const sent = await rail.transferUsdc({
-        to: leg.toAddress,
+        to: toAddress,
         amountAtomic: leg.amountAtomic,
         idempotencyKey,
         purpose: leg.purpose,
@@ -491,7 +514,7 @@ export async function settleEscrow(
       await markLegConfirmed(opts.db, {
         ledgerId: row.id,
         txHash: sent.txHash,
-        toAddress: leg.toAddress,
+        toAddress,
         now,
       });
       if (leg.kind === "WINNER_PAYOUT") {
@@ -503,7 +526,7 @@ export async function settleEscrow(
         if (leg.participantId) {
           await markPoolParticipantPaid(opts.db, {
             participantId: leg.participantId,
-            payoutAddress: leg.toAddress,
+            payoutAddress: toAddress,
             payoutTxHash: sent.txHash,
             now,
           });
@@ -517,7 +540,7 @@ export async function settleEscrow(
       } else if (leg.kind === "POOL_PAYOUT" && leg.participantId) {
         await markPoolParticipantPaid(opts.db, {
           participantId: leg.participantId,
-          payoutAddress: leg.toAddress,
+          payoutAddress: toAddress,
           payoutTxHash: sent.txHash,
           now,
         });
@@ -717,61 +740,62 @@ function finishSettleResult(args: {
   };
 }
 
+/**
+ * Winner identity and address come only from the GitHub merge claim.
+ * Caller hunterUserId / hunterPayoutAddress are not arguments and cannot override.
+ */
 async function resolveHunter(
   db: Database,
   bountyId: string,
-  input: {
-    hunterUserId?: string;
-    hunterPayoutAddress?: string | null;
-    claimId?: string;
-  },
-): Promise<{ userId: string; address: string; claimId?: string }> {
-  if (input.claimId) {
-    const [claim] = await db.select().from(claims).where(eq(claims.id, input.claimId)).limit(1);
-    if (claim && claim.bountyId === bountyId) {
-      const address =
-        input.hunterPayoutAddress?.trim() ||
-        claim.payoutAddress?.trim() ||
-        (await walletOf(db, claim.hunterUserId));
-      if (!address) {
-        throw new EscrowError(
-          "missing_payout_address",
-          "Hunter payout address is required to settle. Set users.wallet_address or claims.payout_address.",
-        );
-      }
-      return { userId: claim.hunterUserId, address, claimId: claim.id };
+  input: { claimId?: string },
+): Promise<{ userId: string; address: string; claimId: string }> {
+  const claim = await loadSettleClaim(db, bountyId, input.claimId);
+  const raw =
+    claim.payoutAddress?.trim() || (await walletOf(db, claim.hunterUserId));
+  if (!raw) {
+    throw new EscrowError(
+      "missing_payout_address",
+      "Hunter payout address is required to settle. The winner sets it on their own Claim (claims.payout_address or their saved wallet).",
+    );
+  }
+  const address = requireBasePayoutAddress(raw);
+  return { userId: claim.hunterUserId, address, claimId: claim.id };
+}
+
+async function loadSettleClaim(
+  db: Database,
+  bountyId: string,
+  claimId?: string,
+): Promise<typeof claims.$inferSelect> {
+  if (claimId) {
+    const [claim] = await db.select().from(claims).where(eq(claims.id, claimId)).limit(1);
+    if (!claim || claim.bountyId !== bountyId || (claim.status !== "eligible" && claim.status !== "paid")) {
+      throw new EscrowError(
+        "not_settleable",
+        "Settle requires the eligible claim from the merged pull request. A caller cannot choose the hunter or the payout address.",
+      );
     }
+    return claim;
   }
 
   const [eligible] = await db
     .select()
     .from(claims)
-    .where(and(eq(claims.bountyId, bountyId), inArray(claims.status, ["eligible", "paid"])))
+    .where(and(eq(claims.bountyId, bountyId), eq(claims.status, "eligible")))
     .limit(1);
+  if (eligible) return eligible;
 
-  const hunterUserId = input.hunterUserId || eligible?.hunterUserId;
-  if (!hunterUserId) {
-    const address = input.hunterPayoutAddress?.trim();
-    if (!address) {
-      throw new EscrowError(
-        "missing_payout_address",
-        "No eligible claim and no hunter payout address. Pass hunterPayoutAddress for the minimal settle API.",
-      );
-    }
-    return { userId: "00000000-0000-4000-8000-000000000000", address };
-  }
+  const [paid] = await db
+    .select()
+    .from(claims)
+    .where(and(eq(claims.bountyId, bountyId), eq(claims.status, "paid")))
+    .limit(1);
+  if (paid) return paid;
 
-  const address =
-    input.hunterPayoutAddress?.trim() ||
-    eligible?.payoutAddress?.trim() ||
-    (await walletOf(db, hunterUserId));
-  if (!address) {
-    throw new EscrowError(
-      "missing_payout_address",
-      "Hunter payout address is required to settle. Set users.wallet_address or pass hunterPayoutAddress.",
-    );
-  }
-  return { userId: hunterUserId, address, claimId: eligible?.id };
+  throw new EscrowError(
+    "not_settleable",
+    "No eligible claim from the GitHub merge flow. Settle will not pay an arbitrary address.",
+  );
 }
 
 async function assertPoolMemberActor(
@@ -827,6 +851,10 @@ export async function refundEscrow(
   input: {
     actorUserId?: string;
     reason: "cancel" | "expiry";
+    /**
+     * Ignored. Single-funder refunds go to the x402 payer when it was stored,
+     * otherwise the escrow's recorded funder, otherwise the poster's saved wallet.
+     */
     funderAddress?: string | null;
   },
   opts: EscrowServiceOpts,
@@ -938,18 +966,12 @@ export async function refundEscrow(
     });
   }
 
-  const funderAddress =
-    input.funderAddress?.trim() ||
-    escrow.funderAddress?.trim() ||
-    (await walletOf(opts.db, bounty.posterUserId));
-  if (!funderAddress) {
-    throw new EscrowError(
-      "missing_funder_address",
-      "Funder address is required to refund face F. Set users.wallet_address or escrows.funder_address.",
-    );
-  }
+  const recordedPayer =
+    escrow.funderAddress?.trim() || (await walletOf(opts.db, bounty.posterUserId));
+  const funderAddress = requireBasePayoutAddress(recordedPayer, "missing_funder_address");
 
   const split = splitFaceUsdc(bounty.amountUsdc);
+  await assertPayoutCovered(opts.db, bountyId, split.faceAtomic, rail.mode);
   const refundKey = moneyIdempotencyKey(bountyId, "REFUND_OUT");
 
   assertEscrowTransition(escrow.status === "refunding" ? "refunding" : "funded", "refunding");
@@ -1042,8 +1064,10 @@ async function refundSplitContributions(input: {
       lastHash = leg.refundTxHash;
       continue;
     }
+    const toAddress = requireBasePayoutAddress(leg.toAddress, "missing_funder_address");
+    await assertPayoutCovered(opts.db, bountyId, leg.amountAtomic, rail.mode);
     const sent = await rail.transferUsdc({
-      to: leg.toAddress,
+      to: toAddress,
       amountAtomic: leg.amountAtomic,
       idempotencyKey: leg.idempotencyKey,
       purpose: "refund",

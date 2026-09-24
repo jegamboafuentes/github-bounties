@@ -19,7 +19,9 @@ export {
   readCdpNetwork,
 } from "./env";
 export { HOSTED_CHECKOUT_BLOCKER, HOSTED_CHECKOUT_ENABLED, hostedCheckoutStatus } from "./hosted";
+export { assertCallerLockHash, assertCallerTopUpHash, assertFundTxHashAvailable } from "./fund-hash";
 export { inboundIsRecorded, recordExactInbound, resolveLockFundTxHash } from "./inbound";
+export { assertPayoutCovered, fundHashIsVerified, verifiedInflowAtomic } from "./payout-guard";
 export { handleX402Fund } from "./x402-http";
 export {
   buildX402ExactChallenge,

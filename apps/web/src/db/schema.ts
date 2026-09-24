@@ -404,6 +404,9 @@ export const escrows = pgTable(
   },
   (table) => [
     uniqueIndex("escrows_bounty_id_uidx").on(table.bountyId),
+    uniqueIndex("escrows_fund_tx_hash_uidx")
+      .on(table.fundTxHash)
+      .where(sql`${table.fundTxHash} is not null`),
     index("escrows_status_idx").on(table.status),
     uniqueIndex("escrows_idempotency_key_uidx")
       .on(table.idempotencyKey)
@@ -661,6 +664,9 @@ export const bountyContributions = pgTable(
   },
   (table) => [
     uniqueIndex("bounty_contributions_bounty_tx_uidx").on(table.bountyId, table.fundTxHash),
+    uniqueIndex("bounty_contributions_fund_tx_hash_uidx")
+      .on(table.fundTxHash)
+      .where(sql`${table.fundTxHash} is not null`),
     index("bounty_contributions_bounty_id_idx").on(table.bountyId),
     index("bounty_contributions_funder_user_id_idx").on(table.funderUserId),
     check("bounty_contributions_amount_positive", sql`${table.amountUsdc} > 0`),

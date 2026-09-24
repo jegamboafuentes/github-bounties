@@ -436,7 +436,7 @@ async function handleFundedTopUp(input: {
         fundTxHash: live.settled.txHash,
         funderAddress: live.settled.payer,
       },
-      { db: deps.db, rail, now: deps.now },
+      { db: deps.db, rail, now: deps.now, fundHashSource: "x402" },
     );
     return {
       status: 200,

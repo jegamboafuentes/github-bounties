@@ -3,13 +3,30 @@ import type { Database } from "../db/client";
 import { escrows } from "../db/schema";
 import { EscrowError } from "./errors";
 
+/**
+ * Choose the Lock fund hash.
+ * Mock/local may use a pasted hash (tests). The live CDP rail never prefers
+ * a pasted value: only the hash recorded by x402 settle for this bounty.
+ */
 export function resolveLockFundTxHash(input: {
   pasted?: string | null;
   recorded?: string | null;
+  railMode?: "mock" | "cdp";
+  /** True when `recorded` was written by x402 settle (`escrows.x402_payment_id`). */
+  recordedByX402?: boolean;
 }): string | undefined {
-  const pasted = input.pasted?.trim();
+  const pasted = input.pasted?.trim() || "";
+  const recorded = input.recorded?.trim() || "";
+  if (input.railMode === "cdp") {
+    if (pasted && (!input.recordedByX402 || pasted.toLowerCase() !== recorded.toLowerCase())) {
+      throw new EscrowError(
+        "fund_hash_not_verified",
+        "Live rail only accepts the fund transaction recorded by x402 settle for this bounty. Paste-hash Lock is mock/local only.",
+      );
+    }
+    return recorded || undefined;
+  }
   if (pasted) return pasted;
-  const recorded = input.recorded?.trim();
   return recorded || undefined;
 }
 
