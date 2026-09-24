@@ -15,6 +15,31 @@ import { claimedByUntilLabel } from "./display";
 
 loadDotenvFiles();
 
+/**
+ * Insert the residual lock and `claim_locked` together. Board reads in other
+ * test files drain every active lock; a gap between the two writes lets that
+ * drain release the lock before the bounty is claim_locked, so the later read
+ * leaves status stuck at claim_locked.
+ */
+async function plantResidualLock(
+  db: ReturnType<typeof createDb>["db"],
+  lock: {
+    id?: string;
+    bountyId: string;
+    hunterUserId: string;
+    lockedAt: Date;
+    expiresAt: Date;
+  },
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.insert(claimLocks).values({ ...lock, status: "active" });
+    await tx
+      .update(bounties)
+      .set({ status: "claim_locked", updatedAt: lock.lockedAt })
+      .where(eq(bounties.id, lock.bountyId));
+  });
+}
+
 async function fixture() {
   const { db, sql } = createDb();
   const suffix = randomUUID().slice(0, 8);
@@ -168,18 +193,13 @@ describe("V2-4 bounty post + claim-lock sunset", () => {
       );
 
       const lockId = randomUUID();
-      await db.insert(claimLocks).values({
+      await plantResidualLock(db, {
         id: lockId,
         bountyId: created.id,
         hunterUserId: hunterId,
         lockedAt,
         expiresAt,
-        status: "active",
       });
-      await db
-        .update(bounties)
-        .set({ status: "claim_locked", updatedAt: lockedAt })
-        .where(eq(bounties.id, created.id));
 
       const forbidden = claimedByUntilLabel({
         hunterLabel: `octo-${suffix}`,
@@ -233,18 +253,13 @@ describe("V2-4 bounty post + claim-lock sunset", () => {
       const now = new Date();
       const lockedAt = hoursFrom(now, -80);
       const expiresAt = hoursFrom(now, -8);
-      await db.insert(claimLocks).values({
+      await plantResidualLock(db, {
         id: lockId,
         bountyId: created.id,
         hunterUserId: hunterId,
         lockedAt,
         expiresAt,
-        status: "active",
       });
-      await db
-        .update(bounties)
-        .set({ status: "claim_locked", updatedAt: lockedAt })
-        .where(eq(bounties.id, created.id));
 
       const expired = await expireClaimLocks(db, now);
       assert.ok(expired.expiredLockIds.includes(lockId));
@@ -276,14 +291,13 @@ describe("V2-4 bounty post + claim-lock sunset", () => {
         { db, fetchIssueSnapshot: async () => null },
       );
       await fundBounty(created.id, posterId, db);
-      await db.insert(claimLocks).values({
+      const lockedAt = new Date();
+      await plantResidualLock(db, {
         bountyId: created.id,
         hunterUserId: hunterId,
-        lockedAt: new Date(),
-        expiresAt: new Date(Date.now() + 72 * 3600_000),
-        status: "active",
+        lockedAt,
+        expiresAt: new Date(lockedAt.getTime() + 72 * 3600_000),
       });
-      await db.update(bounties).set({ status: "claim_locked" }).where(eq(bounties.id, created.id));
       const released = await releaseClaimLock(created.id, posterId, db);
       assert.equal(released.by, "poster");
       const [row] = await db
