@@ -12,8 +12,9 @@ const { auth } = NextAuth(authConfig);
  * Unauthenticated callers cannot hit /settings, /bounties/new, GitHub install
  * return pages, /api/me, or /api/github/connect. Webhooks are not matched (HMAC).
  *
- * `/api/v1`, `/api/docs`, and `/mcp` are public. They are matched so a CORS
- * preflight can answer, and they return before the session checks.
+ * `/api/v1`, `/api/docs`, and `/mcp` are not session-gated. Callers authenticate
+ * with Authorization: Bearer on those paths. Cookies are ignored there. The
+ * matcher still includes them so a CORS preflight can answer.
  */
 export default auth((req) => {
   const pathname = req.nextUrl.pathname;

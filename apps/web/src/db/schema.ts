@@ -678,6 +678,141 @@ export const bountyContributions = pgTable(
  * Redeliveries keep the same `X-GitHub-Delivery` GUID.
  * `claim_results` stores Claim upserts and skip reasons (`hunter_not_linked`, …).
  */
+/**
+ * Human-owned API key. The plaintext (`gb_test_` / `gb_live_` + 32 random bytes)
+ * is shown once. `key_hash` is HMAC-SHA256 with `API_KEY_HMAC_SECRET`.
+ * Caps are a ceiling the user may only lower. No agent-owned accounts.
+ */
+export const API_KEY_SCOPES = ["read", "write", "money"] as const;
+export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
+export const API_KEY_ENVS = ["test", "live"] as const;
+export type ApiKeyEnv = (typeof API_KEY_ENVS)[number];
+
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    env: text("env").notNull(),
+    prefix: text("prefix").notNull(),
+    keyHash: text("key_hash").notNull(),
+    scopes: text("scopes").array().notNull(),
+    perTxCapUsdc: numeric("per_tx_cap_usdc", { precision: 20, scale: 6 }).notNull(),
+    dailyCapUsdc: numeric("daily_cap_usdc", { precision: 20, scale: 6 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }),
+    lastUsedIp: text("last_used_ip"),
+    revokedAt: timestamp("revoked_at", { withTimezone: true, mode: "date" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }),
+  },
+  (table) => [
+    uniqueIndex("api_keys_key_hash_uidx").on(table.keyHash),
+    index("api_keys_user_id_idx").on(table.userId),
+    index("api_keys_user_created_idx").on(table.userId, table.createdAt),
+    check("api_keys_name_present", sql`length(trim(${table.name})) > 0`),
+    check("api_keys_env", sql`${table.env} in ('test', 'live')`),
+    check("api_keys_prefix_present", sql`length(trim(${table.prefix})) > 0`),
+    check("api_keys_hash_present", sql`length(trim(${table.keyHash})) > 0`),
+    check(
+      "api_keys_scopes",
+      sql`cardinality(${table.scopes}) > 0 AND ${table.scopes} <@ ARRAY['read', 'write', 'money']::text[]`,
+    ),
+    check("api_keys_per_tx_positive", sql`${table.perTxCapUsdc} > 0`),
+    check("api_keys_daily_positive", sql`${table.dailyCapUsdc} > 0`),
+    check("api_keys_daily_gte_tx", sql`${table.dailyCapUsdc} >= ${table.perTxCapUsdc}`),
+  ],
+);
+
+/**
+ * One row per authenticated API or MCP call. Also the Postgres rate-limit
+ * counter (Cloud Run has several instances, so an in-memory map is not enough).
+ * `route` starts with `read `, `write `, or `money `.
+ */
+export const apiRequestLog = pgTable(
+  "api_request_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    keyId: uuid("key_id")
+      .notNull()
+      .references(() => apiKeys.id, { onDelete: "restrict" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    route: text("route").notNull(),
+    status: integer("status").notNull(),
+    bountyId: uuid("bounty_id"),
+    ip: text("ip"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("api_request_log_key_created_idx").on(table.keyId, table.createdAt),
+    index("api_request_log_user_created_idx").on(table.userId, table.createdAt),
+    check("api_request_log_route_present", sql`length(trim(${table.route})) > 0`),
+  ],
+);
+
+/** USDC an API key has reserved or recorded. Caps sum `reserved` and `recorded`. */
+export const API_SPEND_KINDS = ["fund", "top_up"] as const;
+export type ApiSpendKind = (typeof API_SPEND_KINDS)[number];
+export const API_SPEND_STATUSES = ["reserved", "recorded", "failed"] as const;
+export type ApiSpendStatus = (typeof API_SPEND_STATUSES)[number];
+
+export const apiSpendLedger = pgTable(
+  "api_spend_ledger",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    keyId: uuid("key_id")
+      .notNull()
+      .references(() => apiKeys.id, { onDelete: "restrict" }),
+    bountyId: uuid("bounty_id")
+      .notNull()
+      .references(() => bounties.id, { onDelete: "restrict" }),
+    kind: text("kind").notNull(),
+    amountUsdc: numeric("amount_usdc", { precision: 20, scale: 6 }).notNull(),
+    txHash: text("tx_hash"),
+    status: text("status").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("api_spend_ledger_key_created_idx").on(table.keyId, table.createdAt),
+    index("api_spend_ledger_bounty_idx").on(table.bountyId),
+    check("api_spend_ledger_kind", sql`${table.kind} in ('fund', 'top_up')`),
+    check("api_spend_ledger_status", sql`${table.status} in ('reserved', 'recorded', 'failed')`),
+    check("api_spend_ledger_amount_positive", sql`${table.amountUsdc} > 0`),
+  ],
+);
+
+/**
+ * Idempotency-Key store for fund, top-up, and cancel.
+ * `response_status` 0 means in progress. 402 is a payment challenge and may be
+ * replaced when the same key retries with a payment signature.
+ */
+export const apiIdempotencyKeys = pgTable(
+  "api_idempotency_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    keyId: uuid("key_id")
+      .notNull()
+      .references(() => apiKeys.id, { onDelete: "restrict" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestHash: text("request_hash").notNull(),
+    responseStatus: integer("response_status").notNull(),
+    responseBody: jsonb("response_body").notNull(),
+    responseHeaders: jsonb("response_headers").$type<Record<string, string> | null>(),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("api_idempotency_keys_key_idem_uidx").on(table.keyId, table.idempotencyKey),
+    index("api_idempotency_keys_expires_idx").on(table.expiresAt),
+    check("api_idempotency_keys_key_present", sql`length(trim(${table.idempotencyKey})) > 0`),
+    check("api_idempotency_keys_hash_present", sql`length(trim(${table.requestHash})) > 0`),
+  ],
+);
+
 export const webhookDeliveries = pgTable("webhook_deliveries", {
   deliveryId: text("delivery_id").primaryKey(),
   event: text("event").notNull(),

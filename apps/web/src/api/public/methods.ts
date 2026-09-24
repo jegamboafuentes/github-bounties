@@ -7,11 +7,12 @@ export const PUBLIC_READ_ALLOW = "GET, OPTIONS";
  * POST, PUT, PATCH, and DELETE on `/api/v1/*`.
  * Same JSON error envelope as the other V4-1 failures, plus Allow.
  */
-export function methodNotAllowed(): Response {
+export function methodNotAllowed(allow: string = PUBLIC_READ_ALLOW): Response {
+  const readOnly = allow === PUBLIC_READ_ALLOW;
   return apiErrorResponse(
     "method_not_allowed",
-    "Only GET and OPTIONS are allowed.",
+    readOnly ? "Only GET and OPTIONS are allowed." : `Only ${allow} are allowed.`,
     null,
-    { Allow: PUBLIC_READ_ALLOW },
+    { Allow: allow },
   );
 }

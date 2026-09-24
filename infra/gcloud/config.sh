@@ -77,6 +77,7 @@ SECRETS=(
   CRON_SECRET
   GEMINI_API_KEY
   RESEND_API_KEY
+  API_KEY_HMAC_SECRET
 )
 
 # First-deploy --set-secrets (Ops: enabled versions present).
@@ -119,7 +120,13 @@ WEB_SKIP_SECRETS=(
 # keeps remount --set-secrets from dropping it. PROD is not wired.
 # RESEND_API_KEY is the same shape: optional DEV email. Skip when the secret
 # has no enabled version. Do not add it to WEB_REQUIRED_SECRETS.
+# API_KEY_HMAC_SECRET: V4-2 API key HMAC. Create it in Secret Manager on DEV
+# before keys work. Attach when an enabled version exists; skip when absent so
+# a remount does not fail the rest of the deploy. PROD can stay without it
+# until keys are turned on there. Money stays off on mainnet unless
+# API_MONEY_ENABLED is explicitly set (plain env, not this list).
 WEB_OPTIONAL_SECRETS=(
   GEMINI_API_KEY
   RESEND_API_KEY
+  API_KEY_HMAC_SECRET
 )

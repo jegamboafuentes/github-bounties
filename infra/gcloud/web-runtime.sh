@@ -138,4 +138,9 @@ web_print_secret_map() {
   echo "      not SM. Export before deploy-web.sh so WalletConnect QR works on DEV.)"
   echo "    EMAIL_FROM  (optional plain env; verified Resend sender. Not SM."
   echo "      Unset uses the app default. DEV only — not wired on PROD.)"
+  echo "    API_MONEY_ENABLED  (optional plain env. Unset: on for base-sepolia,"
+  echo "      off for CDP_NETWORK=base. Set 0 to disable money on DEV.)"
+  echo "    API_PER_TX_CAP_USDC / API_DAILY_CAP_USDC  (optional plain env."
+  echo "      Admin ceilings. DEV defaults 50 / 200 USDC. PROD defaults 25 / 100."
+  echo "      Users can only lower their keys.)"
 }

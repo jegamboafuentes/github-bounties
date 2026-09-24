@@ -8,6 +8,10 @@
 # or AUTH_URL (create after the live origin). AUTH_TRUST_HOST=true is plain env.
 # GEMINI_API_KEY is a WEB_OPTIONAL_SECRET: deploy-web.sh attaches it when an
 # enabled SM version exists (DEV) and skips when absent. Not wired on PROD.
+# API_KEY_HMAC_SECRET is the same shape (V4-2 API key HMAC). Create the secret
+# on DEV and remount so keys work. API_MONEY_ENABLED, API_PER_TX_CAP_USDC, and
+# API_DAILY_CAP_USDC are plain env, not secrets. Money defaults off when
+# CDP_NETWORK=base.
 #
 # Always tags :$BUILD_ID and :latest so manual `gcloud builds submit` works.
 # $COMMIT_SHA is empty on manual submit unless you pass

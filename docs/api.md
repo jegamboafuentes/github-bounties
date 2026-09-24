@@ -1,8 +1,8 @@
-# Public API and MCP (V4-1)
+# Public API and MCP
 
-Read-only HTTP API and MCP tools for the public bounty board. No API key. No writes, no funding, no claims. The handlers call the same server functions as the website, so the 2% fee, the 15% pool, and the retired claim-lock are unchanged.
+Anonymous reads (V4-1) need no API key. V4-2 adds Bearer API keys for `/me`, posting, work signals, unfunded cancel, and headless x402 fund / top-up. Money over the API is DEV-only until `API_MONEY_ENABLED` is turned on for mainnet. The handlers call the same server functions as the website, so the 2% fee (`FEE_BPS` 200), the 15% pool (`POOL_BPS_OF_POST_FEE` 1500), and the retired claim-lock are unchanged.
 
-No database migration.
+V4-2 migration: `0011_api_access` (`api_keys`, `api_request_log`, `api_spend_ledger`, `api_idempotency_keys`). Apply it on DEV before creating keys. `0010` is reserved for a parallel security migration and is not part of this change.
 
 | Surface | URL |
 | --- | --- |
@@ -113,10 +113,100 @@ Cursor (`.cursor/mcp.json`):
 }
 ```
 
-Claude Code:
+Claude Code (anonymous reads):
 
 ```bash
 claude mcp add --transport http github-bounties https://dev.githubbounties.xyz/mcp
 ```
 
-No `Authorization` header in V4-1. API keys arrive in V4-2.
+## V4-2 keys, writes, and headless x402 (DEV)
+
+Authorization is `Authorization: Bearer <key>` on `/api/v1` and `/mcp`. Cookies are ignored. `src/proxy.ts` does not session-gate those paths.
+
+Create a key on Settings → API keys. The plaintext is shown once. DEV keys start with `gb_test_`. Mainnet keys start with `gb_live_`. The server stores HMAC-SHA256 (`API_KEY_HMAC_SECRET`) plus a display prefix. Any signed-in user can create a key. The `money` scope stays disabled until that user has a saved payout wallet and a linked GitHub account. There are no agent-owned accounts.
+
+Spend ceilings (a user can lower these, not raise them):
+
+| Network | Per transaction | Per UTC day |
+| --- | --- | --- |
+| DEV (`base-sepolia`) | 50 USDC | 200 USDC |
+| PROD (`base`) | 25 USDC | 100 USDC |
+
+`API_PER_TX_CAP_USDC` and `API_DAILY_CAP_USDC` are optional admin overrides of those ceilings.
+
+`API_MONEY_ENABLED` defaults **on** for `base-sepolia` and **off** for `CDP_NETWORK=base`. Set it to `0` to disable money on DEV. Do not set it on PROD until a later sign-off.
+
+Authenticated limits, counted in `api_request_log` (shared across Cloud Run instances): read 120/minute, write 20/minute, money 10/hour. Anonymous reads stay at the V4-1 per-IP limit. `GET /api/v1/me` and `GET /api/v1/me/bounties` need the `read` scope. Post, work-signal, and unfunded cancel need `write`. Fund and top-up need `money`.
+
+`Idempotency-Key` is required on fund, top-up, and cancel. The same key and body replay the stored response. A different body returns `idempotency_conflict`. Fund and top-up: the first call returns **402** `payment_required` (amount is the face or the top-up amount, `payTo` is escrow, `approval_url` is the bounty page, `PAYMENT-REQUIRED` header). Retry with `PAYMENT-SIGNATURE` or `X-PAYMENT` and the same idempotency key. The server settles through the CDP facilitator and then calls `lockEscrowFunds` or `topUpFundedBounty`. The body cannot include an address or a pasted transaction hash. Caps are checked before the 402 and again before the spend is recorded.
+
+Cancel is unfunded (`pending_fund`) only. Funded cancel is not on this API. Settle, the retired claim-lock, claims, wallet changes, and GitHub disconnect are not exposed.
+
+Error codes: `unauthorized`, `key_revoked`, `forbidden_scope`, `rate_limited`, `validation_failed`, `not_found`, `conflict`, `payment_required`, `spend_cap_exceeded`, `idempotency_key_required`, `idempotency_conflict`, `wallet_not_set`, `github_not_linked`, plus bounty and escrow domain codes unchanged (`bounty_exists`, `not_poster`, `not_fundable`, …).
+
+```bash
+curl -sS https://dev.githubbounties.xyz/api/v1/me \
+  -H "Authorization: Bearer $GB_API_KEY"
+curl -sS https://dev.githubbounties.xyz/api/v1/me/bounties \
+  -H "Authorization: Bearer $GB_API_KEY"
+curl -sS -X POST https://dev.githubbounties.xyz/api/v1/bounties \
+  -H "Authorization: Bearer $GB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"issueUrl":"https://github.com/octo/hello/issues/42","amountUsdc":"5"}'
+curl -sS -X POST https://dev.githubbounties.xyz/api/v1/bounties/$BOUNTY_ID/work-signal \
+  -H "Authorization: Bearer $GB_API_KEY"
+curl -sS -X DELETE https://dev.githubbounties.xyz/api/v1/bounties/$BOUNTY_ID/work-signal \
+  -H "Authorization: Bearer $GB_API_KEY"
+curl -sS -X POST https://dev.githubbounties.xyz/api/v1/bounties/$BOUNTY_ID/cancel \
+  -H "Authorization: Bearer $GB_API_KEY" \
+  -H "Idempotency-Key: cancel-1"
+curl -sS -D - -X POST https://dev.githubbounties.xyz/api/v1/bounties/$BOUNTY_ID/fund \
+  -H "Authorization: Bearer $GB_API_KEY" \
+  -H "Idempotency-Key: fund-1"
+curl -sS -X POST https://dev.githubbounties.xyz/api/v1/bounties/$BOUNTY_ID/top-up \
+  -H "Authorization: Bearer $GB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: top-1" \
+  -d '{"amountUsdc":"2"}'
+```
+
+Cursor (`.cursor/mcp.json`), key from the environment:
+
+```json
+{
+  "mcpServers": {
+    "github-bounties-dev": {
+      "url": "https://dev.githubbounties.xyz/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:GB_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+Claude Code:
+
+```bash
+claude mcp add --transport http github-bounties-dev https://dev.githubbounties.xyz/mcp \
+  --header "Authorization: Bearer ${GB_API_KEY}"
+```
+
+An agent with a Base Sepolia CDP server wallet can post and fund a DEV bounty end to end with `apps/web/scripts/dev-agent-fund.ts` (not run in CI):
+
+```bash
+cd apps/web
+GB_API_KEY=gb_test_... ISSUE_URL=https://github.com/octo/hello/issues/42 AMOUNT_USDC=5 \
+  npx tsx scripts/dev-agent-fund.ts
+```
+
+### Env and secrets Ops must mount on DEV
+
+| Name | Kind | Notes |
+| --- | --- | --- |
+| `API_KEY_HMAC_SECRET` | Secret Manager | Required before any key can be created or accepted. HMAC-SHA256 secret, at least 16 characters. Attach as `API_KEY_HMAC_SECRET=API_KEY_HMAC_SECRET:latest` when an enabled version exists (`WEB_OPTIONAL_SECRETS`, same skip-if-absent rule as `GEMINI_API_KEY`). |
+| `API_MONEY_ENABLED` | Plain env, optional | Unset means on for `base-sepolia` and off for `base`. Set `0` to turn money off on DEV. Leave unset on PROD. |
+| `API_PER_TX_CAP_USDC` | Plain env, optional | Admin ceiling. Default 50 on DEV, 25 on PROD. Users cannot raise their keys above this. |
+| `API_DAILY_CAP_USDC` | Plain env, optional | Admin ceiling. Default 200 on DEV, 100 on PROD. |
+
+Migration DEV needs: `0011_api_access`.

@@ -6,6 +6,8 @@ import { DisconnectGitHubButton } from "@/components/disconnect-github";
 import { GitHubAvatar } from "@/components/github-avatar";
 import { WalletForm } from "@/components/wallet-form";
 import { signOutToHome } from "@/app/actions/auth";
+import { loadSettingsApiKeys } from "@/app/actions/api-keys";
+import { ApiKeysCard } from "@/components/api-keys-card";
 import { PRODUCT_NAME } from "@/lib/constants";
 import { getRuntimeDb } from "@/db/runtime";
 import { findGithubLinkByUserId } from "@/github/persist";
@@ -24,6 +26,7 @@ export default async function SettingsPage({
   const db = getRuntimeDb();
   const link = await findGithubLinkByUserId(user.id, db);
   const missingApp = missingGitHubAppInstallEnv();
+  const apiKeys = await loadSettingsApiKeys(user.id, user.wallet_address);
 
   return (
     <div className="flex flex-1 flex-col bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
@@ -105,6 +108,26 @@ export default async function SettingsPage({
             walletConnectConfigured={walletConnectConfigured()}
           />
         </section>
+
+        <ApiKeysCard
+          keys={apiKeys.keys.map((key) => ({
+            id: key.id,
+            name: key.name,
+            prefix: key.prefix,
+            env: key.env,
+            scopes: key.scopes,
+            perTxCapUsdc: key.perTxCapUsdc,
+            dailyCapUsdc: key.dailyCapUsdc,
+            lastUsedAt: key.lastUsedAt?.toISOString() ?? null,
+            lastUsedIp: key.lastUsedIp,
+            revokedAt: key.revokedAt?.toISOString() ?? null,
+          }))}
+          ceilings={apiKeys.ceilings}
+          keyEnv={apiKeys.keyEnv}
+          moneyEligible={apiKeys.moneyEligible}
+          walletSet={Boolean(user.wallet_address?.trim())}
+          githubLinked={Boolean(link)}
+        />
 
         <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">

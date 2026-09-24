@@ -1,38 +1,36 @@
+import { handleV1Action, handleV1Get } from "@/api/access/http";
 import { publicCorsPreflight } from "@/api/public/cors";
-import { handlePublicRead } from "@/api/public/http";
 import { methodNotAllowed } from "@/api/public/methods";
 import { acceptListInput, coerceListSearchParams } from "@/api/public/query";
 import { publicReadApi } from "@/api/public/service";
 
 export const dynamic = "force-dynamic";
 
+const WRITE_ALLOW = "GET, POST, OPTIONS";
+
 export function GET(request: Request) {
-  return handlePublicRead(
-    request,
-    async () => {
-      const input = acceptListInput(coerceListSearchParams(new URL(request.url).searchParams));
-      return Response.json(await publicReadApi.listBounties(input));
-    },
-    { cors: true },
-  );
+  return handleV1Get(request, async () => {
+    const input = acceptListInput(coerceListSearchParams(new URL(request.url).searchParams));
+    return Response.json(await publicReadApi.listBounties(input));
+  });
 }
 
 export function OPTIONS() {
   return publicCorsPreflight();
 }
 
-export function POST() {
-  return methodNotAllowed();
+export function POST(request: Request) {
+  return handleV1Action(request, { kind: "create" });
 }
 
 export function PUT() {
-  return methodNotAllowed();
+  return methodNotAllowed(WRITE_ALLOW);
 }
 
 export function PATCH() {
-  return methodNotAllowed();
+  return methodNotAllowed(WRITE_ALLOW);
 }
 
 export function DELETE() {
-  return methodNotAllowed();
+  return methodNotAllowed(WRITE_ALLOW);
 }
