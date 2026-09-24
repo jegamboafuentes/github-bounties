@@ -1,6 +1,6 @@
 import { getBoardBounty, getPoolRoster } from "@/bounties";
 import { getRuntimeDb } from "@/db/runtime";
-import { getEscrowSnapshot } from "@/escrow";
+import { getEscrowSnapshot, listBountyContributions } from "@/escrow";
 
 export const dynamic = "force-dynamic";
 
@@ -11,16 +11,17 @@ export async function GET(
 ) {
   const { id } = await ctx.params;
   const db = getRuntimeDb();
-  const [bounty, escrow, roster] = await Promise.all([
+  const [bounty, escrow, roster, contributions] = await Promise.all([
     getBoardBounty(id, db).catch(() => null),
     getEscrowSnapshot(id, db).catch(() => null),
     getPoolRoster(id, db).catch(() => null),
+    listBountyContributions(id, db).catch(() => []),
   ]);
   if (!bounty) {
     return Response.json({ ok: false, error: "bounty_not_found" }, { status: 404 });
   }
   return Response.json(
-    { ok: true, bounty, escrow, roster },
+    { ok: true, bounty, escrow, roster, contributions },
     { headers: { "cache-control": "no-store" } },
   );
 }

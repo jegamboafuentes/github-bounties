@@ -11,10 +11,12 @@ export function AmountPresetChips({
   value,
   onChange,
   disabled = false,
+  hint,
 }: {
   value: string;
   onChange: (next: string) => void;
   disabled?: boolean;
+  hint?: string;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -43,8 +45,8 @@ export function AmountPresetChips({
         })}
       </div>
       <p className="text-xs text-zinc-500">
-        One-tap {FUND_AMOUNT_PRESETS_USDC.map((n) => `$${n}`).join(" / ")} or type a custom face
-        below. Lock later pays this exact face — chips do not change an existing bounty.
+        {hint ??
+          `One-tap ${FUND_AMOUNT_PRESETS_USDC.map((n) => `$${n}`).join(" / ")} or type a custom face below. Lock later pays this exact face — chips do not change an existing bounty.`}
       </p>
     </div>
   );

@@ -102,6 +102,7 @@ export function buildX402ExactChallenge(input: {
   faceUsdc: string;
   network: string;
   maxTimeoutSeconds?: number;
+  description?: string;
 }): X402PaymentRequired {
   const amount = usdcToAtomic(input.faceUsdc).toString();
   const url = x402ResourceUrl(input.bountyId, input.origin);
@@ -111,7 +112,9 @@ export function buildX402ExactChallenge(input: {
     error: "Payment required",
     resource: {
       url,
-      description: `${PRODUCT_NAME} fund lock: exact face USDC to gb-escrow (bounty ${input.bountyId})`,
+      description:
+        input.description ??
+        `${PRODUCT_NAME} fund lock: exact face USDC to gb-escrow (bounty ${input.bountyId})`,
       mimeType: "application/json",
     },
     accepts: [

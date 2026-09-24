@@ -59,6 +59,7 @@ export type PayX402Result =
       ok: true;
       inboundRecorded: boolean;
       alreadyFunded?: boolean;
+      topUpApplied?: boolean;
       fundTxHash?: string | null;
       message?: string;
     }
@@ -248,7 +249,7 @@ export function sameOriginX402Path(resourceUrl: string): string {
   try {
     const parsed = new URL(resourceUrl, "http://local.invalid");
     if (parsed.pathname.includes("/api/bounties/") && parsed.pathname.endsWith("/x402")) {
-      return parsed.pathname;
+      return `${parsed.pathname}${parsed.search}`;
     }
   } catch {
     /* keep */
@@ -367,13 +368,15 @@ export async function payX402Exact(input: {
     const body = (firstBody ?? {}) as {
       inboundRecorded?: boolean;
       alreadyFunded?: boolean;
+      topUpApplied?: boolean;
       fundTxHash?: string | null;
       message?: string;
     };
     return {
       ok: true,
-      inboundRecorded: Boolean(body.inboundRecorded || body.alreadyFunded),
+      inboundRecorded: Boolean(body.inboundRecorded || body.alreadyFunded || body.topUpApplied),
       alreadyFunded: body.alreadyFunded,
+      topUpApplied: body.topUpApplied,
       fundTxHash: body.fundTxHash,
       message: body.message,
     };
@@ -442,6 +445,7 @@ export async function payX402Exact(input: {
     ok?: boolean;
     inboundRecorded?: boolean;
     alreadyFunded?: boolean;
+    topUpApplied?: boolean;
     fundTxHash?: string | null;
     error?: string;
     message?: string;
@@ -449,11 +453,15 @@ export async function payX402Exact(input: {
     errorMessage?: string;
   } | null;
 
-  if (paid.status === 200 && (paidBody?.inboundRecorded || paidBody?.alreadyFunded || paidBody?.ok)) {
+  if (
+    paid.status === 200 &&
+    (paidBody?.inboundRecorded || paidBody?.alreadyFunded || paidBody?.topUpApplied || paidBody?.ok)
+  ) {
     return {
       ok: true,
-      inboundRecorded: Boolean(paidBody?.inboundRecorded || paidBody?.alreadyFunded),
+      inboundRecorded: Boolean(paidBody?.inboundRecorded || paidBody?.alreadyFunded || paidBody?.topUpApplied),
       alreadyFunded: paidBody?.alreadyFunded,
+      topUpApplied: paidBody?.topUpApplied,
       fundTxHash: paidBody?.fundTxHash,
       message: paidBody?.message,
     };

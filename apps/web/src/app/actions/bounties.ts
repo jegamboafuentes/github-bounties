@@ -11,6 +11,7 @@ import {
   releaseClaimLock,
   fundBounty,
   signalWorkingOnThis,
+  topUpBounty,
 } from "@/bounties";
 import { claimPoolPayout, claimPayout, isClaimError } from "@/claims";
 import { getRuntimeDb } from "@/db/runtime";
@@ -83,6 +84,28 @@ export async function fundBountyAction(formData: FormData): Promise<void> {
         )}`,
       );
     }
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
+    redirectBountyError(bountyId, err);
+  }
+}
+
+export async function topUpBountyAction(formData: FormData): Promise<void> {
+  const bountyId = String(formData.get("bountyId") ?? "");
+  const amountUsdc = String(formData.get("amountUsdc") ?? "");
+  const fundTxHash = String(formData.get("fundTxHash") ?? "").trim() || undefined;
+  const user = await getCurrentPublicUser();
+  if (!user) {
+    redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
+  }
+  try {
+    await topUpBounty(
+      bountyId,
+      user.id,
+      { amountUsdc, fundTxHash },
+      getRuntimeDb(),
+    );
+    refreshBounty(bountyId);
   } catch (err) {
     if (isRedirectError(err)) throw err;
     redirectBountyError(bountyId, err);

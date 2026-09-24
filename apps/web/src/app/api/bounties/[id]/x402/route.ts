@@ -1,17 +1,24 @@
+import { getCurrentPublicUser } from "@/auth/protect";
 import { getRuntimeDb } from "@/db/runtime";
 import { handleX402Fund, jsonForUnknown } from "@/escrow";
 
 export const dynamic = "force-dynamic";
 
 /**
- * x402 `exact` seller: payTo = gb-escrow, price = bounty face F.
- * Unpaid → 402. Settled → inbound recorded; poster Lock needs no hash paste.
- * Hosted checkout stays disabled (ADR 0001 / 0002).
+ * x402 `exact` seller: payTo = gb-escrow.
+ * First fund prices the face. `?topUpUsdc=` on a funded bounty prices the added amount.
+ * Unpaid → 402. First settle records inbound; poster Lock needs no hash paste.
+ * A settled top-up increases face immediately. Hosted checkout stays disabled.
  */
 async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  const topUp = new URL(req.url).searchParams.get("topUpUsdc")?.trim();
+  const user = topUp ? await getCurrentPublicUser() : null;
   try {
-    const result = await handleX402Fund(req, id, { db: getRuntimeDb() });
+    const result = await handleX402Fund(req, id, {
+      db: getRuntimeDb(),
+      actorUserId: user?.id ?? null,
+    });
     return Response.json(result.body, {
       status: result.status,
       headers: result.headers,

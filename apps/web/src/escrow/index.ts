@@ -56,6 +56,14 @@ export {
 export { attributedAtomic, reconcileBountyNotes, sumAttributedAtomic } from "./reconcile";
 export { getEscrowSnapshot, inferEscrowRail, type EscrowSnapshot } from "./read";
 export {
+  assertFundedTopUpOpen,
+  contributionRefundPlan,
+  listBountyContributions,
+  topUpFundedBounty,
+  type BountyContributionView,
+  type TopUpResult,
+} from "./top-up";
+export {
   escrowHealth,
   expireUnmergedBounties,
   lockEscrowFunds,

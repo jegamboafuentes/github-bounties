@@ -12,7 +12,7 @@ This is not Lightning Bounties / LB1. Escrow lock / 2% settlement is V1-5 ([docs
 | --- | --- |
 | Hunt | parallel; optional non-exclusive `work_signals` |
 | Exclusive claim-lock | **sunset** (V2-4). Do not acquire new `claim_locks`. |
-| Fund | escrow lock `pending_fund` → `funded` (CDP or documented mock) |
+| Fund | escrow lock `pending_fund` → `funded` (CDP or documented mock). While `funded` and before the winning merge, any signed-in user can add USDC on the same x402 rail. Face becomes the sum. |
 | Auth | Google session for post / fund-lock / signal / claim / cancel |
 | Repo | must be App-connected (`repos.is_active`) |
 

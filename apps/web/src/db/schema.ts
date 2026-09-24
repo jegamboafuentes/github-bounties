@@ -618,6 +618,37 @@ export type WebhookClaimResult = {
 };
 
 /**
+ * One inbound USDC credit toward a bounty face (first Lock or a later top-up).
+ *
+ * Face on `bounties` / `escrows` is the sum of these rows. Fee and pool math
+ * stay 2% of that face and 15% of post-fee — this table is attribution only.
+ * `refund_tx_hash` is set when a multi-funder cancel returns that row's amount.
+ */
+export const bountyContributions = pgTable(
+  "bounty_contributions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bountyId: uuid("bounty_id")
+      .notNull()
+      .references(() => bounties.id, { onDelete: "restrict" }),
+    funderUserId: uuid("funder_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    amountUsdc: numeric("amount_usdc", { precision: 20, scale: 6 }).notNull(),
+    fundTxHash: text("fund_tx_hash").notNull(),
+    funderAddress: text("funder_address"),
+    refundTxHash: text("refund_tx_hash"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("bounty_contributions_bounty_tx_uidx").on(table.bountyId, table.fundTxHash),
+    index("bounty_contributions_bounty_id_idx").on(table.bountyId),
+    index("bounty_contributions_funder_user_id_idx").on(table.funderUserId),
+    check("bounty_contributions_amount_positive", sql`${table.amountUsdc} > 0`),
+  ],
+);
+
+/**
  * GitHub delivery-id idempotency (V1-3).
  * Redeliveries keep the same `X-GitHub-Delivery` GUID.
  * `claim_results` stores Claim upserts and skip reasons (`hunter_not_linked`, …).
