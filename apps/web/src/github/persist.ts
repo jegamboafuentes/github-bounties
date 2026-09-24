@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
+import { isUniqueViolation } from "../db/errors";
 import { githubLinks, repos } from "../db/schema";
 import type { GitHubIdentity, InstallationRepo } from "./api";
 
@@ -136,6 +137,7 @@ export async function upsertInstallationRepos(args: {
         githubRepoId: repo.githubRepoId,
         fullName: repo.fullName,
         installationId: args.installationId,
+        connectionKind: "app_install",
         connectedByUserId: args.userId,
         isActive: true,
       })
@@ -144,6 +146,7 @@ export async function upsertInstallationRepos(args: {
         set: {
           fullName: repo.fullName,
           installationId: args.installationId,
+          connectionKind: "app_install",
           connectedByUserId: args.userId,
           isActive: true,
           updatedAt: new Date(),
@@ -157,7 +160,12 @@ export async function upsertInstallationRepos(args: {
     const keepIds = args.repositories.map((r) => r.githubRepoId);
     await args.db
       .update(repos)
-      .set({ isActive: false, updatedAt: new Date() })
+      .set({
+        isActive: false,
+        connectionKind: "public_reference",
+        installationId: null,
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(repos.installationId, args.installationId),
@@ -178,8 +186,87 @@ export async function deactivateReposForInstallation(
 ): Promise<number> {
   const rows = await db
     .update(repos)
-    .set({ isActive: false, updatedAt: new Date() })
+    .set({
+      isActive: false,
+      connectionKind: "public_reference",
+      installationId: null,
+      updatedAt: new Date(),
+    })
     .where(eq(repos.installationId, BigInt(installationId)))
     .returning({ id: repos.id });
   return rows.length;
+}
+
+/**
+ * Remember a public repo the poster referenced. Does not require an App install.
+ * An active `app_install` row for the same `github_repo_id` is left in place so
+ * webhooks keep ownership. Inactive installs become `public_reference` so the
+ * merge poller can see funded bounties again.
+ */
+export async function upsertPublicReferenceRepo(args: {
+  userId: string;
+  githubRepoId: bigint;
+  fullName: string;
+  db: Database;
+}): Promise<RepoRow> {
+  const write = async (): Promise<RepoRow> => {
+    const [existing] = await args.db
+      .select()
+      .from(repos)
+      .where(eq(repos.githubRepoId, args.githubRepoId))
+      .limit(1);
+
+    if (
+      existing &&
+      existing.connectionKind === "app_install" &&
+      existing.isActive &&
+      existing.installationId != null
+    ) {
+      if (existing.fullName === args.fullName) return existing;
+      const [renamed] = await args.db
+        .update(repos)
+        .set({ fullName: args.fullName, updatedAt: new Date() })
+        .where(eq(repos.id, existing.id))
+        .returning();
+      return renamed ?? existing;
+    }
+
+    if (!existing) {
+      const [inserted] = await args.db
+        .insert(repos)
+        .values({
+          githubRepoId: args.githubRepoId,
+          fullName: args.fullName,
+          installationId: null,
+          connectionKind: "public_reference",
+          connectedByUserId: args.userId,
+          isActive: true,
+        })
+        .returning();
+      if (!inserted) throw new Error("insert public reference repo returned no row");
+      return inserted;
+    }
+
+    const [updated] = await args.db
+      .update(repos)
+      .set({
+        fullName: args.fullName,
+        installationId: null,
+        connectionKind: "public_reference",
+        connectedByUserId: args.userId,
+        isActive: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(repos.id, existing.id))
+      .returning();
+    if (!updated) throw new Error("update public reference repo returned no row");
+    return updated;
+  };
+
+  try {
+    return await write();
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    return write();
+  }
 }

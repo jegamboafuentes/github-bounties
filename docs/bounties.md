@@ -14,7 +14,7 @@ This is not Lightning Bounties / LB1. Escrow lock / 2% settlement is V1-5 ([docs
 | Exclusive claim-lock | **sunset** (V2-4). Do not acquire new `claim_locks`. |
 | Fund | escrow lock `pending_fund` → `funded` (CDP or documented mock). While `funded` and before the winning merge, any signed-in user can add USDC on the same x402 rail. Face becomes the sum. |
 | Auth | Google session for post / fund-lock / signal / claim / cancel |
-| Repo | must be App-connected (`repos.is_active`) |
+| Repo | public issue URL, or an active App install. Closed issues are rejected at post time |
 
 ## Status flow
 
@@ -31,11 +31,21 @@ Residual `claim_locked` rows drain to `funded` on read. Money: `funded` → elig
 | `/board` | public | List + filter by repo / status / complexity / language. Ready Gemini intel shows S/M/L + stack badges (hidden when missing). Poster and paid hunter GitHub avatars when a login is present (`avatars.githubusercontent.com/{login}`) |
 | `GET /api/stats` | public | Versioned platform aggregates (`schemaVersion`). Homepage consumes the same helper. See [stats.md](stats.md) |
 | `/settings` | Google session | GitHub connection status (connected vs not). Payout wallet: WalletConnect (same Reown project id as fund) or Advanced paste. Pool members are paid to this wallet when settle runs. |
-| `/bounties/new` | Google session | Create from issue URL. GitHub **Connected** vs **Not connected** only (no connected-repo dump). Face chips `$1 / $5 / $10 / $50 / $100` + custom |
+| `/bounties/new` | Google session | Create from any public issue URL (App install optional). GitHub **Connected** vs **Not connected** only (no connected-repo dump). Face chips `$1 / $5 / $10 / $50 / $100` + custom |
 | `/bounties/[id]` | public read; Google for actions | Full GitHub issue body (sanitized markdown), Gemini intelligence card (AI estimates; degrades without `GEMINI_API_KEY`), escrow lock (WalletConnect / Pay face + Advanced paste-hash), Working on this, pool roster, payout breakdown, winner Claim (BYO Base), cancel/refund |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` | Drains residual exclusive locks **and** `expires_at` bounty refunds |
+| `GET\|POST /api/jobs/poll-public-merges` | optional `CRON_SECRET` | DEV only. Finds merged PRs that close funded issues on `public_reference` repos and writes the same Claim path as webhooks |
 
-CLI (same function): `cd apps/web && npm run expire-locks`
+CLI (same functions):
+
+```bash
+cd apps/web && npm run expire-locks
+cd apps/web && npm run poll-public-merges
+```
+
+Schedule `poll-public-merges` on DEV the same way as expire-locks (Cloud Scheduler GET or POST, `Authorization: Bearer $CRON_SECRET` when that env is set). Do not schedule it on PROD and do not remount PROD for this change. Optional `GITHUB_PUBLIC_READ_TOKEN` raises the public REST rate limit; unauthenticated reads work without it.
+
+A public post stores `repos.connection_kind = public_reference` and a null `installation_id` (`connected_by_user_id` is the poster). A later App install on that `github_repo_id` upgrades the row to `app_install` so webhooks take over. Lock comments and labels are skipped when there is no installation. Money is unchanged: WalletConnect + x402, 2% fee, 15% of the post-fee pool, crowdfund top-ups, manual Claim.
 
 Expiry **does not advertise** exclusive lock. It force-releases / expires leftover `claim_locks.status=active` and restores `claim_locked` bounties to `funded`. `bounties.expires_at` refunds are unchanged. Board and detail also drain on read.
 

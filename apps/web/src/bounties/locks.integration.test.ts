@@ -143,9 +143,16 @@ describe("V2-4 bounty post + claim-lock sunset", () => {
               issueUrl: "https://github.com/not/connected/issues/1",
               amountUsdc: "10",
             },
-            { db },
+            {
+              db,
+              http: async () => ({
+                ok: false,
+                status: 404,
+                json: async () => ({ message: "Not Found" }),
+              }),
+            },
           ),
-        (err: unknown) => err instanceof BountyError && err.code === "repo_not_connected",
+        (err: unknown) => err instanceof BountyError && err.code === "issue_not_found",
       );
     } finally {
       await sql.end({ timeout: 5 });

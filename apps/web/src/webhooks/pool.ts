@@ -160,15 +160,6 @@ export async function freezeAfterWinner(
 
     const webhookPr = poolPullRequestFromWebhook(args.payload);
     const installationId = args.payload.installation?.id ?? repo.installationId;
-    if (installationId == null && !opts.fetchPullRequests) {
-      results.push({
-        issueNumber,
-        bountyId: bounty.id,
-        skip: "github_snapshot_unavailable",
-        frozen: false,
-      });
-      continue;
-    }
 
     let snapshot: PoolPullRequest[] = [];
     try {
@@ -282,7 +273,9 @@ export async function ingestLiveRoster(
         owner,
         repo: name,
         issueNumber: 0,
-        installationId: args.payload.installation?.id ?? Number(repo.installationId),
+        installationId:
+          args.payload.installation?.id ??
+          (repo.installationId == null ? null : Number(repo.installationId)),
         includePullNumbers: [pr.number],
       });
       const match = fetched.find((row) => row.number === pr.number);

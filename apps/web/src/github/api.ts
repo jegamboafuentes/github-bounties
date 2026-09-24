@@ -53,6 +53,29 @@ export function githubApiHeaders(
   };
 }
 
+/** Optional PAT for public REST/GraphQL. Unauthenticated reads work without it. */
+export function readGitHubPublicReadToken(
+  env: NodeJS.ProcessEnv = process.env,
+): string | null {
+  const token = env.GITHUB_PUBLIC_READ_TOKEN?.trim();
+  return token || null;
+}
+
+export function publicGitHubHeaders(
+  token?: string | null,
+  extra?: Record<string, string>,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    accept: GITHUB_ACCEPT,
+    "x-github-api-version": GITHUB_API_VERSION,
+    "user-agent": "github-bounties",
+    ...extra,
+  };
+  const trimmed = token?.trim();
+  if (trimmed) headers.authorization = `Bearer ${trimmed}`;
+  return headers;
+}
+
 function apiHeaders(token: string, extra?: Record<string, string>): Record<string, string> {
   return githubApiHeaders(token, extra);
 }
@@ -291,6 +314,8 @@ export type GitHubIssueSnapshot = {
   body: string | null;
   htmlUrl: string;
   state: string;
+  /** Set when the issues API payload is actually a pull request. */
+  pullRequest?: boolean;
 };
 
 export async function fetchIssue(
@@ -340,22 +365,33 @@ export type GitHubRepoContext = {
 };
 
 /**
- * Repo about + languages + README blurb via the GitHub App installation token.
- * Best-effort: missing README / languages still returns description.
+ * Repo about + languages + README blurb.
+ * Uses the App installation token when `installationId` is set, otherwise
+ * public REST (`GITHUB_PUBLIC_READ_TOKEN` optional). Missing README still returns description.
  */
 export async function fetchRepoContext(
   owner: string,
   repo: string,
-  opts: { installationId: InstallationId; http?: GitHubHttp; jwt?: string },
+  opts: {
+    installationId?: InstallationId | null;
+    http?: GitHubHttp;
+    jwt?: string;
+    env?: NodeJS.ProcessEnv;
+  } = {},
 ): Promise<GitHubRepoContext> {
-  const token = await createInstallationToken(opts.installationId, {
-    http: opts.http,
-    jwt: opts.jwt,
-  });
   const http = opts.http ?? defaultHttp;
+  const headers =
+    opts.installationId != null
+      ? apiHeaders(
+          await createInstallationToken(opts.installationId, {
+            http,
+            jwt: opts.jwt,
+          }),
+        )
+      : publicGitHubHeaders(readGitHubPublicReadToken(opts.env));
 
   const repoRes = await http(`${GITHUB_API}/repos/${owner}/${repo}`, {
-    headers: apiHeaders(token),
+    headers,
   });
   let description: string | null = null;
   let language: string | null = null;
@@ -369,7 +405,7 @@ export async function fetchRepoContext(
   }
 
   const langRes = await http(`${GITHUB_API}/repos/${owner}/${repo}/languages`, {
-    headers: apiHeaders(token),
+    headers,
   });
   const languages: string[] = [];
   if (langRes.ok) {
@@ -383,7 +419,7 @@ export async function fetchRepoContext(
   }
 
   const readmeRes = await http(`${GITHUB_API}/repos/${owner}/${repo}/readme`, {
-    headers: apiHeaders(token),
+    headers,
   });
   let readmeBlurb: string | null = null;
   if (readmeRes.ok) {

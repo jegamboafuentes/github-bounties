@@ -4,7 +4,9 @@ import { bounties, repos } from "../db/schema";
 import {
   fetchIssue,
   type GitHubHttp,
+  type GitHubIssueSnapshot,
 } from "../github/api";
+import { resolvePublicIssue } from "../github/public-read";
 import {
   clipIssueBody,
   looksLegacyClippedBody,
@@ -19,7 +21,7 @@ export type BountyIssueBody = {
   refreshed: boolean;
   repoFullName: string;
   githubIssueNumber: number;
-  installationId: bigint;
+  installationId: bigint | null;
 };
 
 export function shouldRefreshIssueBody(args: {
@@ -36,8 +38,9 @@ export function shouldRefreshIssueBody(args: {
 
 /**
  * Load the full GitHub issue body for the bounty detail page.
- * Uses the stored snapshot when fresh; otherwise fetches via the GitHub App
- * installation token (same path as create). Never throws — falls back to snapshot.
+ * Uses the stored snapshot when fresh; otherwise fetches via the App
+ * installation token or public REST when the repo has no installation.
+ * Never throws — falls back to snapshot.
  */
 export async function loadBountyIssueBody(
   bountyId: string,
@@ -91,7 +94,7 @@ export async function loadBountyIssueBody(
   }
 
   try {
-    const snapshot = await fetchIssue(owner, repo, row.githubIssueNumber, {
+    const snapshot = await loadIssueSnapshot(owner, repo, row.githubIssueNumber, {
       installationId: row.installationId,
       http: opts.http,
       jwt: opts.jwt,
@@ -124,6 +127,23 @@ export async function loadBountyIssueBody(
       installationId: row.installationId,
     };
   }
+}
+
+async function loadIssueSnapshot(
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  opts: { installationId: bigint | null; http?: GitHubHttp; jwt?: string },
+): Promise<GitHubIssueSnapshot> {
+  if (opts.installationId != null) {
+    return fetchIssue(owner, repo, issueNumber, {
+      installationId: opts.installationId,
+      http: opts.http,
+      jwt: opts.jwt,
+    });
+  }
+  const resolved = await resolvePublicIssue(owner, repo, issueNumber, { http: opts.http });
+  return resolved.issue;
 }
 
 export function splitFullName(fullName: string): [string, string] | [null, null] {
