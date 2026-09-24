@@ -1,6 +1,10 @@
 import { relations } from "drizzle-orm";
 import {
   allocationLedger,
+  apiIdempotencyKeys,
+  apiKeys,
+  apiRequestLog,
+  apiSpendLedger,
   bounties,
   bountyContributions,
   bountyIntelligence,
@@ -26,6 +30,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   workSignals: many(workSignals),
   emailOutbox: many(emailOutbox),
   bountyContributions: many(bountyContributions),
+  apiKeys: many(apiKeys),
 }));
 
 export const emailOutboxRelations = relations(emailOutbox, ({ one }) => ({
@@ -68,6 +73,28 @@ export const bountiesRelations = relations(bounties, ({ one, many }) => ({
   workSignals: many(workSignals),
   intelligence: one(bountyIntelligence),
   contributions: many(bountyContributions),
+  apiSpends: many(apiSpendLedger),
+}));
+
+export const apiKeysRelations = relations(apiKeys, ({ one, many }) => ({
+  user: one(users, { fields: [apiKeys.userId], references: [users.id] }),
+  requests: many(apiRequestLog),
+  spends: many(apiSpendLedger),
+  idempotencyKeys: many(apiIdempotencyKeys),
+}));
+
+export const apiRequestLogRelations = relations(apiRequestLog, ({ one }) => ({
+  key: one(apiKeys, { fields: [apiRequestLog.keyId], references: [apiKeys.id] }),
+  user: one(users, { fields: [apiRequestLog.userId], references: [users.id] }),
+}));
+
+export const apiSpendLedgerRelations = relations(apiSpendLedger, ({ one }) => ({
+  key: one(apiKeys, { fields: [apiSpendLedger.keyId], references: [apiKeys.id] }),
+  bounty: one(bounties, { fields: [apiSpendLedger.bountyId], references: [bounties.id] }),
+}));
+
+export const apiIdempotencyKeysRelations = relations(apiIdempotencyKeys, ({ one }) => ({
+  key: one(apiKeys, { fields: [apiIdempotencyKeys.keyId], references: [apiKeys.id] }),
 }));
 
 export const claimLocksRelations = relations(claimLocks, ({ one }) => ({

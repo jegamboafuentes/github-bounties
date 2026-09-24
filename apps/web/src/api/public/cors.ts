@@ -1,8 +1,13 @@
-/** Browser GET of `/api/v1` from any origin. No cookies, no credentials. */
+/**
+ * Browser calls to `/api/v1` from any origin. No cookies and no credentials.
+ * Authorization is Bearer only. Agents may also send Idempotency-Key and the
+ * x402 payment headers.
+ */
 export const PUBLIC_API_CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Accept, Content-Type",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers":
+    "Accept, Content-Type, Authorization, Idempotency-Key, PAYMENT-SIGNATURE, X-PAYMENT",
   "Access-Control-Max-Age": "86400",
 };
 

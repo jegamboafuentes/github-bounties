@@ -70,10 +70,9 @@ describe("public API error shape", () => {
     assert.equal(response.headers.get("content-type")?.includes("application/json"), true);
   });
 
-  it("every /api/v1 route answers POST, PUT, PATCH, and DELETE with methodNotAllowed", () => {
+  it("read-only /api/v1 routes still answer writes with methodNotAllowed", () => {
     const root = join(dirname(fileURLToPath(import.meta.url)), "../../app/api/v1");
     const routes = [
-      "bounties/route.ts",
       "bounties/[id]/route.ts",
       "bounties/[id]/funders/route.ts",
       "bounties/[id]/intelligence/route.ts",
@@ -87,5 +86,8 @@ describe("public API error shape", () => {
         assert.match(source, new RegExp(`export function ${method}\\(`), `${route} ${method}`);
       }
     }
+    const writes = readFileSync(join(root, "bounties/route.ts"), "utf8");
+    assert.match(writes, /handleV1Action/);
+    assert.match(writes, /methodNotAllowed\(WRITE_ALLOW\)/);
   });
 });

@@ -3,6 +3,7 @@ import {
   OpenAPIRegistry,
   OpenApiGeneratorV31,
 } from "@asteasolutions/zod-to-openapi";
+import { registerAccessOpenApi } from "../access/openapi";
 import { z } from "zod";
 import { bountyStatusValues } from "../../db/schema";
 
@@ -74,13 +75,11 @@ export const listBountiesInputSchema = z
 export const apiErrorSchema = z
   .object({
     error: z.object({
-      code: z.enum([
-        "validation_failed",
-        "not_found",
-        "method_not_allowed",
-        "rate_limited",
-        "internal",
-      ]),
+      code: z
+        .string()
+        .describe(
+          "Stable code. API codes: validation_failed, not_found, method_not_allowed, rate_limited, internal, unauthorized, key_revoked, forbidden_scope, conflict, payment_required, spend_cap_exceeded, idempotency_key_required, idempotency_conflict, wallet_not_set, github_not_linked. Bounty and escrow domain codes (bounty_exists, not_poster, not_fundable, not_refundable, and the rest) pass through unchanged.",
+        ),
       message: z.string(),
       details: z.unknown().nullable(),
     }),
@@ -441,12 +440,15 @@ publicApiRegistry.registerPath({
 });
 
 export const PUBLIC_API_DESCRIPTION = [
-  "GitHub Bounties pays USDC on a public GitHub issue when a pull request that closes it is merged. Hunters work in parallel. This API is the read-only V4-1 surface: the board, one bounty, its funders, cached issue intelligence, and platform stats. It does not post, fund, claim, or move money, and it does not require an API key. The same data is already public on the website.",
+  "GitHub Bounties pays USDC on a public GitHub issue when a pull request that closes it is merged. Hunters work in parallel. Anonymous reads of the board, one bounty, its funders, cached issue intelligence, and platform stats do not require an API key. V4-2 adds Bearer API keys for /me, posting, work signals, unfunded cancel, and headless x402 fund and top-up (money is DEV-only until API_MONEY_ENABLED is turned on for mainnet).",
   "amountUsdc and payout.faceUsdc are the face (the posted amount, including top-ups). totalFundedUsdc is the sum of confirmed contributions, bounty_contributions rows with a recorded fund transaction, and is 0.000000 when there are none. It is not the face. status cancelled, expired, refunding, or refunded means that confirmed sum is not still locked.",
   "POST, PUT, PATCH, and DELETE on /api/v1 return 405 with Allow: GET, OPTIONS (RFC 9110) and the JSON error envelope (code method_not_allowed).",
   "Funder avatars and the funders route are newest contribution first, matching the board avatar stack. Avatars are distinct funders, capped at five. The funders route is one row per contribution.",
   "Rate limit: about 60 requests per minute per client IP, counted in memory on each Cloud Run instance. It is not a global limit across instances. The client IP is the last address in X-Forwarded-For (the hop Cloud Run appends). A limited response is HTTP 429 with error code rate_limited, Retry-After, and RateLimit-Limit, RateLimit-Remaining, and RateLimit-Reset headers.",
+  "Authenticated calls use Authorization: Bearer and no cookies. Per key, reads are 120/minute, writes are 20/minute, and money calls are 10/hour. Those counters are rows in api_request_log so they hold across Cloud Run instances. Money endpoints stay off when CDP_NETWORK=base unless API_MONEY_ENABLED is explicitly on.",
 ].join("\n\n");
+
+registerAccessOpenApi(publicApiRegistry);
 
 let cachedDocument: ReturnType<OpenApiGeneratorV31["generateDocument"]> | undefined;
 
@@ -457,7 +459,7 @@ export function buildOpenApiDocument() {
     openapi: "3.1.0",
     info: {
       title: "GitHub Bounties API",
-      version: "4.1.0",
+      version: "4.2.0",
       description: PUBLIC_API_DESCRIPTION,
     },
     servers: [

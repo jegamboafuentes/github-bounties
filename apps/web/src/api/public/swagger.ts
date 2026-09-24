@@ -86,6 +86,7 @@ export function swaggerDocsHtml(): string {
       url: "/api/v1/openapi.json",
       dom_id: "#swagger",
       deepLinking: true,
+      persistAuthorization: true,
       presets: [SwaggerUIBundle.presets.apis],
       layout: "BaseLayout"
     });

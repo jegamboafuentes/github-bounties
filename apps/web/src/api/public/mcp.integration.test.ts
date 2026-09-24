@@ -122,11 +122,19 @@ describe("MCP read tools", () => {
     assert.deepEqual(
       listed.tools.map((tool) => tool.name).sort(),
       [
+        "cancel_bounty",
+        "clear_work_signal",
+        "create_bounty",
+        "fund_bounty",
         "get_bounty",
         "get_bounty_intelligence",
+        "get_me",
         "get_stats",
         "list_bounties",
         "list_funders",
+        "list_my_bounties",
+        "signal_working",
+        "top_up_bounty",
       ],
     );
     const listTool = listed.tools.find((tool) => tool.name === "list_bounties");

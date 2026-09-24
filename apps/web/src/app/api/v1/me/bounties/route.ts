@@ -1,12 +1,13 @@
-import { handleV1Get } from "@/api/access/http";
+import { handleV1Action } from "@/api/access/http";
 import { publicCorsPreflight } from "@/api/public/cors";
 import { methodNotAllowed } from "@/api/public/methods";
-import { publicReadApi } from "@/api/public/service";
 
 export const dynamic = "force-dynamic";
 
+const ALLOW = "GET, OPTIONS";
+
 export function GET(request: Request) {
-  return handleV1Get(request, async () => Response.json(await publicReadApi.getStats()));
+  return handleV1Action(request, { kind: "my-bounties" });
 }
 
 export function OPTIONS() {
@@ -14,17 +15,17 @@ export function OPTIONS() {
 }
 
 export function POST() {
-  return methodNotAllowed();
+  return methodNotAllowed(ALLOW);
 }
 
 export function PUT() {
-  return methodNotAllowed();
+  return methodNotAllowed(ALLOW);
 }
 
 export function PATCH() {
-  return methodNotAllowed();
+  return methodNotAllowed(ALLOW);
 }
 
 export function DELETE() {
-  return methodNotAllowed();
+  return methodNotAllowed(ALLOW);
 }

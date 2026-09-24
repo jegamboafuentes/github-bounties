@@ -1,12 +1,12 @@
+import { handleV1Get } from "@/api/access/http";
 import { publicCorsPreflight } from "@/api/public/cors";
-import { handlePublicRead } from "@/api/public/http";
 import { methodNotAllowed } from "@/api/public/methods";
 import { buildOpenApiDocument } from "@/api/public/schemas";
 
 export const dynamic = "force-dynamic";
 
 export function GET(request: Request) {
-  return handlePublicRead(request, async () => Response.json(buildOpenApiDocument()), { cors: true });
+  return handleV1Get(request, async () => Response.json(buildOpenApiDocument()));
 }
 
 export function OPTIONS() {

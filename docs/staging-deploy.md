@@ -247,6 +247,7 @@ Cloud Run `--set-secrets=ENV=NAME:latest`. Names only.
 | `AUTH_URL` | `AUTH_URL` | **no** | Create after live origin |
 | `GEMINI_API_KEY` | `GEMINI_API_KEY` | **optional** | V3-0 bounty intelligence. **DEV only.** Attach `GEMINI_API_KEY=GEMINI_API_KEY:latest` when an enabled version exists (already mounted on DEV `github-bounties-web`). Skip cleanly when absent — do not add it to the required first-deploy `--set-secrets` list (`--set-secrets` fails if a named secret has 0 versions). Not wired on PROD. |
 | `RESEND_API_KEY` | `RESEND_API_KEY` | **optional** | V3.x A1–A2 transactional email. **DEV only.** Same attach/skip rule as `GEMINI_API_KEY`. Never `NEXT_PUBLIC_*`. Not wired on PROD. See [email.md](email.md). |
+| `API_KEY_HMAC_SECRET` | `API_KEY_HMAC_SECRET` | **optional** | V4-2 API key HMAC-SHA256. **DEV:** create a Secret Manager version (16+ characters) and remount so `API_KEY_HMAC_SECRET=API_KEY_HMAC_SECRET:latest` attaches. Skip cleanly when absent (keys then fail closed). Same `WEB_OPTIONAL_SECRETS` rule as `GEMINI_API_KEY`. Not required on PROD until keys are enabled there. |
 
 Plain env (not Secret Manager):
 
@@ -259,10 +260,13 @@ Plain env (not Secret Manager):
 | `PUBLIC_BASE_URL` | omit | Optional env after live origin (GitHub URL helpers) |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | omit | Public Reown Cloud project id (not SM). Needed for WalletConnect QR on fund / Lock. Browser wallets work without it. Allow `https://dev.githubbounties.xyz` and `http://localhost:3000` in the Reown dashboard. |
 | `EMAIL_FROM` | omit | Optional plain env (not SM). Verified Resend sender. Unset uses `GitHub Bounties <noreply@githubbounties.xyz>`. DEV only. |
+| `API_MONEY_ENABLED` | omit | Optional plain env. Unset is **on** for `CDP_NETWORK=base-sepolia` and **off** for `base`. Set `0` to disable fund/top-up on the public API. Leave unset on PROD so mainnet cannot turn money on by accident. |
+| `API_PER_TX_CAP_USDC` | omit | Optional plain env. Admin per-transaction ceiling. DEV default `50`, PROD default `25`. Users can only lower a key. |
+| `API_DAILY_CAP_USDC` | omit | Optional plain env. Admin daily ceiling. DEV default `200`, PROD default `100`. |
 
 `--set-secrets` fails if the named secret has **no enabled version**.
 
-`GEMINI_API_KEY` and `RESEND_API_KEY` are `WEB_OPTIONAL_SECRETS` in [`infra/gcloud/config.sh`](../infra/gcloud/config.sh). `deploy-web.sh` (static and discover) attaches each when Secret Manager has an enabled version so a full DEV remount with `--set-secrets` does not drop an existing mount. If a secret is missing, the deploy skips it: the bounty page degrades the intelligence card, and welcome mail stays pending. **PROD is not wired** for either key.
+`GEMINI_API_KEY`, `RESEND_API_KEY`, and `API_KEY_HMAC_SECRET` are `WEB_OPTIONAL_SECRETS` in [`infra/gcloud/config.sh`](../infra/gcloud/config.sh). `deploy-web.sh` (static and discover) attaches each when Secret Manager has an enabled version so a full DEV remount with `--set-secrets` does not drop an existing mount. If a secret is missing, the deploy skips it: the bounty page degrades the intelligence card, and welcome mail stays pending. **PROD is not wired** for either key.
 
 Rotate: add a new SM version, then deploy a no-op revision (or re-submit this
 build) so instances restart. See [gcp-bootstrap.md](gcp-bootstrap.md#rotate-secrets).

@@ -1,17 +1,20 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { McpAccess } from "../access/http";
+import { registerAuthedMcpTools } from "../access/mcp-tools";
 import { PublicApiError, publicApiErrorBody, type PublicApiErrorBody } from "./errors";
 import { acceptBountyId, acceptListInput } from "./query";
 import type { PublicReadApi } from "./service";
 import { listBountiesInputSchema, bountyIdParamsSchema } from "./schemas";
 
 const INSTRUCTIONS = [
-  "Read-only GitHub Bounties tools. No API key.",
+  "GitHub Bounties tools. Anonymous calls can read the public board. Write and money tools need Authorization: Bearer with an API key (gb_test_ on DEV, gb_live_ on mainnet). No cookies.",
   "list_bounties filters the public board. get_bounty reads one bounty, including the stored issue body, payout breakdown, and pool roster.",
   "list_funders returns public contribution rows (name, GitHub login, avatar, amount, time), newest first.",
   "get_bounty_intelligence reads the Gemini cache only and must not be treated as a refresh.",
   "get_stats returns platform totals.",
-  "These tools cannot post, fund, top up, claim, or cancel. The exclusive claim-lock is retired.",
+  "get_me and list_my_bounties read the key owner. create_bounty, signal_working, clear_work_signal, and cancel_bounty need the write scope. cancel_bounty is unfunded only.",
+  "fund_bounty and top_up_bounty need the money scope. They are headless x402: call once for payment requirements, then retry with the same idempotencyKey and paymentSignature. The exclusive claim-lock is retired. Settle, claims, and wallet changes are not tools.",
 ].join(" ");
 
 function toolJson(value: unknown): CallToolResult {
@@ -35,9 +38,9 @@ function failureFrom(err: unknown): CallToolResult {
   return toolFailure(publicApiErrorBody("internal", "Internal error.", null));
 }
 
-export function createBountiesMcpServer(api: PublicReadApi): McpServer {
+export function createBountiesMcpServer(api: PublicReadApi, access?: McpAccess | null): McpServer {
   const server = new McpServer(
-    { name: "github-bounties", version: "4.1.0" },
+    { name: "github-bounties", version: "4.2.0" },
     { instructions: INSTRUCTIONS },
   );
 
@@ -131,5 +134,6 @@ export function createBountiesMcpServer(api: PublicReadApi): McpServer {
     },
   );
 
+  registerAuthedMcpTools(server, access);
   return server;
 }
