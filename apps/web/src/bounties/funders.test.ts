@@ -5,25 +5,30 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { FunderAvatarStack } from "../components/funder-avatar-stack";
 import {
   BOARD_FUNDER_AVATAR_LIMIT,
+  collapseContributionFunders,
+  dedupeShownFunders,
   funderStackAriaLabel,
-  groupBoardFunderRows,
   resolveFunderAvatarUrl,
-  summarizeRankedFunders,
-  type RankedFunderRow,
+  type ContributionFunderRow,
 } from "./funders";
 
 const BOUNTY = "00000000-0000-4000-8000-0000000000b0";
 
-function row(partial: Partial<RankedFunderRow> & Pick<RankedFunderRow, "userId" | "rn">): RankedFunderRow {
+function row(
+  partial: Partial<ContributionFunderRow> & Pick<ContributionFunderRow, "userId" | "createdAt">,
+): ContributionFunderRow {
   return {
     bountyId: BOUNTY,
-    displayName: partial.displayName ?? `Funder ${partial.rn}`,
+    displayName: partial.displayName ?? "Funder",
     avatarUrl: partial.avatarUrl ?? null,
     githubAvatarUrl: partial.githubAvatarUrl ?? null,
     githubLogin: partial.githubLogin ?? null,
-    funderCount: partial.funderCount ?? 1,
     ...partial,
   };
+}
+
+function at(seconds: number): Date {
+  return new Date(Date.UTC(2026, 8, 1, 0, 0, seconds));
 }
 
 describe("board funder avatars", () => {
@@ -56,50 +61,95 @@ describe("board funder avatars", () => {
   });
 
   it("keeps one face for a single funder and nothing when nobody funded", () => {
-    const one = summarizeRankedFunders([
+    const one = collapseContributionFunders([
       row({
         userId: "u1",
-        rn: 1,
+        createdAt: at(1),
         displayName: "Alice",
         avatarUrl: "https://lh3.googleusercontent.com/a/alice",
-        funderCount: 1,
       }),
-    ]);
-    assert.equal(one.funderCount, 1);
+    ]).get(BOUNTY);
+    assert.equal(one?.funderCount, 1);
     assert.deepEqual(
-      one.funders.map((funder) => funder.displayName),
+      one?.funders.map((funder) => funder.displayName),
       ["Alice"],
     );
-    assert.equal(one.funders[0]?.avatarUrl, "https://lh3.googleusercontent.com/a/alice");
-    assert.deepEqual(summarizeRankedFunders([]), { funders: [], funderCount: 0 });
+    assert.equal(one?.funders[0]?.avatarUrl, "https://lh3.googleusercontent.com/a/alice");
+    assert.equal(collapseContributionFunders([]).size, 0);
   });
 
-  it("orders most recent first, dedupes a repeat funder, and caps at 5 with the full count", () => {
-    const summary = summarizeRankedFunders([
-      row({ userId: "late", rn: 1, displayName: "Eve", funderCount: 6 }),
-      row({ userId: "late", rn: 1, displayName: "Eve", funderCount: 6 }),
-      row({ userId: "d", rn: 4, displayName: "Dave", funderCount: 6 }),
-      row({ userId: "b", rn: 2, displayName: "Bob", funderCount: 6 }),
-      row({ userId: "c", rn: 3, displayName: "Carol", funderCount: 6 }),
-      row({ userId: "a", rn: 5, displayName: "Alice", funderCount: 6 }),
-      row({ userId: "hidden", rn: 6, displayName: "Zoe", funderCount: 6 }),
-    ]);
-    assert.equal(BOARD_FUNDER_AVATAR_LIMIT, 5);
-    assert.equal(summary.funderCount, 6);
+  it("collapses a repeat top-up from the same user id to one face", () => {
+    const summary = collapseContributionFunders([
+      row({
+        userId: "enrique",
+        createdAt: at(1),
+        displayName: "Enrique Gamboa",
+        avatarUrl: "https://lh3.googleusercontent.com/a/enrique",
+      }),
+      row({
+        userId: "enrique",
+        createdAt: at(30),
+        displayName: "Enrique Gamboa",
+        avatarUrl: "https://lh3.googleusercontent.com/a/enrique",
+      }),
+    ]).get(BOUNTY);
+    assert.equal(summary?.funderCount, 1);
     assert.deepEqual(
-      summary.funders.map((funder) => funder.displayName),
-      ["Eve", "Bob", "Carol", "Dave", "Alice"],
+      summary?.funders.map((funder) => funder.userId),
+      ["enrique"],
+    );
+  });
+
+  it("keeps two faces when two user ids share a display name", () => {
+    const summary = collapseContributionFunders([
+      row({ userId: "lb", createdAt: at(1), displayName: "Enrique Gamboa" }),
+      row({ userId: "mp", createdAt: at(30), displayName: "Enrique Gamboa" }),
+    ]).get(BOUNTY);
+    assert.equal(summary?.funderCount, 2);
+    assert.deepEqual(
+      summary?.funders.map((funder) => funder.userId),
+      ["mp", "lb"],
+    );
+  });
+
+  it("orders by each user's latest contribution and caps distinct funders at 5", () => {
+    const summary = collapseContributionFunders([
+      row({ userId: "eve", createdAt: at(1), displayName: "Eve" }),
+      row({ userId: "eve", createdAt: at(50), displayName: "Eve" }),
+      row({ userId: "dave", createdAt: at(40), displayName: "Dave" }),
+      row({ userId: "bob", createdAt: at(20), displayName: "Bob" }),
+      row({ userId: "carol", createdAt: at(30), displayName: "Carol" }),
+      row({ userId: "alice", createdAt: at(10), displayName: "Alice" }),
+      row({ userId: "zoe", createdAt: at(5), displayName: "Zoe" }),
+    ]).get(BOUNTY);
+    assert.equal(BOARD_FUNDER_AVATAR_LIMIT, 5);
+    assert.equal(summary?.funderCount, 6);
+    assert.deepEqual(
+      summary?.funders.map((funder) => funder.displayName),
+      ["Eve", "Dave", "Carol", "Bob", "Alice"],
     );
   });
 
   it("groups rows per bounty", () => {
-    const grouped = groupBoardFunderRows([
-      row({ bountyId: "b1", userId: "u1", rn: 1, displayName: "Ada", funderCount: 1 }),
-      row({ bountyId: "b2", userId: "u2", rn: 1, displayName: "Grace", funderCount: 1 }),
+    const grouped = collapseContributionFunders([
+      row({ bountyId: "b1", userId: "u1", createdAt: at(1), displayName: "Ada" }),
+      row({ bountyId: "b2", userId: "u2", createdAt: at(1), displayName: "Grace" }),
     ]);
     assert.equal(grouped.get("b1")?.funders[0]?.displayName, "Ada");
     assert.equal(grouped.get("b2")?.funders[0]?.displayName, "Grace");
     assert.equal(grouped.get("b1")?.funderCount, 1);
+  });
+
+  it("drops a repeated user id on the card and counts distinct funders", () => {
+    const shown = dedupeShownFunders(
+      [
+        { userId: "enrique", displayName: "Enrique Gamboa", avatarUrl: null },
+        { userId: "enrique", displayName: "Enrique Gamboa", avatarUrl: null },
+      ],
+      2,
+    );
+    assert.equal(shown.funderCount, 1);
+    assert.equal(shown.funders.length, 1);
   });
 
   it("builds an accessible name for one face, several faces, and overflow", () => {
@@ -180,6 +230,21 @@ describe("FunderAvatarStack", () => {
     assert.match(html, />\+1</);
     assert.match(html, /aria-label="Funded by Alice, Bob, Carol, Dave, Eve, and 1 other"/);
     assert.match(html, /-ml-2/);
+  });
+
+  it("renders one face when the same user id is listed twice", () => {
+    const html = renderToStaticMarkup(
+      createElement(FunderAvatarStack, {
+        funderCount: 2,
+        funders: [
+          face("enrique", "Enrique Gamboa", "https://lh3.googleusercontent.com/a/enrique"),
+          face("enrique", "Enrique Gamboa", "https://lh3.googleusercontent.com/a/enrique"),
+        ],
+      }),
+    );
+    assert.equal(html.match(/<img /g)?.length, 1);
+    assert.match(html, /aria-label="Funded by Enrique Gamboa"/);
+    assert.doesNotMatch(html, /\+[0-9]/);
   });
 
   it("uses two initials when a funder has no picture", () => {

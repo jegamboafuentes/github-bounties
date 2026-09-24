@@ -22,15 +22,15 @@ export type BoardFunderSummary = {
   funderCount: number;
 };
 
-export type RankedFunderRow = {
+/** One `bounty_contributions` row plus the funder's profile fields. */
+export type ContributionFunderRow = {
   bountyId: string;
   userId: string;
   displayName: string;
   avatarUrl: string | null;
   githubAvatarUrl: string | null;
   githubLogin: string | null;
-  rn: number;
-  funderCount: number;
+  createdAt: Date;
 };
 
 export function emptyBoardFunders(): BoardFunderSummary {
@@ -73,59 +73,79 @@ export function funderStackAriaLabel(
 }
 
 /**
- * One face per funder, most recent first (`rn` ascending).
- * Caps the visible list at {@link BOARD_FUNDER_AVATAR_LIMIT}.
- * `funderCount` is the distinct total, including people past the cap.
+ * One face per `funder_user_id`. A second contribution from the same user
+ * does not add a face. Order is that user's latest contribution, most recent
+ * first. `funderCount` is the distinct user total, not the contribution count.
+ * The visible list is capped at {@link BOARD_FUNDER_AVATAR_LIMIT}.
  */
-export function summarizeRankedFunders(rows: readonly RankedFunderRow[]): BoardFunderSummary {
-  const ordered = [...rows].sort((a, b) => a.rn - b.rn || a.userId.localeCompare(b.userId));
-  const seen = new Set<string>();
-  const funders: BoardFunder[] = [];
-  let funderCount = 0;
-  for (const row of ordered) {
-    funderCount = Math.max(funderCount, row.funderCount);
-    if (seen.has(row.userId)) continue;
-    seen.add(row.userId);
-    if (funders.length >= BOARD_FUNDER_AVATAR_LIMIT) continue;
-    funders.push({
-      userId: row.userId,
-      displayName: row.displayName.trim() || "someone",
-      avatarUrl: resolveFunderAvatarUrl({
-        avatarUrl: row.avatarUrl,
-        githubAvatarUrl: row.githubAvatarUrl,
-        githubLogin: row.githubLogin,
-        size: BOARD_FUNDER_AVATAR_SIZE * 2,
-      }),
-    });
-  }
-  if (funderCount < seen.size) funderCount = seen.size;
-  return { funders, funderCount };
-}
-
-export function groupBoardFunderRows(
-  rows: readonly RankedFunderRow[],
+export function collapseContributionFunders(
+  rows: readonly ContributionFunderRow[],
 ): Map<string, BoardFunderSummary> {
-  const byBounty = new Map<string, RankedFunderRow[]>();
+  const byBounty = new Map<string, Map<string, ContributionFunderRow>>();
   for (const row of rows) {
-    const list = byBounty.get(row.bountyId) ?? [];
-    list.push(row);
-    byBounty.set(row.bountyId, list);
+    const users = byBounty.get(row.bountyId) ?? new Map<string, ContributionFunderRow>();
+    const prev = users.get(row.userId);
+    if (!prev || row.createdAt.getTime() >= prev.createdAt.getTime()) {
+      users.set(row.userId, row);
+    }
+    byBounty.set(row.bountyId, users);
   }
+
   const out = new Map<string, BoardFunderSummary>();
-  for (const [bountyId, list] of byBounty) {
-    out.set(bountyId, summarizeRankedFunders(list));
+  for (const [bountyId, users] of byBounty) {
+    const ordered = [...users.values()].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || a.userId.localeCompare(b.userId),
+    );
+    out.set(bountyId, {
+      funderCount: ordered.length,
+      funders: ordered.slice(0, BOARD_FUNDER_AVATAR_LIMIT).map(toBoardFunder),
+    });
   }
   return out;
 }
 
 /**
+ * Backstop for the card. Drops a repeated user id even if the payload listed
+ * every contribution. `funderCount` stays the distinct total.
+ */
+export function dedupeShownFunders(
+  funders: readonly BoardFunder[],
+  funderCount: number,
+): { funders: BoardFunder[]; funderCount: number } {
+  const seen = new Set<string>();
+  const unique: BoardFunder[] = [];
+  for (const funder of funders) {
+    if (!funder.userId || seen.has(funder.userId)) continue;
+    seen.add(funder.userId);
+    unique.push(funder);
+  }
+  const dropped = funders.length - unique.length;
+  return {
+    funders: unique.slice(0, BOARD_FUNDER_AVATAR_LIMIT),
+    funderCount: Math.max(unique.length, funderCount - dropped),
+  };
+}
+
+function toBoardFunder(row: ContributionFunderRow): BoardFunder {
+  return {
+    userId: row.userId,
+    displayName: row.displayName.trim() || "someone",
+    avatarUrl: resolveFunderAvatarUrl({
+      avatarUrl: row.avatarUrl,
+      githubAvatarUrl: row.githubAvatarUrl,
+      githubLogin: row.githubLogin,
+      size: BOARD_FUNDER_AVATAR_SIZE * 2,
+    }),
+  };
+}
+
+/**
  * Distinct funders for board cards.
  *
- * The bounty detail Funders list is one row per contribution, oldest first
- * (`created_at` asc). It is not ordered by amount, so the card does not copy
- * that sequence. Each person appears once, ordered by their latest
- * contribution (most recent funder first). At most 5 faces are returned;
- * `funderCount` is the distinct total.
+ * Loads one row per contribution, then {@link collapseContributionFunders}
+ * keeps a single face per `funder_user_id`. Order is that user's latest
+ * contribution (most recent first). The detail Funders list stays one row
+ * per contribution, oldest first, and is not used here.
  *
  * A database that has not applied `0007_bounty_contributions` yields an empty
  * map so the board still renders.
@@ -144,56 +164,20 @@ export async function listBoardFunders(
 
   try {
     const result = await db.execute(sql`
-      with per_funder as (
-        select
-          bc.bounty_id,
-          bc.funder_user_id,
-          u.display_name,
-          u.avatar_url,
-          gl.github_login,
-          gl.github_avatar_url,
-          max(bc.created_at) as latest_at
-        from bounty_contributions bc
-        inner join users u on u.id = bc.funder_user_id
-        left join github_links gl on gl.user_id = u.id
-        where bc.bounty_id in (${idList})
-        group by
-          bc.bounty_id,
-          bc.funder_user_id,
-          u.display_name,
-          u.avatar_url,
-          gl.github_login,
-          gl.github_avatar_url
-      ),
-      ranked as (
-        select
-          per_funder.bounty_id,
-          per_funder.funder_user_id,
-          per_funder.display_name,
-          per_funder.avatar_url,
-          per_funder.github_login,
-          per_funder.github_avatar_url,
-          row_number() over (
-            partition by per_funder.bounty_id
-            order by per_funder.latest_at desc, per_funder.funder_user_id asc
-          ) as rn,
-          count(*) over (partition by per_funder.bounty_id) as funder_count
-        from per_funder
-      )
       select
-        bounty_id,
-        funder_user_id,
-        display_name,
-        avatar_url,
-        github_login,
-        github_avatar_url,
-        rn,
-        funder_count
-      from ranked
-      where rn <= ${BOARD_FUNDER_AVATAR_LIMIT}
-      order by bounty_id, rn
+        bc.bounty_id,
+        bc.funder_user_id,
+        u.display_name,
+        u.avatar_url,
+        gl.github_login,
+        gl.github_avatar_url,
+        bc.created_at
+      from bounty_contributions bc
+      inner join users u on u.id = bc.funder_user_id
+      left join github_links gl on gl.user_id = u.id
+      where bc.bounty_id in (${idList})
     `);
-    return groupBoardFunderRows(parseRankedFunderRows(result));
+    return collapseContributionFunders(parseContributionFunderRows(result));
   } catch (err) {
     if (!isUndefinedTableError(err)) throw err;
     console.error(
@@ -209,8 +193,8 @@ function joinWithAnd(parts: readonly string[]): string {
   return `${parts.slice(0, -1).join(", ")}, and ${parts[parts.length - 1]}`;
 }
 
-function parseRankedFunderRows(result: unknown): RankedFunderRow[] {
-  const parsed: RankedFunderRow[] = [];
+function parseContributionFunderRows(result: unknown): ContributionFunderRow[] {
+  const parsed: ContributionFunderRow[] = [];
   for (const raw of rowsOf(result)) {
     if (!raw || typeof raw !== "object") continue;
     const row = raw as Record<string, unknown>;
@@ -224,8 +208,7 @@ function parseRankedFunderRows(result: unknown): RankedFunderRow[] {
       avatarUrl: textField(row, "avatar_url"),
       githubAvatarUrl: textField(row, "github_avatar_url"),
       githubLogin: textField(row, "github_login"),
-      rn: asCount(row.rn),
-      funderCount: asCount(row.funder_count),
+      createdAt: asDate(row.created_at),
     });
   }
   return parsed;
@@ -247,12 +230,11 @@ function textField(row: Record<string, unknown>, key: string): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function asCount(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
-  if (typeof value === "bigint") return Number(value);
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return Math.trunc(parsed);
+function asDate(value: unknown): Date {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
   }
-  return 0;
+  return new Date(0);
 }
