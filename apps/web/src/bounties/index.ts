@@ -35,7 +35,7 @@ export {
 } from "./display";
 export { BountyError, isBountyError } from "./errors";
 export { expireClaimLocks, expireClaimLocksForBounty, drainExclusiveClaimLocks } from "./expire";
-export { fundBounty } from "./fund";
+export { fundBounty, topUpBounty } from "./fund";
 export { getBoardBounty, listBoardBounties, type BoardBounty } from "./list";
 export {
   pendingHunterLinkCaption,

@@ -142,6 +142,7 @@ export async function processLiveX402Exact(input: {
   network: string;
   paymentHeader?: string;
   env?: EnvMap;
+  description?: string;
 }): Promise<X402SellerResult> {
   const caip2 = x402SellerNetworkCaip2(input.network, input.env);
 
@@ -184,7 +185,9 @@ export async function processLiveX402Exact(input: {
       price,
       extra,
     },
-    description: `GitHub Bounties fund lock: exact face to gb-escrow (${input.bountyId})`,
+    description:
+      input.description ??
+      `GitHub Bounties fund lock: exact face to gb-escrow (${input.bountyId})`,
     mimeType: "application/json",
   };
   const routes = {

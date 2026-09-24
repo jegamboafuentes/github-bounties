@@ -6,6 +6,7 @@ import {
   clearWorkSignalAction,
   fundBountyAction,
   signalWorkingOnThisAction,
+  topUpBountyAction,
 } from "@/app/actions/bounties";
 import {
   bountyStatusLabel,
@@ -27,7 +28,7 @@ import { PoolRoster } from "@/components/pool-roster";
 import { WorkSignalsPanel } from "@/components/work-signals-panel";
 import { getRuntimeDb } from "@/db/runtime";
 import { githubLinks } from "@/db/schema";
-import { getEscrowSnapshot } from "@/escrow";
+import { getEscrowSnapshot, listBountyContributions } from "@/escrow";
 import { loadBountyIntelligence } from "@/intelligence/load";
 import { classifyIntelligenceFailure } from "@/intelligence/errors";
 import { INTELLIGENCE_ESTIMATE_LABEL } from "@/intelligence/prompt";
@@ -46,11 +47,12 @@ export default async function BountyDetailPage({
   const { id } = await params;
   const query = await searchParams;
   const db = getRuntimeDb();
-  const [user, bounty, escrow, roster] = await Promise.all([
+  const [user, bounty, escrow, roster, contributions] = await Promise.all([
     getCurrentPublicUser(),
     getBoardBounty(id, db).catch(() => null),
     getEscrowSnapshot(id, db).catch(() => null),
     getPoolRoster(id, db).catch(() => null),
+    listBountyContributions(id, db).catch(() => []),
   ]);
   const viewerGithubId = user
     ? (
@@ -98,6 +100,9 @@ export default async function BountyDetailPage({
   const isPoster = user?.id === bounty.posterUserId;
   const isEligibleHunter = Boolean(user && bounty.payout && user.id === bounty.payout.hunterUserId);
   const canFund = Boolean(isPoster && bounty.status === "pending_fund");
+  const canTopUp = Boolean(
+    user && bounty.status === "funded" && !bounty.payout && !roster?.frozen,
+  );
   const canSignal = Boolean(
     user &&
       (bounty.status === "pending_fund" ||
@@ -271,6 +276,22 @@ export default async function BountyDetailPage({
           </dl>
         ) : null}
 
+        {contributions.length > 0 ? (
+          <section className="rounded-xl border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Funders</h2>
+            <ul className="mt-3 divide-y divide-zinc-200 dark:divide-zinc-800">
+              {contributions.map((row) => (
+                <li key={row.id} className="flex items-baseline justify-between gap-3 py-2">
+                  <span>{row.displayName}</span>
+                  <span className="font-medium">
+                    {formatUsdc(row.amountUsdc)} {bounty.currency}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         <dl className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white text-sm dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
             <dt className="text-xs uppercase tracking-wide text-zinc-500">Poster</dt>
@@ -303,6 +324,21 @@ export default async function BountyDetailPage({
             />
           ) : null}
 
+          {canTopUp ? (
+            <FundLockPanel
+              mode="topup"
+              bountyId={bounty.id}
+              faceUsdc={bounty.amountUsdc}
+              currency={bounty.currency}
+              inboundRecorded={false}
+              resourceUrl={`/api/bounties/${bounty.id}/x402`}
+              escrowAddress={escrow?.escrowAddress ?? null}
+              walletConnectConfigured={walletConnectConfigured()}
+              fundAction={fundBountyAction}
+              topUpAction={topUpBountyAction}
+            />
+          ) : null}
+
           {canCancel ? (
             <form action={cancelBountyAction}>
               <input type="hidden" name="bountyId" value={bounty.id} />
@@ -324,7 +360,7 @@ export default async function BountyDetailPage({
               <Link href={signInHref} className="underline underline-offset-4">
                 Sign in with Google
               </Link>{" "}
-              to fund, signal Working on this, or claim a winner or pool payout.
+              to fund, add USDC to a funded bounty, signal Working on this, or claim a winner or pool payout.
             </p>
           ) : null}
         </div>

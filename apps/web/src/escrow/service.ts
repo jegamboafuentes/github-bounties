@@ -35,9 +35,15 @@ import {
   type PlannedLeg,
   type SettleScope,
 } from "./allocation";
-import { resolveRail, type CdpRail } from "./rail";
+import { resolveRail, type CdpRail, type RailWallets } from "./rail";
 import { notifyAfterWinnerPayout, notifyBountyFunded, type DomainEmailDeps } from "../email/events";
 import { walletConnectStatus } from "../wallet/env";
+import {
+  contributionRefundPlan,
+  markContributionRefunded,
+  recordLockContribution,
+  type ContributionRefundLeg,
+} from "./top-up";
 import { x402ExactStatus } from "./x402";
 import { reconcileBountyNotes, type EscrowReconRow } from "./reconcile";
 import {
@@ -205,6 +211,15 @@ export async function lockEscrowFunds(
         ...patch,
       });
     }
+
+    await recordLockContribution(tx as unknown as Database, {
+      bountyId,
+      funderUserId: actorUserId,
+      amountUsdc: bounty.amountUsdc,
+      fundTxHash: locked.txHash,
+      funderAddress,
+      now,
+    });
   });
 
   const escrow = await loadEscrow(opts.db, bountyId);
@@ -908,6 +923,21 @@ export async function refundEscrow(
   }
 
   const wallets = await rail.ensureWallets();
+  const splitPlan = await contributionRefundPlan(opts.db, bountyId, bounty.amountUsdc);
+  if (splitPlan.kind === "split") {
+    return refundSplitContributions({
+      bountyId,
+      faceUsdc: bounty.amountUsdc,
+      escrow,
+      reason: input.reason,
+      plan: splitPlan,
+      rail,
+      wallets,
+      now,
+      opts,
+    });
+  }
+
   const funderAddress =
     input.funderAddress?.trim() ||
     escrow.funderAddress?.trim() ||
@@ -976,6 +1006,89 @@ export async function refundEscrow(
     reconcile: latest
       ? reconcileBountyNotes(toRecon(bountyId, bounty.amountUsdc, latest))
       : [],
+  };
+}
+
+/**
+ * Full face still goes back and no fee is taken. Each funder receives the
+ * amount they added. The escrow refund hash is the last confirmed leg.
+ */
+async function refundSplitContributions(input: {
+  bountyId: string;
+  faceUsdc: string;
+  escrow: NonNullable<Awaited<ReturnType<typeof loadEscrow>>>;
+  reason: "cancel" | "expiry";
+  plan: { kind: "split"; legs: ContributionRefundLeg[] };
+  rail: CdpRail;
+  wallets: RailWallets;
+  now: Date;
+  opts: EscrowServiceOpts;
+}): Promise<RefundResult> {
+  const { bountyId, faceUsdc, escrow, reason, plan, rail, wallets, now, opts } = input;
+
+  assertEscrowTransition(escrow.status === "refunding" ? "refunding" : "funded", "refunding");
+  await opts.db
+    .update(bounties)
+    .set({ status: "refunding", updatedAt: now })
+    .where(eq(bounties.id, bountyId));
+  await opts.db
+    .update(escrows)
+    .set({ status: "refunding", updatedAt: now })
+    .where(eq(escrows.id, escrow.id));
+
+  let lastHash: string | null = null;
+  for (const leg of plan.legs) {
+    if (leg.refundTxHash) {
+      lastHash = leg.refundTxHash;
+      continue;
+    }
+    const sent = await rail.transferUsdc({
+      to: leg.toAddress,
+      amountAtomic: leg.amountAtomic,
+      idempotencyKey: leg.idempotencyKey,
+      purpose: "refund",
+      kind: "REFUND_OUT",
+    });
+    await markContributionRefunded(opts.db, leg.contributionId, sent.txHash, now);
+    lastHash = sent.txHash;
+  }
+  if (!lastHash) {
+    throw new EscrowError("rail_failed", "Multi-funder refund produced no transaction hash.");
+  }
+
+  const bountyTerminal = reason === "expiry" ? "expired" : "cancelled";
+  await opts.db.transaction(async (tx) => {
+    await tx
+      .update(escrows)
+      .set({
+        status: "refunded",
+        refundTxHash: lastHash,
+        escrowAddress: wallets.escrowAddress,
+        updatedAt: now,
+      })
+      .where(eq(escrows.id, escrow.id));
+    await tx
+      .update(bounties)
+      .set({ status: bountyTerminal, updatedAt: now })
+      .where(eq(bounties.id, bountyId));
+    await tx
+      .update(claimLocks)
+      .set({ status: "released", updatedAt: now })
+      .where(and(eq(claimLocks.bountyId, bountyId), eq(claimLocks.status, "active")));
+    await voidPendingAllocationLegs(tx as unknown as Database, bountyId, now);
+  });
+
+  const latest = await loadEscrow(opts.db, bountyId);
+  return {
+    bountyId,
+    escrowStatus: latest?.status ?? "refunded",
+    bountyStatus: bountyTerminal,
+    refundTxHash: lastHash,
+    rail: rail.mode,
+    network: rail.network,
+    missingEnv: rail.missingEnv,
+    hostedCheckout: hostedCheckoutStatus(),
+    reconcile: latest ? reconcileBountyNotes(toRecon(bountyId, faceUsdc, latest)) : [],
   };
 }
 

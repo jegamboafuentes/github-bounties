@@ -169,6 +169,10 @@ describe("x402 browser pay payload", () => {
     assert.equal(parsed?.accepts[0]?.amount, "10000000");
     assert.equal(parsed?.resource.url, challenge.resource.url);
     assert.equal(sameOriginX402Path(challenge.resource.url), "/api/bounties/b1/x402");
+    assert.equal(
+      sameOriginX402Path("https://dev.githubbounties.xyz/api/bounties/b1/x402?topUpUsdc=10"),
+      "/api/bounties/b1/x402?topUpUsdc=10",
+    );
 
     const signer: WalletTypedDataSigner = {
       address: "0x1111111111111111111111111111111111111111",

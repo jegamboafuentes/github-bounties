@@ -157,7 +157,7 @@ Legs (each with its own idempotency key; winner/fee reuse the V1-5 keys so in-fl
 
 Recon: attributed escrow = `F − confirmed winner − confirmed pool − confirmed fee − refund`. Terminal Settled / Refunded = 0.
 
-Inbound fund / x402 Lock is unchanged. Hosted checkout stays disabled. Mock rail still lists missing `CDP_*`. Live DEV is Base Sepolia. Mainnet refused without `CDP_ALLOW_MAINNET=1`.
+Inbound fund / x402 Lock is unchanged for the first funder. A later funder can add USDC on that same exact rail (`?topUpUsdc=`) while the bounty is still `funded` and the winner set is not frozen. Face on the bounty and escrow becomes the sum. Fee stays `floor(newFace × 200 / 10_000)` and the pool stays 15% of post-fee, both at Claim. Cancel of N funders returns each contribution (still full face, no fee). One funder keeps the single `REFUND_OUT`. Hosted checkout stays disabled. Mock rail still lists missing `CDP_*`. Live DEV is Base Sepolia. Mainnet refused without `CDP_ALLOW_MAINNET=1`.
 
 Winner Claim (`scope=winner_and_fee`, default) transfers **FEE_OUT + WINNER_PAYOUT only**. Each pool member Claims `scope=pool_member`. `scope=all` remains the V2-3 ops retry. UI breakdown (roster + face/fee/winner/pool/Paid vs Claim) is V2-4 + pool self-claim. Exclusive claim-lock is retired (V2-4); residual locks drain on read. Hosted checkout stays disabled. DEV remount after merge; no PROD remount required.
 
@@ -175,6 +175,7 @@ Winner Claim (`scope=winner_and_fee`, default) transfers **FEE_OUT + WINNER_PAYO
 | Poster **Lock in escrow** on `/bounties/[id]` | Google | pending → funded + escrow lock (uses recorded x402 inbound if present) |
 | `POST /api/bounties/:id/fund` | Google | same Lock; **4xx** + `fail_code`/`fail_reason` on rail/client failure |
 | `GET\|POST /api/bounties/:id/x402` | public (payment is the auth) | x402 `exact` seller; unpaid **402**; settle records inbound |
+| `GET\|POST /api/bounties/:id/x402?topUpUsdc=` | Google session | same exact seller for an **added** amount on an already-funded bounty; settle increases face |
 | `GET /api/bounties/:id` | public | bounty + escrow snapshot + pool roster (includes last Lock fail + x402 resource) |
 | Poster **Cancel and refund** | Google | full-face refund or void if never funded |
 | `POST /api/bounties/:id/settle` | Google | minimal settle (poster or hunter) |
