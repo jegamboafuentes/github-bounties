@@ -1,6 +1,8 @@
 -- Read-only audit for the 2026-09-24 escrow hotfix.
 -- Every runnable statement is a SELECT. No UPDATE, DELETE, or INSERT.
--- The correction at the bottom is commented out and is not part of migrate 0009.
+-- There is no correction SQL in this file. funder_address and x402-topup
+-- marker fixes come from the on-chain sender of the recorded fund tx.
+-- See docs/security/README.md (read-only tool; owner approval before any UPDATE).
 -- Run on PROD after QA smoke on DEV, and before migrate 0009.
 -- An empty result is the healthy case for every query.
 
@@ -39,9 +41,11 @@ WHERE e.fund_tx_hash IS NOT NULL
 
 -- 3. Contribution hashes that are not the x402 lock hash, not an x402-topup line
 --    on the escrow payment id, and not a mock/dry-run rail hash.
---    A real x402 top-up from before this deploy has no marker. After you confirm
---    that hash on Base, append a line `x402-topup:<hash>` to escrows.x402_payment_id
---    so Claim can count it. Do not mark a hash you cannot find on-chain.
+--    A real x402 top-up from before this deploy has no marker. The stored shape
+--    is the existing x402_payment_id plus a line `x402-topup:<hash>`
+--    (withVerifiedTopUpHash). Do not append that line by hand. The read-only
+--    tool proposes it only when that contribution tx has exactly one
+--    configured-USDC Transfer to the escrow wallet for the recorded amount.
 SELECT
   c.bounty_id,
   c.id AS contribution_id,
@@ -172,6 +176,10 @@ WHERE c.fund_tx_hash IS NULL
 --     PROD example: bounty bbcc9ee5. Lock used to fall through to the escrow
 --     address when the poster had no saved wallet, overwriting the x402 payer.
 --     Report these rows. Do not edit them from this script.
+--     Do not set funder_address from the contribution funder or the poster's
+--     saved wallet. A wallet saved after Lock is not the fund tx sender.
+--     The sender is the on-chain Transfer `from` of e.fund_tx_hash, from the
+--     read-only tool in docs/security/README.md. Never a hand-typed address.
 SELECT
   e.bounty_id,
   b.status AS bounty_status,
@@ -192,41 +200,16 @@ WHERE e.funder_address IS NOT NULL
   AND e.escrow_address IS NOT NULL
   AND lower(btrim(e.funder_address)) = lower(btrim(e.escrow_address));
 
--- CORRECTION — OWNER APPROVAL REQUIRED. DO NOT RUN.
--- Not part of migrate 0009. Every line below is commented out.
--- Sets funder_address from a stored payer that is not the escrow wallet,
--- and only when that payer still exists on the contribution row or the
--- poster's saved wallet. If Lock overwrote both (PROD bounty bbcc9ee5,
--- real sender 0x14f1…a15C), this matches zero rows. Do not invent an address.
+-- Funder-address and top-up-marker corrections are not in this file.
+-- funder_address must be the on-chain sender of the recorded fund tx:
+-- the Transfer `from` on the env-configured USDC contract, paid to the
+-- escrow wallet, for the recorded amount. Never the poster's saved wallet,
+-- never a contribution-funder fallback, and never a hand-typed address.
+-- The top-up marker is a line `x402-topup:<contribution fund tx hash>`
+-- appended to the existing x402_payment_id, and only after that
+-- contribution tx matches on-chain the same way.
 --
--- UPDATE escrows e
--- SET funder_address = src.payer,
---     updated_at = now()
--- FROM (
---   SELECT e2.id,
---          COALESCE(
---            CASE
---              WHEN c.funder_address IS NOT NULL
---               AND lower(btrim(c.funder_address)) <> lower(btrim(e2.escrow_address))
---              THEN btrim(c.funder_address)
---            END,
---            CASE
---              WHEN u.wallet_address IS NOT NULL
---               AND lower(btrim(u.wallet_address)) <> lower(btrim(e2.escrow_address))
---              THEN btrim(u.wallet_address)
---            END
---          ) AS payer
---   FROM escrows e2
---   JOIN bounties b ON b.id = e2.bounty_id
---   LEFT JOIN users u ON u.id = b.poster_user_id
---   LEFT JOIN bounty_contributions c
---     ON c.bounty_id = e2.bounty_id
---    AND c.fund_tx_hash = e2.fund_tx_hash
---   WHERE e2.funder_address IS NOT NULL
---     AND e2.escrow_address IS NOT NULL
---     AND lower(btrim(e2.funder_address)) = lower(btrim(e2.escrow_address))
---     AND e2.x402_payment_id IS NOT NULL
---     AND btrim(e2.x402_payment_id) <> ''
--- ) src
--- WHERE e.id = src.id
---   AND src.payer IS NOT NULL;
+-- Ops (read-only; does not write):
+--   cd apps/web && npm run security:derive-corrections
+-- Send stdout to the owner. Nobody runs UPDATEs on PROD without the owner's OK.
+-- See docs/security/README.md.
