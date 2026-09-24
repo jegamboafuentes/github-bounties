@@ -5,6 +5,7 @@ import {
 } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
 import { bountyStatusValues } from "../../db/schema";
+import { DEV_SITE_HOST, PROD_SITE_HOST, originFromSiteUrl } from "../../lib/site-env";
 
 extendZodWithOpenApi(z);
 
@@ -147,7 +148,7 @@ export const publicBountySchema = z
     totalFundedUsdc: z
       .string()
       .describe(
-        "Sum of confirmed bounty contributions (bounty_contributions rows with a recorded fund transaction), as 6-decimal USDC. 0.000000 when none are confirmed. This is not the face in amountUsdc. A pending_fund bounty can show a face while this is 0.000000. Cancelled, expired, refunding, and refunded bounties still return this confirmed sum; status says that sum was voided or returned and is not still locked.",
+        "Verified USDC inflow as 6-decimal USDC: the original escrow fund when escrows.fund_tx_hash is recorded, plus confirmed bounty_contributions, counting each fund transaction hash once. A Lock writes that same hash on a contribution, and a top-up stores the new face on the escrow, so those amounts are not added twice. 0.000000 when there is no verified inflow. This is not the face in amountUsdc. A pending_fund bounty can show a face while this is 0.000000. Cancelled, expired, refunding, and refunded bounties still return this confirmed amount; status says that sum was voided or returned and is not still locked.",
       ),
     createdAt: isoDateTime,
     fundedAt: isoDateTime.nullable(),
@@ -232,7 +233,7 @@ export const bountyDetailResponseSchema = z
         amountUsdc: z
           .string()
           .describe(
-            "Escrow face record. Not the confirmed contribution sum. Use bounty.totalFundedUsdc for money that has a recorded fund transaction.",
+            "Escrow face record. Top-ups rewrite this to the new face. Use bounty.totalFundedUsdc for verified inflow.",
           ),
         rail: z.string(),
         inboundRecorded: z.boolean(),
@@ -337,7 +338,7 @@ publicApiRegistry.registerPath({
   path: "/api/v1/bounties",
   summary: "List and filter the bounty board",
   description:
-    "Public board rows with keyset pagination. Intelligence filters use the cache only and do not call Gemini. amountUsdc is the face. totalFundedUsdc is the confirmed contribution sum (0.000000 when none). The list payout is the empty-pool schedule on the face; the live roster split is on the detail route. funders.avatars are newest contribution first.",
+    "Public board rows with keyset pagination. Intelligence filters use the cache only and do not call Gemini. amountUsdc is the face. totalFundedUsdc is the verified escrow fund plus confirmed contributions, each fund hash once (0.000000 when there is no verified inflow). The list payout is the empty-pool schedule on the face; the live roster split is on the detail route. funders.avatars are newest contribution first.",
   request: { query: listBountiesInputSchema },
   responses: {
     200: {
@@ -356,7 +357,7 @@ publicApiRegistry.registerPath({
   path: "/api/v1/bounties/{id}",
   summary: "Read one bounty",
   description:
-    "Issue body snapshot, status, payout breakdown, pool roster, and read-only lock state. Wallet addresses are omitted. The issue body is the stored snapshot and is not refetched. amountUsdc and payout.faceUsdc are the face. totalFundedUsdc is the confirmed contribution sum. status cancelled, expired, refunding, or refunded means that sum is not still locked.",
+    "Issue body snapshot, status, payout breakdown, pool roster, and read-only lock state. Wallet addresses are omitted. The issue body is the stored snapshot and is not refetched. amountUsdc and payout.faceUsdc are the face. totalFundedUsdc is the verified escrow fund plus confirmed contributions, each fund hash once. status cancelled, expired, refunding, or refunded means that sum is not still locked.",
   request: { params: bountyIdParamsSchema },
   responses: {
     200: {
@@ -442,7 +443,7 @@ publicApiRegistry.registerPath({
 
 export const PUBLIC_API_DESCRIPTION = [
   "GitHub Bounties pays USDC on a public GitHub issue when a pull request that closes it is merged. Hunters work in parallel. This API is the read-only V4-1 surface: the board, one bounty, its funders, cached issue intelligence, and platform stats. It does not post, fund, claim, or move money, and it does not require an API key. The same data is already public on the website.",
-  "amountUsdc and payout.faceUsdc are the face (the posted amount, including top-ups). totalFundedUsdc is the sum of confirmed contributions, bounty_contributions rows with a recorded fund transaction, and is 0.000000 when there are none. It is not the face. status cancelled, expired, refunding, or refunded means that confirmed sum is not still locked.",
+  "amountUsdc and payout.faceUsdc are the face (the posted amount, including top-ups). totalFundedUsdc is the verified original escrow fund (counted when escrows.fund_tx_hash is recorded) plus confirmed bounty_contributions, counting each fund transaction hash once. A Lock stores that hash on a contribution, and a top-up rewrites the escrow amount to the new face, so neither is added twice. It is 0.000000 when there is no verified inflow. It is not the face. status cancelled, expired, refunding, or refunded means that confirmed amount is not still locked.",
   "POST, PUT, PATCH, and DELETE on /api/v1 return 405 with Allow: GET, OPTIONS (RFC 9110) and the JSON error envelope (code method_not_allowed).",
   "Funder avatars and the funders route are newest contribution first, matching the board avatar stack. Avatars are distinct funders, capped at five. The funders route is one row per contribution.",
   "Rate limit: about 60 requests per minute per client IP, counted in memory on each Cloud Run instance. It is not a global limit across instances. The client IP is the last address in X-Forwarded-For (the hop Cloud Run appends). A limited response is HTTP 429 with error code rate_limited, Retry-After, and RateLimit-Limit, RateLimit-Remaining, and RateLimit-Reset headers.",
@@ -450,22 +451,81 @@ export const PUBLIC_API_DESCRIPTION = [
 
 let cachedDocument: ReturnType<OpenApiGeneratorV31["generateDocument"]> | undefined;
 
-export function buildOpenApiDocument() {
-  if (cachedDocument) return cachedDocument;
-  const generator = new OpenApiGeneratorV31(publicApiRegistry.definitions);
-  cachedDocument = generator.generateDocument({
-    openapi: "3.1.0",
-    info: {
-      title: "GitHub Bounties API",
-      version: "4.1.0",
-      description: PUBLIC_API_DESCRIPTION,
-    },
-    servers: [
-      { url: "https://dev.githubbounties.xyz", description: "DEV (Base Sepolia)" },
-      { url: "https://githubbounties.xyz", description: "PROD (Base mainnet)" },
-    ],
-  });
-  return cachedDocument;
+const OPENAPI_DEV_SERVER = {
+  url: "https://dev.githubbounties.xyz",
+  description: "DEV (Base Sepolia)",
+};
+const OPENAPI_PROD_SERVER = {
+  url: "https://githubbounties.xyz",
+  description: "PROD (Base mainnet)",
+};
+
+export type OpenApiServerContext = {
+  /** `X-Forwarded-Host` or `Host`. Untrusted hosts are ignored. */
+  host?: string | null;
+  /**
+   * Used when `host` is missing or not a public site host.
+   * `NEXT_PUBLIC_APP_URL`, then `APP_BASE_URL`, then `PUBLIC_BASE_URL`, then `AUTH_URL`.
+   */
+  env?: Record<string, string | undefined>;
+};
+
+function firstHeaderValue(value: string | null | undefined): string {
+  return value?.split(",")[0]?.trim() ?? "";
+}
+
+function publicSiteKind(value: string | null | undefined): "dev" | "prod" | null {
+  const origin = originFromSiteUrl(firstHeaderValue(value));
+  if (!origin) return null;
+  let host = "";
+  try {
+    host = new URL(origin).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  if (host === DEV_SITE_HOST || host.endsWith(`.${DEV_SITE_HOST}`)) return "dev";
+  if (host === PROD_SITE_HOST || host === `www.${PROD_SITE_HOST}`) return "prod";
+  return null;
+}
+
+/**
+ * Current public origin first, the other origin second.
+ * Swagger Try it out uses servers[0], so PROD must not list DEV first.
+ * A localhost or raw Cloud Run host is not listed; the app origin env is used instead.
+ * When neither names DEV or PROD, DEV stays first so the document still lists both public origins.
+ */
+export function orderOpenApiServers(input: OpenApiServerContext = {}): Array<{
+  url: string;
+  description: string;
+}> {
+  const env = input.env ?? process.env;
+  const kind =
+    publicSiteKind(input.host) ??
+    publicSiteKind(env.NEXT_PUBLIC_APP_URL) ??
+    publicSiteKind(env.APP_BASE_URL) ??
+    publicSiteKind(env.PUBLIC_BASE_URL) ??
+    publicSiteKind(env.AUTH_URL);
+  if (kind === "prod") return [OPENAPI_PROD_SERVER, OPENAPI_DEV_SERVER];
+  return [OPENAPI_DEV_SERVER, OPENAPI_PROD_SERVER];
+}
+
+export function buildOpenApiDocument(input: OpenApiServerContext = {}) {
+  if (!cachedDocument) {
+    const generator = new OpenApiGeneratorV31(publicApiRegistry.definitions);
+    cachedDocument = generator.generateDocument({
+      openapi: "3.1.0",
+      info: {
+        title: "GitHub Bounties API",
+        version: "4.1.0",
+        description: PUBLIC_API_DESCRIPTION,
+      },
+      servers: [OPENAPI_DEV_SERVER, OPENAPI_PROD_SERVER],
+    });
+  }
+  return {
+    ...cachedDocument,
+    servers: orderOpenApiServers(input),
+  };
 }
 
 export type ListBountiesInput = z.infer<typeof listBountiesInputSchema>;

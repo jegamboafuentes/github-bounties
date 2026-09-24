@@ -60,3 +60,52 @@ npm run security:derive-corrections
 
 There is no address argument. Do not pass a sender, a poster wallet, or the
 escrow wallet on the command line.
+
+## Migrate 0010 — case-insensitive fund hashes
+
+Migration `0010_case_insensitive_fund_tx_hash` replaces the 0009 unique
+indexes on `bounty_contributions.fund_tx_hash` and `escrows.fund_tx_hash`
+with unique indexes on `lower(fund_tx_hash)`. 0009 did not index any other
+hash column. The migration does not `UPDATE` existing rows. If two rows
+collide under `lower()`, it raises and leaves the 0009 indexes in place.
+
+DEV needs `migrate 0010` for the new indexes to exist. Run this pre-check
+on DEV and on PROD before migrating. Do not run it as a substitute for the
+owner's OK on PROD, and do not apply 0010 on PROD from this change by itself.
+A row means stop: those hashes collide when case is ignored.
+
+```sql
+SELECT source, count(*) AS duplicate_groups
+FROM (
+  SELECT 'bounty_contributions' AS source
+  FROM bounty_contributions
+  WHERE fund_tx_hash IS NOT NULL
+  GROUP BY lower(fund_tx_hash)
+  HAVING count(*) > 1
+  UNION ALL
+  SELECT 'escrows' AS source
+  FROM escrows
+  WHERE fund_tx_hash IS NOT NULL
+  GROUP BY lower(fund_tx_hash)
+  HAVING count(*) > 1
+) d
+GROUP BY source;
+```
+
+An empty result is the healthy case (zero case-insensitive duplicate groups).
+The migration file header has the matching detail query.
+
+## Legacy escrow-wallet funder (PROD bbcc9ee5)
+
+`contributionRefundPlan` does not substitute another address when a
+contribution's `funder_address` is the escrow wallet. A multi-funder refund
+plans that leg to the stored funder address. `readStoredTransferDestination`
+refuses to treat the escrow wallet (x402 payTo) as a refund destination, so
+the transfer guard fails safe with `destination_mismatch` and sends nothing.
+
+That is the intended fail-safe for legacy rows whose funder is the escrow
+wallet. PROD bounty `bbcc9ee5` is the known case. The fix is the
+on-chain-derived correction from PR #72 (`npm run security:derive-corrections`),
+which sets `funder_address` to the USDC Transfer `from` of the recorded fund
+transaction. Do not add a code fallback in `contributionRefundPlan` to the
+poster's saved wallet or to any other address.

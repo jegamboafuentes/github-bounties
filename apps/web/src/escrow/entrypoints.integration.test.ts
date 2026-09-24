@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mock, describe, it } from "node:test";
 import { eq } from "drizzle-orm";
 import { createBountyFromIssueUrl } from "../bounties/create";
-import { fundBounty } from "../bounties/fund";
+import { fundBounty, topUpBounty } from "../bounties/fund";
 import { createDb, type Database } from "../db/client";
 import { loadDotenvFiles } from "../db/load-dotenv";
 import { allocationLedger, bounties, claims, escrows, repos, users } from "../db/schema";
@@ -254,6 +254,82 @@ describe("settle, refund, fund, and top-up entrypoints", () => {
       assert.ok(logged.some((row) => row.action === "fee_transfer" && row.result === "ok"));
     } finally {
       console.log = original;
+      currentUser = null;
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("returns 403 not_settler when a funder-only user settles an already settled bounty", async () => {
+    const { db, sql, posterId, hunterId, attackerId, fullName, suffix } = await fixture();
+    const rail = createMockRail(probeCdpEnv({}));
+    try {
+      const created = await createBountyFromIssueUrl(
+        {
+          posterUserId: posterId,
+          issueUrl: `https://github.com/${fullName}/issues/8`,
+          amountUsdc: "10",
+        },
+        { db, fetchIssueSnapshot: async () => null },
+      );
+      await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await topUpBounty(
+        created.id,
+        attackerId,
+        {
+          amountUsdc: "1",
+          fundTxHash: `0xroutefunder${suffix}000000000000000000000000000000000000000001`,
+        },
+        db,
+        new Date(),
+        { rail },
+      );
+      await db.insert(claims).values({
+        bountyId: created.id,
+        hunterUserId: hunterId,
+        status: "eligible",
+        prNumber: 18,
+        payoutAddress: HUNTER,
+      });
+      currentUser = { id: posterId };
+      const { POST } = await import("../app/api/bounties/[id]/settle/route");
+      const first = await POST(
+        new Request(`https://dev.githubbounties.xyz/api/bounties/${created.id}/settle`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+        }),
+        { params: Promise.resolve({ id: created.id }) },
+      );
+      assert.equal(first.status, 200);
+      const settled = (await first.json()) as { ok?: boolean; payoutTxHash?: string };
+      assert.equal(settled.ok, true);
+      assert.ok(settled.payoutTxHash);
+
+      currentUser = { id: attackerId };
+      const denied = await POST(
+        new Request(`https://dev.githubbounties.xyz/api/bounties/${created.id}/settle`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+        }),
+        { params: Promise.resolve({ id: created.id }) },
+      );
+      const deniedBody = (await denied.json()) as { ok?: boolean; error?: string };
+      assert.equal(denied.status, 403);
+      assert.equal(deniedBody.ok, false);
+      assert.equal(deniedBody.error, "not_settler");
+
+      currentUser = { id: posterId };
+      const retry = await POST(
+        new Request(`https://dev.githubbounties.xyz/api/bounties/${created.id}/settle`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+        }),
+        { params: Promise.resolve({ id: created.id }) },
+      );
+      const retryBody = (await retry.json()) as { ok?: boolean; payoutTxHash?: string };
+      assert.equal(retry.status, 200);
+      assert.equal(retryBody.ok, true);
+      assert.equal(retryBody.payoutTxHash, settled.payoutTxHash);
+    } finally {
       currentUser = null;
       await sql.end({ timeout: 5 });
     }

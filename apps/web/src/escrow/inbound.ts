@@ -59,7 +59,7 @@ export async function recordExactInbound(
     now?: Date;
   },
 ): Promise<{ alreadyRecorded: boolean; txHash: string }> {
-  const txHash = input.txHash.trim();
+  const txHash = input.txHash.trim().toLowerCase();
   const paymentId = input.x402PaymentId.trim();
   if (!txHash) {
     throw new EscrowError(
@@ -73,7 +73,7 @@ export async function recordExactInbound(
     throw new EscrowError("bounty_not_found", "Escrow row missing — cannot record inbound.");
   }
   if (existing.status !== "pending") {
-    if (existing.fundTxHash?.trim() === txHash) {
+    if (existing.fundTxHash?.trim().toLowerCase() === txHash) {
       return { alreadyRecorded: true, txHash };
     }
     throw new EscrowError(
@@ -81,7 +81,7 @@ export async function recordExactInbound(
       `Escrow is ${existing.status}, not pending — will not overwrite inbound.`,
     );
   }
-  const previous = existing.fundTxHash?.trim();
+  const previous = existing.fundTxHash?.trim().toLowerCase();
   if (previous && previous !== txHash) {
     throw new EscrowError(
       "x402_settle_failed",

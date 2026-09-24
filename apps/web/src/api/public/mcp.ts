@@ -46,7 +46,7 @@ export function createBountiesMcpServer(api: PublicReadApi): McpServer {
     {
       title: "List bounties",
       description:
-        "List public GitHub Bounties. Filter by repo (case-insensitive substring of owner/name), status, complexity S/M/L, language (substring of the cached stack), and has_intel. Sort by newest (default) or amount (face USDC, descending). amountUsdc is the face. totalFundedUsdc is the sum of confirmed contributions with a recorded fund transaction, or 0.000000 when none are confirmed. It is not the face. status cancelled, expired, refunding, or refunded means that confirmed sum is not still locked. funders.avatars are distinct faces, newest contribution first. Pass nextCursor back as cursor to read the next page. limit defaults to 20 and cannot exceed 100. Read-only. Does not call Gemini. Cache badges only.",
+        "List public GitHub Bounties. Filter by repo (case-insensitive substring of owner/name), status, complexity S/M/L, language (substring of the cached stack), and has_intel. Sort by newest (default) or amount (face USDC, descending). amountUsdc is the face. totalFundedUsdc is the verified escrow fund plus confirmed contributions, each fund hash once, or 0.000000 when there is no verified inflow. It is not the face. status cancelled, expired, refunding, or refunded means that confirmed amount is not still locked. funders.avatars are distinct faces, newest contribution first. Pass nextCursor back as cursor to read the next page. limit defaults to 20 and cannot exceed 100. Read-only. Does not call Gemini. Cache badges only.",
       inputSchema: listBountiesInputSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
@@ -64,7 +64,7 @@ export function createBountiesMcpServer(api: PublicReadApi): McpServer {
     {
       title: "Get bounty",
       description:
-        "Read one public bounty by id. Includes the stored issue body (no GitHub refetch), status, fee and pool payout breakdown, pool roster, escrow status, and the retired claim-lock state (always read-only). amountUsdc and payout.faceUsdc are the face. totalFundedUsdc is the confirmed contribution sum, or 0.000000 when none are confirmed. status cancelled, expired, refunding, or refunded means that sum is not still locked. funders.avatars are newest contribution first. Omits wallet addresses, emails, and Google ids.",
+        "Read one public bounty by id. Includes the stored issue body (no GitHub refetch), status, fee and pool payout breakdown, pool roster, escrow status, and the retired claim-lock state (always read-only). amountUsdc and payout.faceUsdc are the face. totalFundedUsdc is the verified escrow fund plus confirmed contributions, each fund hash once, or 0.000000 when there is no verified inflow. status cancelled, expired, refunding, or refunded means that amount is not still locked. funders.avatars are newest contribution first. Omits wallet addresses, emails, and Google ids.",
       inputSchema: bountyIdParamsSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },

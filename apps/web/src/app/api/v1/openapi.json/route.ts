@@ -6,7 +6,12 @@ import { buildOpenApiDocument } from "@/api/public/schemas";
 export const dynamic = "force-dynamic";
 
 export function GET(request: Request) {
-  return handlePublicRead(request, async () => Response.json(buildOpenApiDocument()), { cors: true });
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  return handlePublicRead(
+    request,
+    async () => Response.json(buildOpenApiDocument({ host })),
+    { cors: true },
+  );
 }
 
 export function OPTIONS() {

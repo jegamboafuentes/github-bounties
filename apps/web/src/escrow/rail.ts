@@ -8,6 +8,11 @@ import {
 } from "../lib/constants";
 import { EscrowError } from "./errors";
 import {
+  assertFacilitatorSettlementMatches,
+  normalizeFundTxHash,
+  type FacilitatorSettlementCheck,
+} from "./fund-hash";
+import {
   cdpMissingEnvMessage,
   isDryRunLive,
   isMainnetAllowed,
@@ -59,6 +64,12 @@ export type CdpRail = {
     fundTxHash?: string | null;
     /** Set only after the service matched this hash to an x402 settle for the bounty. */
     verifiedInbound?: boolean;
+    /**
+     * Facilitator settle response when this lock is the settle itself.
+     * Checked before the hash is accepted. Omitted on a later Lock that
+     * reuses a hash already checked at settle time.
+     */
+    facilitatorSettlement?: FacilitatorSettlementCheck;
   }): Promise<RailTransferResult & RailWallets>;
   transferUsdc(input: RailTransferInput): Promise<RailTransferResult>;
 };
@@ -95,9 +106,13 @@ export function createMockRail(
       return wallets;
     },
     async lockFace(input) {
+      if (input.facilitatorSettlement) {
+        assertFacilitatorSettlementMatches(input.facilitatorSettlement);
+      }
+      const pasted = normalizeFundTxHash(input.fundTxHash);
       return {
         ...wallets,
-        txHash: input.fundTxHash?.trim() || mockTxHash("fund", input.idempotencyKey),
+        txHash: pasted || mockTxHash("fund", input.idempotencyKey),
       };
     },
     async transferUsdc(input) {
@@ -211,8 +226,11 @@ export function createCdpRail(env: EnvMap = process.env, probe = probeCdpEnv(env
       return { escrowAddress: wallets.escrowAddress, feeAddress: wallets.feeAddress };
     },
     async lockFace(input) {
+      if (input.facilitatorSettlement) {
+        assertFacilitatorSettlementMatches(input.facilitatorSettlement);
+      }
       const wallets = await loadWallets();
-      const pasted = input.fundTxHash?.trim() || "";
+      const pasted = normalizeFundTxHash(input.fundTxHash);
       if (pasted) {
         if (!input.verifiedInbound) {
           throw new EscrowError(
@@ -220,6 +238,11 @@ export function createCdpRail(env: EnvMap = process.env, probe = probeCdpEnv(env
             "Live rail will not treat a pasted fund tx hash as inbound. Pay via x402 exact, then Lock the recorded hash.",
           );
         }
+        // The facilitator response (network, payTo, asset, amount) is checked
+        // when settle returns, before this hash is stored. A later Lock only
+        // has the stored hash. This path does not fetch the transaction
+        // receipt: no RPC client is on the lock hot path, and CDP transfer()
+        // is an outbound send, not a fund receipt.
         return { ...wallets, txHash: pasted };
       }
       if (isDryRunLive(env) && !probe.unsafeNetwork) {

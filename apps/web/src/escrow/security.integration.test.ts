@@ -6,9 +6,10 @@ import { createBountyFromIssueUrl } from "../bounties/create";
 import { fundBounty, topUpBounty } from "../bounties/fund";
 import { createDb } from "../db/client";
 import { loadDotenvFiles } from "../db/load-dotenv";
-import { bounties, claims, escrows, repos, users } from "../db/schema";
+import { bounties, bountyContributions, claims, escrows, repos, users } from "../db/schema";
 import { EscrowError } from "./errors";
 import { probeCdpEnv } from "./env";
+import { assertFundTxHashAvailable } from "./fund-hash";
 import { recordExactInbound } from "./inbound";
 import { createMockRail, MOCK_ESCROW_ADDRESS } from "./rail";
 import { refundEscrow, settleEscrow } from "./service";
@@ -297,6 +298,92 @@ describe("escrow security hotfix", () => {
       assert.equal(escrow?.payoutTxHash, null);
     } finally {
       console.error = originalError;
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("rejects a funder-only settle on an already settled bounty and keeps the idempotent return for the settler", async () => {
+    const { db, sql, posterId, hunterId, attackerId, fullName, rail, suffix } = await fixture();
+    try {
+      const created = await postBounty(db, posterId, fullName, 9, "10");
+      await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await topUpBounty(
+        created.id,
+        attackerId,
+        {
+          amountUsdc: "2",
+          fundTxHash: `0xfunderonly${suffix}00000000000000000000000000000000000000000001`,
+        },
+        db,
+        new Date(),
+        { rail },
+      );
+      await db.insert(claims).values({
+        bountyId: created.id,
+        hunterUserId: hunterId,
+        status: "eligible",
+        prNumber: 9,
+        payoutAddress: HUNTER_ADDRESS,
+      });
+      const settled = await settleEscrow(created.id, { actorUserId: posterId }, { db, rail });
+      assert.equal(settled.bountyStatus, "settled");
+      assert.ok(settled.payoutTxHash);
+
+      await assert.rejects(
+        () => settleEscrow(created.id, { actorUserId: attackerId }, { db, rail }),
+        (err: unknown) => err instanceof EscrowError && err.code === "not_settler",
+      );
+      const [escrow] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
+      assert.equal(escrow?.status, "settled");
+      assert.equal(escrow?.payoutTxHash, settled.payoutTxHash);
+
+      const again = await settleEscrow(created.id, { actorUserId: posterId }, { db, rail });
+      assert.equal(again.bountyStatus, "settled");
+      assert.equal(again.payoutTxHash, settled.payoutTxHash);
+
+      const winner = await settleEscrow(created.id, { actorUserId: hunterId }, { db, rail });
+      assert.equal(winner.payoutTxHash, settled.payoutTxHash);
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("stores fund hashes lowercase and rejects a different-case reuse, including a legacy mixed-case row", async () => {
+    const { db, sql, posterId, fullName, rail, suffix } = await fixture();
+    const mixed = `0xAbC${suffix}000000000000000000000000000000000000000000000000`;
+    try {
+      const first = await postBounty(db, posterId, fullName, 10, "8");
+      const funded = await fundBounty(first.id, posterId, db, new Date(), { rail, fundTxHash: mixed });
+      assert.equal(funded.fundTxHash, mixed.toLowerCase());
+      const [stored] = await db.select().from(escrows).where(eq(escrows.bountyId, first.id));
+      assert.equal(stored?.fundTxHash, mixed.toLowerCase());
+
+      const second = await postBounty(db, posterId, fullName, 11, "8");
+      await assert.rejects(
+        () => fundBounty(second.id, posterId, db, new Date(), { rail, fundTxHash: mixed.toUpperCase() }),
+        (err: unknown) => err instanceof EscrowError && err.code === "fund_hash_reused",
+      );
+
+      const legacy = await postBounty(db, posterId, fullName, 12, "4");
+      const legacyHash = `0xDeF${suffix}000000000000000000000000000000000000000000000000`;
+      await db.insert(bountyContributions).values({
+        bountyId: legacy.id,
+        funderUserId: posterId,
+        amountUsdc: "4.000000",
+        fundTxHash: legacyHash,
+      });
+      const other = await postBounty(db, posterId, fullName, 13, "4");
+      await assert.rejects(
+        () => assertFundTxHashAvailable(db, legacyHash.toLowerCase(), other.id),
+        (err: unknown) => err instanceof EscrowError && err.code === "fund_hash_reused",
+      );
+      await assertFundTxHashAvailable(db, legacyHash.toUpperCase(), legacy.id);
+      const [legacyRow] = await db
+        .select()
+        .from(bountyContributions)
+        .where(eq(bountyContributions.bountyId, legacy.id));
+      assert.equal(legacyRow?.fundTxHash, legacyHash);
+    } finally {
       await sql.end({ timeout: 5 });
     }
   });
