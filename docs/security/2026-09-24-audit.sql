@@ -1,8 +1,25 @@
 -- Read-only audit for the 2026-09-24 escrow hotfix.
--- Run on DEV and PROD before migrate 0009. Does not UPDATE or DELETE.
--- Review every returned row. An empty result for a section is the healthy case.
+-- SELECT only. No UPDATE, DELETE, or INSERT.
+-- Run on PROD after QA smoke on DEV, and before migrate 0009.
+-- An empty result is the healthy case for every query.
 
--- 1. Escrow fund hashes that are not an x402 settle and not a mock/dry-run rail hash.
+-- 1. Duplicate fund hashes.
+-- If this returns rows, STOP: 0009 unique index will fail; do not hand-edit PROD data.
+SELECT 'bounty_contributions' AS source, fund_tx_hash, count(*) AS n,
+  array_agg(bounty_id ORDER BY bounty_id) AS bounty_ids
+FROM bounty_contributions
+WHERE fund_tx_hash IS NOT NULL
+GROUP BY fund_tx_hash
+HAVING count(*) > 1
+UNION ALL
+SELECT 'escrows' AS source, fund_tx_hash, count(*) AS n,
+  array_agg(bounty_id ORDER BY bounty_id) AS bounty_ids
+FROM escrows
+WHERE fund_tx_hash IS NOT NULL
+GROUP BY fund_tx_hash
+HAVING count(*) > 1;
+
+-- 2. Escrow fund hashes that are not an x402 settle and not a mock/dry-run rail hash.
 --    x402 lock sets escrows.x402_payment_id. A 0x hash with no payment id was pasted.
 SELECT
   e.bounty_id,
@@ -19,7 +36,7 @@ WHERE e.fund_tx_hash IS NOT NULL
   AND e.fund_tx_hash NOT LIKE 'sepolia-dry-run:%'
   AND (e.x402_payment_id IS NULL OR btrim(e.x402_payment_id) = '');
 
--- 2. Contribution hashes that are not the x402 lock hash, not an x402-topup line
+-- 3. Contribution hashes that are not the x402 lock hash, not an x402-topup line
 --    on the escrow payment id, and not a mock/dry-run rail hash.
 --    A real x402 top-up from before this deploy has no marker. After you confirm
 --    that hash on Base, append a line `x402-topup:<hash>` to escrows.x402_payment_id
@@ -44,21 +61,6 @@ WHERE c.fund_tx_hash NOT LIKE 'mock:%'
       OR e.x402_payment_id LIKE '%x402-topup:' || c.fund_tx_hash || '%'
     )
   );
-
--- 3. Duplicate fund hashes (migration 0009 refuses to create indexes while these exist).
-SELECT 'bounty_contributions' AS source, fund_tx_hash, count(*) AS n,
-  array_agg(bounty_id ORDER BY bounty_id) AS bounty_ids
-FROM bounty_contributions
-WHERE fund_tx_hash IS NOT NULL
-GROUP BY fund_tx_hash
-HAVING count(*) > 1
-UNION ALL
-SELECT 'escrows' AS source, fund_tx_hash, count(*) AS n,
-  array_agg(bounty_id ORDER BY bounty_id) AS bounty_ids
-FROM escrows
-WHERE fund_tx_hash IS NOT NULL
-GROUP BY fund_tx_hash
-HAVING count(*) > 1;
 
 -- 4. Claims whose payout address differs from the hunter's saved wallet.
 SELECT
@@ -138,9 +140,7 @@ WHERE c.refund_tx_hash IS NOT NULL
   AND lower(btrim(c.funder_address)) <> lower(btrim(u.wallet_address));
 
 -- 9. Odd states: pending_fund with an escrow that already looks funded, or a funded
---    bounty whose escrow is still pending. Also placeholder contribution hashes from
---    a failed or incomplete fund (lock:/legacy-fund:), which can be left by a wallet
---    with no USDC.
+--    bounty whose escrow is still pending.
 SELECT
   b.id AS bounty_id,
   b.status AS bounty_status,
@@ -152,6 +152,9 @@ LEFT JOIN escrows e ON e.bounty_id = b.id
 WHERE (b.status = 'pending_fund' AND e.status IN ('funded', 'settling', 'settled', 'settled_partial', 'refunding', 'refunded'))
    OR (b.status = 'funded' AND (e.id IS NULL OR e.status = 'pending'));
 
+-- 10. Contribution rows with no settled hash, or a placeholder hash from a failed
+--     or incomplete fund (lock: / legacy-fund:), which can be left by a wallet
+--     with no USDC.
 SELECT
   c.bounty_id,
   c.id AS contribution_id,
