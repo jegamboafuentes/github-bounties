@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import type { ApiKeyScope } from "../../db/schema";
+import type { FacilitatorSettlementCheck } from "../../escrow/fund-hash";
 import type { X402SellerResult } from "../../escrow/x402-seller";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
 import type { AccessDeps, ApiKeyRecord } from "./deps";
@@ -156,11 +157,25 @@ function memory(options?: {
     async escrowPayTo() {
       return { payTo: PAY_TO, network: "base-sepolia", mode: "cdp" };
     },
-    async liveSeller() {
+    async liveSeller(input) {
       calls.seller += 1;
+      assert.ok(input.actorUserId);
+      assert.ok(input.moneyAction === "lock" || input.moneyAction === "top_up");
+      const facilitatorSettlement = {
+        bountyId: input.bountyId,
+        action: input.moneyAction,
+        actorUserId: input.actorUserId,
+      } as FacilitatorSettlementCheck;
       const settled: X402SellerResult = {
         kind: "settled",
-        settled: { status: 200, headers: {}, txHash: TX, payer: PAYER, network: "eip155:84532" },
+        settled: {
+          status: 200,
+          headers: {},
+          txHash: TX,
+          payer: PAYER,
+          network: "eip155:84532",
+          facilitatorSettlement,
+        },
       };
       return settled;
     },
@@ -177,6 +192,8 @@ function memory(options?: {
       calls.topUp += 1;
       assert.equal(input.fundTxHash, TX);
       assert.equal(input.payer, PAYER);
+      assert.equal(input.facilitatorSettlement?.action, "top_up");
+      assert.equal(input.facilitatorSettlement?.bountyId, BOUNTY);
       return { fundTxHash: input.fundTxHash, faceUsdc: "20.000000", amountUsdc: input.amountUsdc };
     },
     async createBounty(input) {
@@ -532,7 +549,10 @@ describe("production money wiring", () => {
     assert.match(source, /lockEscrowFunds\(/);
     assert.match(source, /topUpFundedBounty\(/);
     assert.match(source, /fundHashSource: "x402"/);
+    assert.match(source, /facilitatorSettlement: input\.facilitatorSettlement/);
     assert.match(source, /processLiveX402Exact\(/);
+    assert.match(source, /moneyAction: input\.moneyAction/);
+    assert.match(source, /actorUserId: input\.actorUserId/);
     assert.match(source, /recordExactInbound\(/);
     assert.doesNotMatch(source, /fundTxHash:\s*body/);
   });

@@ -320,6 +320,8 @@ export function createAccessDeps(
         paymentHeader: input.paymentSignature,
         env,
         description: input.description,
+        actorUserId: input.actorUserId,
+        moneyAction: input.moneyAction,
       });
     },
     async recordInbound(input) {
@@ -351,7 +353,13 @@ export function createAccessDeps(
           fundTxHash: input.fundTxHash,
           funderAddress: input.payer,
         },
-        { db, fundHashSource: "x402", requestId: input.requestId, now: now() },
+        {
+          db,
+          fundHashSource: "x402",
+          requestId: input.requestId,
+          now: now(),
+          facilitatorSettlement: input.facilitatorSettlement,
+        },
       );
       return {
         fundTxHash: applied.fundTxHash,

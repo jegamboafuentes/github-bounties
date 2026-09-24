@@ -6,7 +6,8 @@ import { buildOpenApiDocument } from "@/api/public/schemas";
 export const dynamic = "force-dynamic";
 
 export function GET(request: Request) {
-  return handleV1Get(request, async () => Response.json(buildOpenApiDocument()));
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  return handleV1Get(request, async () => Response.json(buildOpenApiDocument({ host })));
 }
 
 export function OPTIONS() {

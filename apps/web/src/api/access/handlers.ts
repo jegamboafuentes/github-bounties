@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { isBountyError } from "../../bounties/errors";
 import type { ApiKeyScope } from "../../db/schema";
 import { isEscrowError } from "../../escrow/errors";
+import type { FacilitatorSettlementCheck } from "../../escrow/fund-hash";
 import { usdcToAtomic } from "../../lib/money";
 import {
   buildX402ExactChallenge,
@@ -690,7 +691,7 @@ async function settleAndLock(input: {
   }
 
   const resourceUrl = x402ResourceUrl(bountyId, input.origin);
-  let settled: { txHash: string; payer?: string };
+  let settled: { txHash: string; payer?: string; facilitatorSettlement?: FacilitatorSettlementCheck };
   try {
     const live = await deps.liveSeller({
       bountyId,
@@ -700,12 +701,18 @@ async function settleAndLock(input: {
       paymentSignature: input.paymentSignature,
       resourceUrl,
       description,
+      actorUserId: principal.userId,
+      moneyAction: input.kind === "fund" ? "lock" : "top_up",
     });
     if (live.kind === "challenge" || live.kind === "error") {
       await deps.updateSpend(reservedId, { status: "failed" });
       return sellerFailure(live);
     }
-    settled = { txHash: live.settled.txHash, payer: live.settled.payer };
+    settled = {
+      txHash: live.settled.txHash,
+      payer: live.settled.payer,
+      facilitatorSettlement: live.settled.facilitatorSettlement,
+    };
   } catch (err) {
     await deps.updateSpend(reservedId, { status: "failed" });
     throw err;
@@ -746,6 +753,7 @@ async function settleAndLock(input: {
       fundTxHash: settled.txHash,
       payer: settled.payer ?? null,
       requestId: input.idempotencyKey,
+      facilitatorSettlement: settled.facilitatorSettlement,
     });
     await deps.updateSpend(reservedId, { status: "recorded", txHash: applied.fundTxHash });
     return {

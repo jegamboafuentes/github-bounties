@@ -17,7 +17,11 @@ import { atomicToUsdc, usdcToAtomic } from "../lib/money";
 import { logMoneyAction, takeRequestId } from "./actor-log";
 import { payerDistinctFromEscrow } from "./destination-guard";
 import { EscrowError } from "./errors";
-import { assertFundTxHashAvailable } from "./fund-hash";
+import {
+  assertFundTxHashAvailable,
+  normalizeFundTxHash,
+  type FacilitatorSettlementCheck,
+} from "./fund-hash";
 import { requireBasePayoutAddress } from "./payout-address";
 import { withVerifiedTopUpHash } from "./payout-guard";
 import { resolveRail, type CdpRail } from "./rail";
@@ -32,6 +36,8 @@ export type TopUpOpts = {
    */
   fundHashSource?: "caller" | "x402";
   requestId?: string | null;
+  /** Set by the x402 handler from the facilitator settle response it just checked. */
+  facilitatorSettlement?: FacilitatorSettlementCheck;
 };
 
 export type TopUpResult = {
@@ -106,7 +112,7 @@ export async function recordLockContribution(
     now: Date;
   },
 ): Promise<void> {
-  const fundTxHash = input.fundTxHash.trim() || `lock:${input.bountyId}`;
+  const fundTxHash = normalizeFundTxHash(input.fundTxHash) || `lock:${input.bountyId}`;
   await assertFundTxHashAvailable(db, fundTxHash, input.bountyId);
   const existing = await findContributionByHash(db, input.bountyId, fundTxHash);
   if (existing) return;
@@ -145,7 +151,7 @@ async function insertContribution(
     bountyId: input.bountyId,
     funderUserId: input.funderUserId,
     amountUsdc: input.amountUsdc,
-    fundTxHash: input.fundTxHash,
+    fundTxHash: normalizeFundTxHash(input.fundTxHash),
     funderAddress: input.funderAddress,
     createdAt: input.now,
     updatedAt: input.now,
@@ -320,8 +326,9 @@ export async function topUpFundedBounty(
     ),
     fundTxHash: pasted || null,
     verifiedInbound: rail.mode === "cdp" && source === "x402",
+    facilitatorSettlement: opts.facilitatorSettlement,
   });
-  const fundTxHash = locked.txHash.trim();
+  const fundTxHash = normalizeFundTxHash(locked.txHash);
   if (!fundTxHash) {
     throw new EscrowError("inbound_unconfirmed", "Top-up rail returned no fund transaction hash.");
   }
@@ -497,10 +504,17 @@ export async function markContributionRefunded(
 }
 
 async function findContributionByHash(db: Database, bountyId: string, fundTxHash: string) {
+  const hash = normalizeFundTxHash(fundTxHash);
+  if (!hash) return null;
   const [row] = await db
     .select()
     .from(bountyContributions)
-    .where(and(eq(bountyContributions.bountyId, bountyId), eq(bountyContributions.fundTxHash, fundTxHash)))
+    .where(
+      and(
+        eq(bountyContributions.bountyId, bountyId),
+        sql`lower(${bountyContributions.fundTxHash}) = ${hash}`,
+      ),
+    )
     .limit(1);
   return row ?? null;
 }
@@ -521,7 +535,7 @@ async function backfillOriginalContribution(
     bountyId: bounty.id,
     funderUserId: bounty.posterUserId,
     amountUsdc: bounty.amountUsdc,
-    fundTxHash: escrow?.fundTxHash?.trim() || `legacy-fund:${bounty.id}`,
+    fundTxHash: normalizeFundTxHash(escrow?.fundTxHash) || `legacy-fund:${bounty.id}`,
     funderAddress: escrow?.funderAddress ?? null,
     createdAt: bounty.fundedAt ?? now,
     updatedAt: now,

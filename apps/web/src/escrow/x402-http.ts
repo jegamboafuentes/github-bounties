@@ -198,6 +198,8 @@ export async function handleX402Fund(
       payTo: wallets.escrowAddress,
       network: rail.network,
       paymentHeader,
+      actorUserId: deps.actorUserId,
+      moneyAction: "lock",
       env,
     });
   } catch (err) {
@@ -391,6 +393,8 @@ async function handleFundedTopUp(input: {
       paymentHeader,
       env,
       description,
+      actorUserId: deps.actorUserId,
+      moneyAction: "top_up",
     });
   } catch (err) {
     if (err instanceof EscrowError) {
@@ -446,7 +450,13 @@ async function handleFundedTopUp(input: {
         fundTxHash: live.settled.txHash,
         funderAddress: live.settled.payer,
       },
-      { db: deps.db, rail, now: deps.now, fundHashSource: "x402" },
+      {
+        db: deps.db,
+        rail,
+        now: deps.now,
+        fundHashSource: "x402",
+        facilitatorSettlement: live.settled.facilitatorSettlement,
+      },
     );
     return {
       status: 200,

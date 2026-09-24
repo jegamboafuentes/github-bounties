@@ -1,4 +1,6 @@
 import type { ApiKeyEnv, ApiKeyScope, ApiSpendKind, ApiSpendStatus } from "../../db/schema";
+import type { MoneyAction } from "../../escrow/actor-log";
+import type { FacilitatorSettlementCheck } from "../../escrow/fund-hash";
 import type { X402SellerResult } from "../../escrow/x402-seller";
 import type { IdempotencyRow } from "./policy";
 
@@ -112,6 +114,8 @@ export type AccessDeps = {
     paymentSignature: string;
     resourceUrl: string;
     description: string;
+    actorUserId: string;
+    moneyAction: Extract<MoneyAction, "lock" | "top_up">;
   }) => Promise<X402SellerResult>;
   recordInbound: (input: {
     bountyId: string;
@@ -133,6 +137,7 @@ export type AccessDeps = {
     fundTxHash: string;
     payer: string | null;
     requestId: string;
+    facilitatorSettlement?: FacilitatorSettlementCheck;
   }) => Promise<{ fundTxHash: string; faceUsdc: string; amountUsdc: string }>;
   createBounty: (input: {
     posterUserId: string;
