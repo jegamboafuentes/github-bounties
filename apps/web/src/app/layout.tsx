@@ -1,20 +1,20 @@
 import type { Metadata } from "next";
-import { PRODUCT_NAME } from "@/lib/constants";
+import { headers } from "next/headers";
+import { buildSocialMetadata } from "@/lib/social-metadata";
 import { WalletProviders } from "@/wallet/providers";
 import { readWalletConnectProjectId, resolveFundWalletRuntime } from "@/wallet/env";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: PRODUCT_NAME,
-  description: "USDC bounties on GitHub issues. 2% fee. Parallel hunt; optional Working on this.",
-  icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "48x48" },
-      { url: "/icon.png", type: "image/png", sizes: "192x192" },
-    ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
-  },
-};
+/** Pages already opt into dynamic rendering; metadata must follow runtime env. */
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const requestHeaders = await headers();
+  return buildSocialMetadata(process.env, {
+    host: requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host"),
+    proto: requestHeaders.get("x-forwarded-proto"),
+  });
+}
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   const walletConnectProjectId = readWalletConnectProjectId();
