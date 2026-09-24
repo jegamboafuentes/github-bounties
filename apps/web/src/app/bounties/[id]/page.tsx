@@ -20,6 +20,7 @@ import {
 import { BountyIntelligenceCard } from "@/components/bounty-intelligence-card";
 import { ClaimPayoutPanel } from "@/components/claim-payout-form";
 import { FundLockPanel } from "@/components/fund-lock-panel";
+import { FunderContributionList } from "@/components/funder-contributions";
 import { GitHubAvatar } from "@/components/github-avatar";
 import { AppHeader } from "@/components/header";
 import { IssueBodyCard } from "@/components/issue-body";
@@ -276,21 +277,7 @@ export default async function BountyDetailPage({
           </dl>
         ) : null}
 
-        {contributions.length > 0 ? (
-          <section className="rounded-xl border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Funders</h2>
-            <ul className="mt-3 divide-y divide-zinc-200 dark:divide-zinc-800">
-              {contributions.map((row) => (
-                <li key={row.id} className="flex items-baseline justify-between gap-3 py-2">
-                  <span>{row.displayName}</span>
-                  <span className="font-medium">
-                    {formatUsdc(row.amountUsdc)} {bounty.currency}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
+        <FunderContributionList contributions={contributions} currency={bounty.currency} />
 
         <dl className="divide-y divide-zinc-200 overflow-hidden rounded-xl border border-zinc-200 bg-white text-sm dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">

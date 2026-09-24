@@ -1,8 +1,17 @@
 import { createHash } from "node:crypto";
 import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 import { normalizeBountyAmountUsdc } from "../bounties/amount";
+import { resolveFunderAvatarUrl } from "../bounties/funders";
 import type { Database } from "../db/client";
-import { bounties, bountyContributions, claims, escrows, poolParticipants, users } from "../db/schema";
+import {
+  bounties,
+  bountyContributions,
+  claims,
+  escrows,
+  githubLinks,
+  poolParticipants,
+  users,
+} from "../db/schema";
 import { atomicToUsdc, usdcToAtomic } from "../lib/money";
 import { EscrowError } from "./errors";
 import { resolveRail, type CdpRail } from "./rail";
@@ -32,6 +41,12 @@ export type BountyContributionView = {
   funderAddress: string | null;
   fundTxHash: string;
   createdAt: Date;
+  /**
+   * https picture for this contribution's funder.
+   * Same resolution as board faces: Google `users.avatar_url`, then GitHub.
+   * Null means the row should show initials. Repeat top-ups keep their own row.
+   */
+  avatarUrl: string | null;
 };
 
 export type ContributionRefundLeg = {
@@ -104,12 +119,29 @@ export async function listBountyContributions(
       funderAddress: bountyContributions.funderAddress,
       fundTxHash: bountyContributions.fundTxHash,
       createdAt: bountyContributions.createdAt,
+      userAvatarUrl: users.avatarUrl,
+      githubAvatarUrl: githubLinks.githubAvatarUrl,
+      githubLogin: githubLinks.githubLogin,
     })
     .from(bountyContributions)
     .innerJoin(users, eq(users.id, bountyContributions.funderUserId))
+    .leftJoin(githubLinks, eq(githubLinks.userId, users.id))
     .where(eq(bountyContributions.bountyId, bountyId))
     .orderBy(asc(bountyContributions.createdAt), asc(bountyContributions.id));
-  return rows;
+  return rows.map((row) => ({
+    id: row.id,
+    funderUserId: row.funderUserId,
+    displayName: row.displayName,
+    amountUsdc: row.amountUsdc,
+    funderAddress: row.funderAddress,
+    fundTxHash: row.fundTxHash,
+    createdAt: row.createdAt,
+    avatarUrl: resolveFunderAvatarUrl({
+      avatarUrl: row.userAvatarUrl,
+      githubAvatarUrl: row.githubAvatarUrl,
+      githubLogin: row.githubLogin,
+    }),
+  }));
 }
 
 /**
