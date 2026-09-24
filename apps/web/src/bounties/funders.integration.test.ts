@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { createDb } from "../db/client";
 import { loadDotenvFiles } from "../db/load-dotenv";
 import { bountyContributions, githubLinks, repos, users } from "../db/schema";
+import { listBountyContributions } from "../escrow/top-up";
 import { createBountyFromIssueUrl } from "./create";
 import { getBoardBounty, listBoardBounties } from "./list";
 
@@ -175,6 +176,22 @@ describe("board funder avatar query", () => {
       );
       assert.equal(listedEmpty?.funderCount, 0);
       assert.deepEqual(listedEmpty?.funders, []);
+
+      const detail = await listBountyContributions(crowded.id, db);
+      assert.deepEqual(
+        detail.map((row) => row.displayName),
+        ["Nina Newest", "Alice Hidden", "Bob", "Carol", "Dave", "Eve", "Nina Newest"],
+      );
+      assert.equal(detail[0]?.avatarUrl, "https://lh3.googleusercontent.com/a/nina");
+      assert.equal(detail[6]?.avatarUrl, detail[0]?.avatarUrl);
+      assert.equal(detail[1]?.avatarUrl, "https://lh3.googleusercontent.com/a/alice");
+      assert.equal(detail[2]?.avatarUrl, null);
+      assert.equal(detail[3]?.avatarUrl, "https://lh3.googleusercontent.com/a/carol");
+      assert.equal(detail[4]?.avatarUrl, "https://avatars.githubusercontent.com/u/440?v=4");
+      assert.equal(
+        detail[5]?.avatarUrl,
+        `https://avatars.githubusercontent.com/eve-${suffix}?s=48`,
+      );
     } finally {
       await sql.end({ timeout: 5 });
     }

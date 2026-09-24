@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { FunderAvatarStack } from "../components/funder-avatar-stack";
+import { FunderContributionList } from "../components/funder-contributions";
 import {
   BOARD_FUNDER_AVATAR_LIMIT,
   funderStackAriaLabel,
@@ -192,5 +193,64 @@ describe("FunderAvatarStack", () => {
     assert.doesNotMatch(html, /<img /);
     assert.match(html, />AL</);
     assert.match(html, /title="Ada Lovelace"/);
+  });
+});
+
+describe("FunderContributionList", () => {
+  it("shows a face, name, and amount on every row, including a repeat funder", () => {
+    const html = renderToStaticMarkup(
+      createElement(FunderContributionList, {
+        currency: "USDC",
+        contributions: [
+          {
+            id: "c1",
+            displayName: "Enrique Gamboa",
+            amountUsdc: "1.000000",
+            avatarUrl: "https://lh3.googleusercontent.com/a/enrique",
+          },
+          {
+            id: "c2",
+            displayName: "Enrique Gamboa",
+            amountUsdc: "1.000000",
+            avatarUrl: "https://lh3.googleusercontent.com/a/enrique",
+          },
+        ],
+      }),
+    );
+    assert.equal(html.match(/<img /g)?.length, 2);
+    assert.equal(html.match(/Enrique Gamboa/g)?.length, 4);
+    assert.match(html, /src="https:\/\/lh3.googleusercontent.com\/a\/enrique"/);
+    assert.match(html, /1 USDC/);
+    assert.doesNotMatch(html, />EG</);
+  });
+
+  it("uses the same initials fallback as the board when a picture is missing", () => {
+    const html = renderToStaticMarkup(
+      createElement(FunderContributionList, {
+        currency: "USDC",
+        contributions: [
+          {
+            id: "c1",
+            displayName: "Ada Lovelace",
+            amountUsdc: "5.000000",
+            avatarUrl: null,
+          },
+        ],
+      }),
+    );
+    assert.doesNotMatch(html, /<img /);
+    assert.match(html, />AL</);
+    assert.match(html, /title="Ada Lovelace"/);
+    assert.match(html, /Ada Lovelace/);
+    assert.match(html, /5 USDC/);
+  });
+
+  it("renders nothing when there are no contributions", () => {
+    assert.equal(
+      renderToStaticMarkup(
+        createElement(FunderContributionList, { currency: "USDC", contributions: [] }),
+      ),
+      "",
+    );
   });
 });
