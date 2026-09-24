@@ -1,6 +1,6 @@
 import {
-  BOARD_FUNDER_AVATAR_LIMIT,
   BOARD_FUNDER_AVATAR_SIZE,
+  dedupeShownFunders,
   funderStackAriaLabel,
   type BoardFunder,
 } from "@/bounties/funders";
@@ -23,10 +23,11 @@ export function FunderAvatarStack({
   funders: readonly BoardFunder[];
   funderCount: number;
 }) {
-  const visible = funders.slice(0, BOARD_FUNDER_AVATAR_LIMIT);
-  if (visible.length === 0 || funderCount <= 0) return null;
-  const overflow = Math.max(0, funderCount - visible.length);
-  const label = funderStackAriaLabel(visible, funderCount);
+  const distinct = dedupeShownFunders(funders, funderCount);
+  const visible = distinct.funders;
+  if (visible.length === 0 || distinct.funderCount <= 0) return null;
+  const overflow = Math.max(0, distinct.funderCount - visible.length);
+  const label = funderStackAriaLabel(visible, distinct.funderCount);
 
   return (
     <div className="flex items-center" role="img" aria-label={label}>
