@@ -15,7 +15,14 @@ import {
 } from "@/bounties";
 import { claimPoolPayout, claimPayout, isClaimError } from "@/claims";
 import { getRuntimeDb } from "@/db/runtime";
-import { isEscrowError, refundEscrow } from "@/escrow";
+import {
+  assertCallerLockHash,
+  assertCallerTopUpHash,
+  isEscrowError,
+  probeCdpEnv,
+  refundEscrow,
+  takeRequestId,
+} from "@/escrow";
 import { INVALID_BASE_ADDRESS_MESSAGE, normalizeBaseAddress } from "@/lib/address";
 import { setUserWalletAddress } from "@/auth/users";
 
@@ -75,7 +82,12 @@ export async function fundBountyAction(formData: FormData): Promise<void> {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
   }
   try {
-    const funded = await fundBounty(bountyId, user.id, getRuntimeDb(), new Date(), { fundTxHash });
+    const requestId = takeRequestId(null);
+    await assertCallerLockHash(getRuntimeDb(), bountyId, fundTxHash, probeCdpEnv().mode);
+    const funded = await fundBounty(bountyId, user.id, getRuntimeDb(), new Date(), {
+      fundTxHash,
+      requestId,
+    });
     refreshBounty(bountyId);
     if (funded.rail === "mock" && funded.missingEnv?.length) {
       redirect(
@@ -99,11 +111,15 @@ export async function topUpBountyAction(formData: FormData): Promise<void> {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
   }
   try {
+    const requestId = takeRequestId(null);
+    assertCallerTopUpHash(fundTxHash, probeCdpEnv().mode);
     await topUpBounty(
       bountyId,
       user.id,
       { amountUsdc, fundTxHash },
       getRuntimeDb(),
+      new Date(),
+      { requestId },
     );
     refreshBounty(bountyId);
   } catch (err) {
@@ -119,7 +135,11 @@ export async function cancelBountyAction(formData: FormData): Promise<void> {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
   }
   try {
-    await refundEscrow(bountyId, { actorUserId: user.id, reason: "cancel" }, { db: getRuntimeDb() });
+    await refundEscrow(
+      bountyId,
+      { actorUserId: user.id, reason: "cancel" },
+      { db: getRuntimeDb(), requestId: takeRequestId(null) },
+    );
     refreshBounty(bountyId);
   } catch (err) {
     redirectBountyError(bountyId, err);
@@ -158,7 +178,7 @@ export async function claimPayoutAction(formData: FormData): Promise<void> {
               participantId: String(formData.get("participantId") ?? "") || undefined,
               persistWallet: true,
             },
-            { db: getRuntimeDb() },
+            { db: getRuntimeDb(), requestId: takeRequestId(null) },
           )
         : await claimPayout(
             bountyId,
@@ -168,7 +188,7 @@ export async function claimPayoutAction(formData: FormData): Promise<void> {
               claimId: String(formData.get("claimId") ?? "") || undefined,
               persistWallet: true,
             },
-            { db: getRuntimeDb() },
+            { db: getRuntimeDb(), requestId: takeRequestId(null) },
           );
     refreshBounty(bountyId);
     if (result.rail === "mock" && result.missingEnv.length) {

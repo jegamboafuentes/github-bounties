@@ -29,7 +29,7 @@ import { PoolRoster } from "@/components/pool-roster";
 import { WorkSignalsPanel } from "@/components/work-signals-panel";
 import { getRuntimeDb } from "@/db/runtime";
 import { githubLinks } from "@/db/schema";
-import { getEscrowSnapshot, listBountyContributions } from "@/escrow";
+import { getEscrowSnapshot, listBountyContributions, probeCdpEnv } from "@/escrow";
 import { loadBountyIntelligence } from "@/intelligence/load";
 import { classifyIntelligenceFailure } from "@/intelligence/errors";
 import { INTELLIGENCE_ESTIMATE_LABEL } from "@/intelligence/prompt";
@@ -308,6 +308,7 @@ export default async function BountyDetailPage({
               escrowAddress={escrow?.escrowAddress ?? null}
               walletConnectConfigured={walletConnectConfigured()}
               fundAction={fundBountyAction}
+              allowPastedFundHash={probeCdpEnv().mode === "mock"}
             />
           ) : null}
 
@@ -323,6 +324,7 @@ export default async function BountyDetailPage({
               walletConnectConfigured={walletConnectConfigured()}
               fundAction={fundBountyAction}
               topUpAction={topUpBountyAction}
+              allowPastedFundHash={probeCdpEnv().mode === "mock"}
             />
           ) : null}
 

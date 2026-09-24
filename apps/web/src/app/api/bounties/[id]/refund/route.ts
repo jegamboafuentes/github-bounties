@@ -6,6 +6,7 @@ import {
   isEscrowError,
   jsonForUnknown,
   refundEscrow,
+  takeRequestId,
 } from "@/escrow";
 
 export const dynamic = "force-dynamic";
@@ -20,19 +21,12 @@ export async function POST(
     return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
   const { id } = await ctx.params;
-  let funderAddress: string | undefined;
-  try {
-    const body = (await req.json()) as { funderAddress?: string };
-    funderAddress = body.funderAddress;
-  } catch {
-    funderAddress = undefined;
-  }
 
   try {
     const result = await refundEscrow(
       id,
-      { actorUserId: user.id, reason: "cancel", funderAddress },
-      { db: getRuntimeDb() },
+      { actorUserId: user.id, reason: "cancel" },
+      { db: getRuntimeDb(), requestId: takeRequestId(req.headers.get("x-request-id")) },
     );
     return Response.json(
       { ok: true, ...result },

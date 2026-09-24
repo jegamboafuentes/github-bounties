@@ -247,6 +247,11 @@ export async function handleX402Fund(
     };
   }
 
+  const payerError = x402PayerError(live.settled.payer, wallets.escrowAddress);
+  if (payerError) {
+    return { status: 400, headers: jsonHeaders(), body: escrowErrorJson(payerError) };
+  }
+
   const recorded = await recordExactInbound(deps.db, {
     bountyId,
     txHash: live.settled.txHash,
@@ -427,6 +432,11 @@ async function handleFundedTopUp(input: {
     };
   }
 
+  const topUpPayerError = x402PayerError(live.settled.payer, wallets.escrowAddress);
+  if (topUpPayerError) {
+    return { status: 400, headers: jsonHeaders(), body: escrowErrorJson(topUpPayerError) };
+  }
+
   try {
     const applied = await topUpFundedBounty(
       bounty.id,
@@ -436,7 +446,7 @@ async function handleFundedTopUp(input: {
         fundTxHash: live.settled.txHash,
         funderAddress: live.settled.payer,
       },
-      { db: deps.db, rail, now: deps.now },
+      { db: deps.db, rail, now: deps.now, fundHashSource: "x402" },
     );
     return {
       status: 200,
@@ -473,4 +483,22 @@ async function handleFundedTopUp(input: {
     }
     throw err;
   }
+}
+
+/** The x402 sender. payTo (the escrow wallet) is not a payer. */
+function x402PayerError(payer: string | null | undefined, escrowAddress: string): EscrowError | null {
+  const sender = payer?.trim() || "";
+  if (!sender) {
+    return new EscrowError(
+      "x402_settle_failed",
+      "x402 exact settlement did not return the payer. Do not record the escrow wallet as the funder.",
+    );
+  }
+  if (sender.toLowerCase() === escrowAddress.trim().toLowerCase()) {
+    return new EscrowError(
+      "x402_settle_failed",
+      "x402 payer is the escrow wallet (payTo), not the sender. Refusing to record it as funder_address.",
+    );
+  }
+  return null;
 }

@@ -184,7 +184,7 @@ describe("x402 exact inbound → Lock without paste-hash", () => {
               status: 200,
               headers: { "PAYMENT-RESPONSE": "ok" },
               txHash: "0xfeedface00000000000000000000000000000000000000000000000000000001",
-              payer: "0x00000000000000000000000000000000f00d01",
+              payer: "0x1111111111111111111111111111111111111111",
             },
           }),
         },

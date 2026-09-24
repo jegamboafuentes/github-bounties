@@ -14,7 +14,7 @@ export function fundLockCopy(chainName: FundChainDisplayName): string {
 }
 
 export function x402ExactFundCopy(chainName: FundChainDisplayName): string {
-  return `Connect a ${chainName} wallet, then Pay face F (x402 exact to gb-escrow). Settlement records inbound so Lock needs no explorer hash. Advanced paste-hash remains a fallback. Hosted checkout stays disabled.`;
+  return `Connect a ${chainName} wallet, then Pay face F (x402 exact to gb-escrow). Settlement records inbound so Lock needs no explorer hash. Paste-hash Lock is mock/local only. Hosted checkout stays disabled.`;
 }
 
 export function fundRailCaption(chainName: FundChainDisplayName): string {

@@ -137,16 +137,38 @@ describe("x402 exact fund challenge", () => {
     );
   });
 
-  it("reads PAYMENT-SIGNATURE / X-PAYMENT and prefers pasted hash over recorded inbound", () => {
+  it("reads PAYMENT-SIGNATURE / X-PAYMENT and only trusts a pasted hash on the mock rail", () => {
     assert.equal(
       extractPaymentHeader((name) => (name === "PAYMENT-SIGNATURE" ? "sig" : null)),
       "sig",
     );
     assert.equal(extractPaymentHeader((name) => (name === "X-PAYMENT" ? "legacy" : null)), "legacy");
     assert.equal(extractPaymentHeader(() => null), undefined);
-    assert.equal(resolveLockFundTxHash({ pasted: " 0xabc ", recorded: "0xold" }), "0xabc");
-    assert.equal(resolveLockFundTxHash({ pasted: "", recorded: "0xrec" }), "0xrec");
+    assert.equal(
+      resolveLockFundTxHash({ pasted: " 0xabc ", recorded: "0xold", railMode: "mock" }),
+      "0xabc",
+    );
+    assert.equal(resolveLockFundTxHash({ pasted: "", recorded: "0xrec", railMode: "mock" }), "0xrec");
     assert.equal(resolveLockFundTxHash({}), undefined);
+    assert.equal(
+      resolveLockFundTxHash({
+        pasted: "0xabc",
+        recorded: "0xabc",
+        railMode: "cdp",
+        recordedByX402: true,
+      }),
+      "0xabc",
+    );
+    assert.throws(
+      () =>
+        resolveLockFundTxHash({
+          pasted: "0xfake",
+          recorded: "0xabc",
+          railMode: "cdp",
+          recordedByX402: true,
+        }),
+      (err: unknown) => err instanceof EscrowError && err.code === "fund_hash_not_verified",
+    );
     assert.equal(inboundIsRecorded({ status: "pending", fundTxHash: "0xabc" }), true);
     assert.equal(inboundIsRecorded({ status: "pending", x402PaymentId: "x402:1" }), true);
     assert.equal(inboundIsRecorded({ status: "funded", fundTxHash: "0xabc" }), true);

@@ -1,6 +1,15 @@
 import type { Database } from "../db/client";
 import type { DomainEmailDeps } from "../email/events";
-import { EscrowError, lockEscrowFunds, topUpFundedBounty, type CdpRail, type TopUpResult } from "../escrow";
+import {
+  assertCallerLockHash,
+  assertCallerTopUpHash,
+  EscrowError,
+  lockEscrowFunds,
+  probeCdpEnv,
+  topUpFundedBounty,
+  type CdpRail,
+  type TopUpResult,
+} from "../escrow";
 import { BountyError } from "./errors";
 
 export type FundedBounty = {
@@ -21,15 +30,18 @@ export async function fundBounty(
   actorUserId: string,
   db: Database,
   now: Date = new Date(),
-  opts?: { rail?: CdpRail; fundTxHash?: string | null; email?: DomainEmailDeps },
+  opts?: { rail?: CdpRail; fundTxHash?: string | null; email?: DomainEmailDeps; requestId?: string | null },
 ): Promise<FundedBounty> {
   try {
+    const railMode = opts?.rail?.mode ?? probeCdpEnv().mode;
+    await assertCallerLockHash(db, bountyId, opts?.fundTxHash, railMode);
     const locked = await lockEscrowFunds(bountyId, actorUserId, {
       db,
       now,
       rail: opts?.rail,
       fundTxHash: opts?.fundTxHash,
       email: opts?.email,
+      requestId: opts?.requestId,
     });
     return {
       id: locked.bountyId,
@@ -54,13 +66,16 @@ export async function topUpBounty(
   input: { amountUsdc: string; fundTxHash?: string | null; funderAddress?: string | null },
   db: Database,
   now: Date = new Date(),
-  opts?: { rail?: CdpRail },
+  opts?: { rail?: CdpRail; requestId?: string | null },
 ): Promise<TopUpResult> {
   try {
+    const railMode = opts?.rail?.mode ?? probeCdpEnv().mode;
+    assertCallerTopUpHash(input.fundTxHash, railMode);
     return await topUpFundedBounty(bountyId, actorUserId, input, {
       db,
       now,
       rail: opts?.rail,
+      requestId: opts?.requestId,
     });
   } catch (err) {
     throw toFundError(err);
