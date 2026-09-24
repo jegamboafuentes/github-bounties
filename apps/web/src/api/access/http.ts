@@ -1,6 +1,7 @@
 import { clientIpFromRequest } from "../public/client-ip";
 import { PUBLIC_API_CORS_HEADERS } from "../public/cors";
 import { PublicApiError } from "../public/errors";
+import { acceptBountyId } from "../public/query";
 import { handlePublicRead } from "../public/http";
 import { getRuntimeDb } from "../../db/runtime";
 import { publicOrigin } from "../../escrow/x402";
@@ -104,6 +105,8 @@ export async function handleV1Action(
     const principal = requirePrincipal(
       await authenticateBearer(request.headers.get("authorization"), ip, deps),
     );
+    const bountyId = actionBountyId(action);
+    if (bountyId) acceptBountyId(bountyId);
     const klass = actionClass(action);
     const result = await runAuthed(
       { principal, klass, route: actionRoute(action), bountyId: actionBountyId(action), ip },

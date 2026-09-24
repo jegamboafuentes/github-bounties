@@ -373,6 +373,7 @@ function paymentRequired(input: {
 }
 
 export async function handleMe(principal: ApiPrincipal, deps: AccessDeps): Promise<ApiResult> {
+  requireScope(principal.scopes, "read");
   const me = await deps.loadMe(principal.userId);
   if (!me) throw new PublicApiError("not_found", "User not found.");
   return {
@@ -397,6 +398,7 @@ export async function handleMe(principal: ApiPrincipal, deps: AccessDeps): Promi
 }
 
 export async function handleMyBounties(principal: ApiPrincipal, deps: AccessDeps): Promise<ApiResult> {
+  requireScope(principal.scopes, "read");
   const mine = await deps.listMyBounties(principal.userId);
   return {
     status: 200,

@@ -506,6 +506,15 @@ describe("spend caps, idempotency, and headless x402", () => {
     assert.equal(bag.calls.lock, 0);
   });
 
+  it("requires the read scope for /me", async () => {
+    const bag = memory();
+    const { principal: key } = await principal(bag.deps, ["write"]);
+    await assert.rejects(
+      () => handleMe(key, bag.deps),
+      (err: unknown) => err instanceof Error && "code" in err && err.code === "forbidden_scope",
+    );
+  });
+
   it("omits google_sub from /me", async () => {
     const bag = memory();
     const { principal: key } = await principal(bag.deps, ["read"]);

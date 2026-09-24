@@ -136,7 +136,7 @@ Spend ceilings (a user can lower these, not raise them):
 
 `API_MONEY_ENABLED` defaults **on** for `base-sepolia` and **off** for `CDP_NETWORK=base`. Set it to `0` to disable money on DEV. Do not set it on PROD until a later sign-off.
 
-Authenticated limits, counted in `api_request_log` (shared across Cloud Run instances): read 120/minute, write 20/minute, money 10/hour. Anonymous reads stay at the V4-1 per-IP limit.
+Authenticated limits, counted in `api_request_log` (shared across Cloud Run instances): read 120/minute, write 20/minute, money 10/hour. Anonymous reads stay at the V4-1 per-IP limit. `GET /api/v1/me` and `GET /api/v1/me/bounties` need the `read` scope. Post, work-signal, and unfunded cancel need `write`. Fund and top-up need `money`.
 
 `Idempotency-Key` is required on fund, top-up, and cancel. The same key and body replay the stored response. A different body returns `idempotency_conflict`. Fund and top-up: the first call returns **402** `payment_required` (amount is the face or the top-up amount, `payTo` is escrow, `approval_url` is the bounty page, `PAYMENT-REQUIRED` header). Retry with `PAYMENT-SIGNATURE` or `X-PAYMENT` and the same idempotency key. The server settles through the CDP facilitator and then calls `lockEscrowFunds` or `topUpFundedBounty`. The body cannot include an address or a pasted transaction hash. Caps are checked before the 402 and again before the spend is recorded.
 
