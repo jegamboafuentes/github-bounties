@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { Database } from "../../db/client";
+import { normalizeFundTxHash } from "../../escrow/fund-hash";
 import { isUndefinedTableError } from "../../intelligence/errors";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
 
@@ -14,8 +15,15 @@ export type ContributionAmountRow = {
 };
 
 export function isRecordedFundTx(fundTxHash: string | null | undefined): boolean {
-  return Boolean(fundTxHash && fundTxHash.trim().length > 0);
+  return normalizeFundTxHash(fundTxHash).length > 0;
 }
+
+export type EscrowFundRow = {
+  bountyId: string;
+  /** Running face. Top-ups rewrite this to the new face, so it is not added on top of contributions. */
+  amountUsdc: string;
+  fundTxHash: string | null;
+};
 
 /**
  * Sum of confirmed contributions per bounty.
@@ -39,14 +47,64 @@ export function sumConfirmedContributionAmounts(
   return out;
 }
 
+/**
+ * Confirmed funded total per bounty.
+ *
+ * Add each confirmed contribution (a recorded fund hash) once. When the
+ * escrow has a recorded `fund_tx_hash` that is not already on a contribution,
+ * add only the part of `escrows.amount_usdc` those contributions do not
+ * already cover. Crowdfunding stores the original Lock as a contribution
+ * with the same hash, and a top-up rewrites the escrow amount to the new
+ * face, so that hash and those top-ups are not counted twice. A legacy
+ * lock has the hash and the face only on the escrow. The total is
+ * `0.000000` when no verified inflow is recorded.
+ */
+export function sumConfirmedFundedAmounts(
+  contributions: readonly ContributionAmountRow[],
+  escrows: readonly EscrowFundRow[] = [],
+): Map<string, string> {
+  const atomic = new Map<string, bigint>();
+  const hashes = new Map<string, Set<string>>();
+
+  const addHash = (bountyId: string, fundTxHash: string | null | undefined): string | null => {
+    const hash = normalizeFundTxHash(fundTxHash);
+    if (!hash) return null;
+    const seen = hashes.get(bountyId) ?? new Set<string>();
+    if (seen.has(hash)) return null;
+    seen.add(hash);
+    hashes.set(bountyId, seen);
+    return hash;
+  };
+
+  for (const row of contributions) {
+    if (!addHash(row.bountyId, row.fundTxHash)) continue;
+    const prev = atomic.get(row.bountyId) ?? 0n;
+    atomic.set(row.bountyId, prev + usdcToAtomic(row.amountUsdc));
+  }
+
+  for (const escrow of escrows) {
+    if (!addHash(escrow.bountyId, escrow.fundTxHash)) continue;
+    const already = atomic.get(escrow.bountyId) ?? 0n;
+    const face = usdcToAtomic(escrow.amountUsdc);
+    const original = face > already ? face - already : 0n;
+    atomic.set(escrow.bountyId, already + original);
+  }
+
+  const out = new Map<string, string>();
+  for (const [bountyId, total] of atomic) {
+    out.set(bountyId, atomicToUsdc(total));
+  }
+  return out;
+}
+
 export function confirmedTotalFor(totals: ReadonlyMap<string, string>, bountyId: string): string {
   return totals.get(bountyId) ?? ZERO_FUNDED_USDC;
 }
 
 /**
- * Confirmed contribution sums for a page of bounties.
- * A database without `bounty_contributions` yields an empty map (every total is zero).
- * Does not select wallet addresses.
+ * Confirmed funded totals for a page of bounties.
+ * A missing `bounty_contributions` table still counts legacy escrow funds.
+ * A missing `escrows` table still counts contributions. Does not select wallet addresses.
  */
 export async function loadConfirmedFundedTotals(
   db: Database,
@@ -57,19 +115,34 @@ export async function loadConfirmedFundedTotals(
     bountyIds.map((id) => sql`${id}::uuid`),
     sql`, `,
   );
-  try {
-    const result = await db.execute(sql`
+  const [contributions, escrowFunds] = await Promise.all([
+    loadAmountRows(db, sql`
       select bounty_id, amount_usdc, fund_tx_hash
       from bounty_contributions
       where bounty_id in (${idList})
-    `);
-    return sumConfirmedContributionAmounts(contributionAmountsFromQuery(result));
+    `),
+    loadAmountRows(db, sql`
+      select bounty_id, amount_usdc, fund_tx_hash
+      from escrows
+      where bounty_id in (${idList})
+    `),
+  ]);
+  return sumConfirmedFundedAmounts(contributions, escrowFunds);
+}
+
+async function loadAmountRows(
+  db: Database,
+  query: ReturnType<typeof sql>,
+): Promise<ContributionAmountRow[]> {
+  try {
+    const result = await db.execute(query);
+    return contributionAmountsFromQuery(result);
   } catch (err) {
     if (!isUndefinedTableError(err)) throw err;
     console.error(
       JSON.stringify({ event: "public_funded_total_query_failed", error: "missing_table" }),
     );
-    return new Map();
+    return [];
   }
 }
 

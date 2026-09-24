@@ -12,7 +12,7 @@ No database migration.
 | Swagger UI | `GET /api/docs` |
 | MCP | `POST /mcp` (streamable HTTP, stateless) |
 
-Swagger UI is served from this app (`swagger-ui-dist` on the same origin). Its content security policy allows that bundle and Try it out against DEV and PROD.
+Swagger UI is served from this app (`swagger-ui-dist` on the same origin). Its content security policy allows that bundle and Try it out against DEV and PROD. `servers[0]` in `GET /api/v1/openapi.json` is the public origin that served the document (`X-Forwarded-Host` or `Host` when that host is DEV or PROD). A missing or untrusted host uses `NEXT_PUBLIC_APP_URL`, then `APP_BASE_URL`, then `PUBLIC_BASE_URL`, then `AUTH_URL`. The other public origin is `servers[1]`, so Try it out hits the current environment and the other one stays selectable.
 
 ## Rate limit
 
@@ -57,20 +57,20 @@ List rows include the issue, status, the face, the confirmed funded sum, the emp
 
 `amountUsdc` and `payout.faceUsdc` are the **face**: the posted amount, including top-ups after lock. The fee schedule uses the face. A bounty has a face as soon as it is created, before anyone sends USDC.
 
-`totalFundedUsdc` is the **sum of confirmed contributions**: `bounty_contributions` rows that have a recorded fund transaction. It is `0.000000` when there are none. It is not the face. The same rule is used by the list, the bounty detail, and the MCP tools `list_bounties` and `get_bounty`.
+`totalFundedUsdc` is the **verified inflow**: the original escrow fund when `escrows.fund_tx_hash` is recorded, plus confirmed `bounty_contributions`, counting each fund transaction hash once. A Lock after crowdfunding writes that same hash on a contribution, and a top-up rewrites `escrows.amount_usdc` to the new face, so those amounts are not added twice. A bounty funded before crowdfunding has the hash and the face only on the escrow; that fund is the total. The field is `0.000000` when there is no verified inflow. It is not the face. The same rule is used by the list, the bounty detail, and the MCP tools `list_bounties` and `get_bounty`.
 
 `status` says whether that sum is still locked:
 
 | `status` | Meaning for `totalFundedUsdc` |
 | --- | --- |
-| `pending_fund` | Face is posted. Nothing is confirmed, so the sum is `0.000000`. |
+| `pending_fund` | Face is posted. No verified inflow, so the total is `0.000000`. |
 | `funded`, `claim_locked` | Open and locked. The sum is the locked face, including top-ups. |
 | `settling`, `settled`, `settled_partial` | Payout. The sum is what was confirmed. |
 | `refunding` | A return is in progress. The sum is still the confirmed total, not the face and not a remaining balance. |
 | `cancelled`, `expired` | Terminal. Either the draft was voided before lock (sum `0.000000`) or a locked bounty was refunded in full with no fee (sum is what was confirmed). |
 | `refunded`, `void` | Terminal. The sum is not money still held. |
 
-Poster cancel and expiry store bounty `status` as `cancelled` or `expired`. After a confirmed lock, detail `escrow.status` is `refunded` once the return finishes. `escrow.amountUsdc` is the escrow face record, not `totalFundedUsdc`.
+Poster cancel and expiry store bounty `status` as `cancelled` or `expired`. After a confirmed lock, detail `escrow.status` is `refunded` once the return finishes. `escrow.amountUsdc` is the escrow face record (top-ups rewrite it), not `totalFundedUsdc`.
 
 `bounty.funders.avatars` (list and detail) and `GET /api/v1/bounties/{id}/funders` are both **newest first**. Avatars are distinct funders, capped at five, in the same order as the board avatar stack: the first face is the newest and is drawn on top. The funders route is one row per contribution, created time descending, then id descending. That matches the stack. The website's Funders section on the bounty page still lists oldest first; the API follows the avatar stack so the two API fields share one order. Neither payload includes a wallet address.
 

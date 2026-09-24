@@ -8,6 +8,7 @@ import {
   confirmedTotalFor,
   contributionAmountsFromQuery,
   sumConfirmedContributionAmounts,
+  sumConfirmedFundedAmounts,
   ZERO_FUNDED_USDC,
 } from "./funded";
 import {
@@ -118,6 +119,79 @@ describe("confirmed funded total", () => {
     assert.equal(JSON.stringify(rows).includes("0xshouldnotmatter"), false);
     assert.equal(sumConfirmedContributionAmounts(rows).get("a"), "1.500000");
     assert.equal(sumConfirmedContributionAmounts(rows).get("b"), "2.000000");
+  });
+
+  it("counts a legacy settled escrow fund with no contributions as the face", () => {
+    const totals = sumConfirmedFundedAmounts(
+      [],
+      [{ bountyId: "legacy", amountUsdc: "10.000000", fundTxHash: "0xlegacy" }],
+    );
+    assert.equal(totals.get("legacy"), "10.000000");
+    const presented = presentPublicBounty(
+      board({ status: "settled", amountUsdc: "10.000000" }),
+      confirmedTotalFor(totals, "legacy"),
+    );
+    assert.equal(presented.totalFundedUsdc, "10.000000");
+    assert.equal(presented.amountUsdc, "10.000000");
+    assert.equal(presented.payout.faceUsdc, "10.000000");
+  });
+
+  it("counts an original lock and a top-up once when the escrow hash is the lock", () => {
+    const totals = sumConfirmedFundedAmounts(
+      [
+        { bountyId: "crowd", amountUsdc: "10.000000", fundTxHash: "0xAbC" },
+        { bountyId: "crowd", amountUsdc: "5.000000", fundTxHash: "0xtop" },
+        { bountyId: "crowd", amountUsdc: "10.000000", fundTxHash: "0xabc" },
+      ],
+      [{ bountyId: "crowd", amountUsdc: "15.000000", fundTxHash: "0xabc" }],
+    );
+    assert.equal(totals.get("crowd"), "15.000000");
+    const presented = presentPublicBounty(
+      board({ status: "funded", amountUsdc: "15.000000" }),
+      confirmedTotalFor(totals, "crowd"),
+    );
+    assert.equal(presented.totalFundedUsdc, "15.000000");
+    assert.equal(presented.amountUsdc, "15.000000");
+    assert.equal(presented.payout.faceUsdc, "15.000000");
+  });
+
+  it("does not add the rewritten escrow face on top of a top-up that omits the lock hash", () => {
+    const totals = sumConfirmedFundedAmounts(
+      [{ bountyId: "top", amountUsdc: "5.000000", fundTxHash: "0xtop" }],
+      [{ bountyId: "top", amountUsdc: "15.000000", fundTxHash: "0xlock" }],
+    );
+    assert.equal(totals.get("top"), "15.000000");
+  });
+
+  it("returns 0.000000 for pending_fund when the escrow has no fund transaction", () => {
+    const totals = sumConfirmedFundedAmounts(
+      [{ bountyId: BOUNTY_ID, amountUsdc: "9.000000", fundTxHash: "   " }],
+      [{ bountyId: BOUNTY_ID, amountUsdc: "1.000000", fundTxHash: null }],
+    );
+    assert.equal(confirmedTotalFor(totals, BOUNTY_ID), "0.000000");
+    const presented = presentPublicBounty(
+      board({ status: "pending_fund", amountUsdc: "1.000000", funderCount: 0 }),
+      confirmedTotalFor(totals, BOUNTY_ID),
+    );
+    assert.equal(presented.status, "pending_fund");
+    assert.equal(presented.totalFundedUsdc, "0.000000");
+    assert.equal(presented.amountUsdc, "1.000000");
+    assert.equal(presented.payout.faceUsdc, "1.000000");
+  });
+
+  it("reports a cancelled bounty's verified escrow fund and keeps the face", () => {
+    const totals = sumConfirmedFundedAmounts(
+      [],
+      [{ bountyId: BOUNTY_ID, amountUsdc: "4.500000", fundTxHash: "0xcancel" }],
+    );
+    const presented = presentPublicBounty(
+      board({ status: "cancelled", amountUsdc: "10.000000" }),
+      confirmedTotalFor(totals, BOUNTY_ID),
+    );
+    assert.equal(presented.status, "cancelled");
+    assert.equal(presented.totalFundedUsdc, "4.500000");
+    assert.equal(presented.amountUsdc, "10.000000");
+    assert.equal(presented.payout.faceUsdc, "10.000000");
   });
 
   it("uses 0.000000 for an unfunded bounty and keeps the face on amountUsdc", () => {

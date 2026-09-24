@@ -13,7 +13,7 @@ const ROUTES = [
 
 describe("OpenAPI document", () => {
   it("validates as OpenAPI 3.1 and lists every read route", async () => {
-    const document = buildOpenApiDocument();
+    const document = buildOpenApiDocument({ env: {} });
     await SwaggerParser.validate(document);
     assert.equal(document.openapi, "3.1.0");
     assert.equal(document.info.title, "GitHub Bounties API");
@@ -37,13 +37,47 @@ describe("OpenAPI document", () => {
       assert.ok(names.includes(name), name);
     }
     const json = JSON.stringify(document);
-    assert.match(json, /Sum of confirmed bounty contributions/);
-    assert.match(json, /0\.000000 when none are confirmed/);
+    assert.match(json, /escrows\.fund_tx_hash is recorded/);
+    assert.match(json, /0\.000000 when there is no verified inflow/);
     assert.match(json, /newest contribution first/);
     assert.match(json, /GET, OPTIONS/);
     assert.match(json, /method_not_allowed/);
     for (const path of ROUTES) {
       assert.ok(document.paths?.[path]?.get?.responses?.["405"], `${path} 405`);
     }
+  });
+
+  it("lists the request host first for PROD and for DEV", () => {
+    const prod = buildOpenApiDocument({ host: "githubbounties.xyz", env: {} });
+    assert.deepEqual(
+      prod.servers?.map((server) => server.url),
+      ["https://githubbounties.xyz", "https://dev.githubbounties.xyz"],
+    );
+    const www = buildOpenApiDocument({ host: "www.githubbounties.xyz", env: {} });
+    assert.equal(www.servers?.[0]?.url, "https://githubbounties.xyz");
+
+    const dev = buildOpenApiDocument({
+      host: "dev.githubbounties.xyz",
+      env: { NEXT_PUBLIC_APP_URL: "https://githubbounties.xyz" },
+    });
+    assert.deepEqual(
+      dev.servers?.map((server) => server.url),
+      ["https://dev.githubbounties.xyz", "https://githubbounties.xyz"],
+    );
+  });
+
+  it("uses the app origin when the host is missing or untrusted", () => {
+    const prod = buildOpenApiDocument({
+      host: "github-bounties-web-abc.run.app",
+      env: { APP_BASE_URL: "https://githubbounties.xyz/api" },
+    });
+    assert.equal(prod.servers?.[0]?.url, "https://githubbounties.xyz");
+
+    const dev = buildOpenApiDocument({
+      host: null,
+      env: { NEXT_PUBLIC_APP_URL: "https://dev.githubbounties.xyz" },
+    });
+    assert.equal(dev.servers?.[0]?.url, "https://dev.githubbounties.xyz");
+    assert.equal(dev.servers?.[1]?.url, "https://githubbounties.xyz");
   });
 });
