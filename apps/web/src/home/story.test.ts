@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { FEE_BPS, POOL_BPS_OF_POST_FEE, POOL_MAX_PAID } from "../lib/constants";
-import { STORY_HEADING, STORY_LEDE, STORY_STEP_IDS, STORY_STEPS } from "./story";
+import { storyChainCaption, STORY_HEADING, STORY_LEDE, STORY_STEP_IDS, STORY_STEPS } from "./story";
 
 describe("homepage story", () => {
   it("replaces modules with the six product steps in order", () => {
@@ -46,11 +46,24 @@ describe("homepage story", () => {
     assert.match(blob, /merged pull request/);
     assert.match(blob, /bring-your-own Base address/);
     assert.match(blob, /Working on this does not pay/);
-    assert.match(blob, /Base Sepolia/);
+    assert.match(blob, /USDC on Base/);
+    assert.match(blob, /The chain is Base/);
+    assert.doesNotMatch(blob, /Base Sepolia/);
+    assert.doesNotMatch(blob, /DEV uses/i);
+    assert.doesNotMatch(blob, /DEV runs/i);
     assert.match(blob, /not Lightning/i);
     assert.doesNotMatch(blob, /crowdfund/i);
     assert.doesNotMatch(blob, /kickstarter/i);
     assert.doesNotMatch(blob, /pledge/i);
     assert.doesNotMatch(blob, /token sale/i);
+  });
+
+  it("names the settlement chain from the fund runtime, without a DEV-only sentence", () => {
+    const prod = storyChainCaption("Base");
+    const dev = storyChainCaption("Base Sepolia");
+    assert.equal(prod, "Any bring-your-own Base address. Settlement uses Base.");
+    assert.equal(dev, "Any bring-your-own Base address. Settlement uses Base Sepolia.");
+    assert.doesNotMatch(prod, /Sepolia|DEV uses|DEV runs/i);
+    assert.doesNotMatch(dev, /DEV uses|DEV runs/i);
   });
 });

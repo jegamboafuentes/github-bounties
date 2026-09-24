@@ -4,7 +4,7 @@ function statusClass(status: RoadmapStatus): string {
   if (status === "shipped") {
     return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300";
   }
-  if (status === "in_progress") {
+  if (status === "next") {
     return "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200";
   }
   return "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
