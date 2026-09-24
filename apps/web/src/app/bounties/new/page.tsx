@@ -25,8 +25,8 @@ export default async function NewBountyPage() {
           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">V1-4</p>
           <h1 className="text-3xl font-semibold tracking-tight">Post a bounty</h1>
           <p className="text-zinc-600 dark:text-zinc-400">
-            Paste a GitHub issue URL for an App-connected repo. Google session required.
-            Claim-lock later is coordination only — merge is still truth.
+            Paste any public GitHub issue URL. Google session required.
+            Closed issues are rejected. Merge is still truth.
           </p>
         </div>
 
@@ -45,11 +45,12 @@ export default async function NewBountyPage() {
           )}
           {githubLogin ? (
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Paste an issue URL for an App-connected repo below.
+              Paste a public issue URL below. App-installed repos still receive merge webhooks.
             </p>
           ) : (
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Connect GitHub in Settings, then paste an issue URL for an App-connected repo.{" "}
+              You can post a bounty on a public issue without installing the App.
+              Connect GitHub in Settings when you want to claim a merge payout.{" "}
               <Link href="/settings" className="underline underline-offset-4">
                 Open Settings
               </Link>

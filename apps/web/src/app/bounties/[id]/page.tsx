@@ -87,7 +87,7 @@ export default async function BountyDetailPage({
     githubIssueNumber: bounty.githubIssueNumber,
     issueTitle: issue?.title || bounty.title,
     issueBody: issue?.markdown ?? null,
-    installationId: issue?.installationId ?? BigInt(0),
+    installationId: issue?.installationId ?? null,
     db,
     forceRefresh: query.refreshIntelligence === "1",
   }).catch((err) => ({
