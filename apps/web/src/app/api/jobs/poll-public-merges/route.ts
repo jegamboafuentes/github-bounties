@@ -5,9 +5,9 @@ export const dynamic = "force-dynamic";
 
 /**
  * Cron for funded bounties on public GitHub repos that have no App installation.
- * Cloud Scheduler can GET or POST on DEV and PROD. Same bearer as expire-claim-locks.
+ * The job runs on DEV and PROD. PROD uses Cloud Scheduler `gb-prod-poll-public-merges` every 10 minutes.
+ * Cloud Scheduler can GET or POST. Same bearer as expire-claim-locks.
  * If CRON_SECRET is set, require `Authorization: Bearer <CRON_SECRET>`.
- * PROD runs every 10 minutes as Cloud Scheduler job `gb-prod-poll-public-merges`.
  *
  * CLI (same function): `cd apps/web && npm run poll-public-merges`
  */
