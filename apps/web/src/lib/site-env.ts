@@ -28,6 +28,59 @@ function isDevHost(host: string): boolean {
   return host === DEV_SITE_HOST || host.endsWith(`.${DEV_SITE_HOST}`);
 }
 
+/** Local fallback when no public origin is configured. Crawlers cannot fetch this. */
+export const LOCAL_SITE_ORIGIN = "http://localhost:3000";
+
+/**
+ * Absolute origin (no path) from a URL or bare host.
+ * `https://dev.githubbounties.xyz/path/` → `https://dev.githubbounties.xyz`.
+ */
+export function originFromSiteUrl(value: string | null | undefined): string | null {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed.includes("://") ? trimmed : `https://${trimmed}`);
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    if (!url.hostname) return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function firstHeaderValue(value: string | null | undefined): string {
+  return value?.split(",")[0]?.trim() ?? "";
+}
+
+/**
+ * Public site origin for absolute URLs (Open Graph, Twitter, share images).
+ * Preference matches WalletConnect / x402 / email: `PUBLIC_BASE_URL`, then
+ * `AUTH_URL`. When neither is set, use the incoming https host so a crawler
+ * that hit DEV or PROD still gets an absolute URL on that host. Localhost
+ * only when nothing public is available.
+ */
+export function readPublicSiteOrigin(
+  env: EnvMap = process.env,
+  request?: { host?: string | null; proto?: string | null },
+): string {
+  const configured =
+    originFromSiteUrl(env.PUBLIC_BASE_URL) || originFromSiteUrl(env.AUTH_URL);
+  if (configured) return configured;
+
+  const host = firstHeaderValue(request?.host);
+  const hostname = hostnameOf(host);
+  const isLocal =
+    !hostname || hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  if (!isLocal) {
+    const protoRaw = firstHeaderValue(request?.proto).toLowerCase();
+    const proto = protoRaw === "http" ? "http" : "https";
+    const fromRequest = originFromSiteUrl(`${proto}://${host}`);
+    if (fromRequest) return fromRequest;
+  }
+
+  return LOCAL_SITE_ORIGIN;
+}
+
 /**
  * Whether to render the header “DEV” pill.
  * True on `dev.githubbounties.xyz` (AUTH_URL / PUBLIC_BASE_URL / request host)
