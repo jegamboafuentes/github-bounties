@@ -131,7 +131,14 @@ describe("MCP read tools", () => {
     );
     const listTool = listed.tools.find((tool) => tool.name === "list_bounties");
     assert.match(listTool?.description ?? "", /has_intel/);
+    assert.match(listTool?.description ?? "", /totalFundedUsdc/);
+    assert.match(listTool?.description ?? "", /newest contribution first/);
     assert.equal(typeof listTool?.inputSchema, "object");
+    const bountyTool = listed.tools.find((tool) => tool.name === "get_bounty");
+    assert.match(bountyTool?.description ?? "", /totalFundedUsdc/);
+    const fundersTool = listed.tools.find((tool) => tool.name === "list_funders");
+    assert.match(fundersTool?.description ?? "", /newest first/);
+    assert.doesNotMatch(fundersTool?.description ?? "", /oldest first/);
 
     const result = await client.callTool({ name: "list_bounties", arguments: { limit: 2 } });
     const payload = JSON.parse(textOf(result)) as { data: { id: string; issue: { title: string } }[] };

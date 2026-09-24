@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 export const PUBLIC_API_ERROR_CODES = [
   "validation_failed",
   "not_found",
+  "method_not_allowed",
   "rate_limited",
   "internal",
 ] as const;
@@ -21,6 +22,7 @@ export type PublicApiErrorBody = {
 const STATUS_FOR_CODE: Record<PublicApiErrorCode, number> = {
   validation_failed: 400,
   not_found: 404,
+  method_not_allowed: 405,
   rate_limited: 429,
   internal: 500,
 };
