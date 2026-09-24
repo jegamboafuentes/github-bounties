@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { inflateSync } from "node:zlib";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -10,15 +11,123 @@ import {
   buildSocialMetadata,
 } from "./social-metadata";
 
-function pngSize(relativePath: string): { width: number; height: number; bytes: number } {
+function readPng(relativePath: string): {
+  width: number;
+  height: number;
+  bytes: number;
+  rgb: (x: number, y: number) => [number, number, number];
+} {
   const file = fileURLToPath(new URL(relativePath, import.meta.url));
   const buf = readFileSync(file);
   assert.equal(buf.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+  let pos = 8;
+  let width = 0;
+  let height = 0;
+  let colorType = 0;
+  const idat: Buffer[] = [];
+  while (pos < buf.length) {
+    const length = buf.readUInt32BE(pos);
+    const type = buf.subarray(pos + 4, pos + 8).toString("ascii");
+    const chunk = buf.subarray(pos + 8, pos + 8 + length);
+    if (type === "IHDR") {
+      width = chunk.readUInt32BE(0);
+      height = chunk.readUInt32BE(4);
+      colorType = chunk[9] ?? 0;
+      assert.equal(chunk[8], 8, `${relativePath} must be 8-bit`);
+    } else if (type === "IDAT") {
+      idat.push(chunk);
+    } else if (type === "IEND") {
+      break;
+    }
+    pos += 12 + length;
+  }
+  const channels = colorType === 2 ? 3 : colorType === 6 ? 4 : 0;
+  assert.ok(channels === 3 || channels === 4, `${relativePath} color type ${colorType}`);
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = width * channels;
+  const rows: Buffer[] = [];
+  let offset = 0;
+  let prev = Buffer.alloc(stride);
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[offset] ?? 0;
+    offset += 1;
+    const row = Buffer.from(raw.subarray(offset, offset + stride));
+    offset += stride;
+    if (filter === 1 || filter === 3 || filter === 4) {
+      for (let x = 0; x < stride; x += 1) {
+        const left = x >= channels ? (row[x - channels] ?? 0) : 0;
+        const up = prev[x] ?? 0;
+        const upLeft = x >= channels ? (prev[x - channels] ?? 0) : 0;
+        let pred = 0;
+        if (filter === 1) pred = left;
+        else if (filter === 3) pred = Math.floor((left + up) / 2);
+        else {
+          const p = left + up - upLeft;
+          const pa = Math.abs(p - left);
+          const pb = Math.abs(p - up);
+          const pc = Math.abs(p - upLeft);
+          pred = pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft;
+        }
+        row[x] = ((row[x] ?? 0) + pred) & 255;
+      }
+    } else if (filter === 2) {
+      for (let x = 0; x < stride; x += 1) row[x] = ((row[x] ?? 0) + (prev[x] ?? 0)) & 255;
+    } else if (filter !== 0) {
+      assert.fail(`${relativePath} uses PNG filter ${filter}`);
+    }
+    rows.push(row);
+    prev = row;
+  }
   return {
-    width: buf.readUInt32BE(16),
-    height: buf.readUInt32BE(20),
+    width,
+    height,
     bytes: buf.length,
+    rgb(x: number, y: number): [number, number, number] {
+      const row = rows[y];
+      assert.ok(row);
+      const i = x * channels;
+      const r = row[i] ?? 0;
+      const g = row[i + 1] ?? r;
+      const b = row[i + 2] ?? r;
+      const a = channels === 4 ? (row[i + 3] ?? 255) : 255;
+      const bg = 250;
+      const alpha = a / 255;
+      return [
+        Math.round(r * alpha + bg * (1 - alpha)),
+        Math.round(g * alpha + bg * (1 - alpha)),
+        Math.round(b * alpha + bg * (1 - alpha)),
+      ];
+    },
   };
+}
+
+/** Dark logo-1 ink on #fafafa. logo-3 is light ink and fails this on a white card. */
+function assertDarkMarkOnLight(relativePath: string, width: number, height: number): void {
+  const png = readPng(relativePath);
+  assert.equal(png.width, width);
+  assert.equal(png.height, height);
+  assert.ok(png.bytes < 300_000, `${relativePath} is ${png.bytes} bytes`);
+  for (const [x, y] of [
+    [0, 0],
+    [png.width - 1, 0],
+    [0, png.height - 1],
+    [png.width - 1, png.height - 1],
+  ] as const) {
+    const [r, g, b] = png.rgb(x, y);
+    assert.ok(r >= 245 && g >= 245 && b >= 245, `${relativePath} corner ${x},${y} is ${r},${g},${b}`);
+  }
+  let dark = 0;
+  const step = Math.max(1, Math.floor(Math.min(png.width, png.height) / 200));
+  let samples = 0;
+  for (let y = 0; y < png.height; y += step) {
+    for (let x = 0; x < png.width; x += step) {
+      samples += 1;
+      const [r, g, b] = png.rgb(x, y);
+      if ((r + g + b) / 3 < 40) dark += 1;
+    }
+  }
+  const ratio = dark / samples;
+  assert.ok(ratio > 0.05, `${relativePath} dark-ink ratio ${ratio.toFixed(3)} (logo-3 on white is ~0)`);
 }
 
 describe("buildSocialMetadata", () => {
@@ -60,21 +169,55 @@ describe("buildSocialMetadata", () => {
 });
 
 describe("share and icon assets", () => {
-  it("serves a 1200×630 wordmark card under the WhatsApp size budget", () => {
-    const og = pngSize("../../public/og.png");
-    assert.equal(og.width, 1200);
-    assert.equal(og.height, 630);
-    assert.ok(og.bytes < 300_000, `og.png is ${og.bytes} bytes`);
+  it("serves a 1200×630 dark wordmark on #fafafa under the WhatsApp size budget", () => {
+    assertDarkMarkOnLight("../../public/og.png", OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT);
   });
 
-  it("uses a square wordmark icon for the tab and apple touch", () => {
-    const icon = pngSize("../../public/icon.png");
-    const apple = pngSize("../../public/apple-touch-icon.png");
-    assert.equal(icon.width, 512);
-    assert.equal(icon.height, 512);
-    assert.equal(apple.width, 180);
-    assert.equal(apple.height, 180);
-    assert.equal(pngSize("../../src/app/icon.png").width, 512);
-    assert.equal(pngSize("../../src/app/apple-icon.png").width, 180);
+  it("keeps the whole black wordmark inside WhatsApp's center square crop", () => {
+    const png = readPng("../../public/og.png");
+    const side = png.height;
+    const left = Math.floor((png.width - side) / 2);
+    const right = left + side;
+    let centerDark = 0;
+    let centerSamples = 0;
+    let gutterDark = 0;
+    let gutterSamples = 0;
+    const step = 3;
+    for (let y = 0; y < png.height; y += step) {
+      for (let x = 0; x < png.width; x += step) {
+        const [r, g, b] = png.rgb(x, y);
+        const dark = (r + g + b) / 3 < 40;
+        if (x >= left && x < right) {
+          centerSamples += 1;
+          if (dark) centerDark += 1;
+        } else {
+          gutterSamples += 1;
+          if (dark) gutterDark += 1;
+        }
+      }
+    }
+    const centerRatio = centerDark / centerSamples;
+    const gutterRatio = gutterDark / gutterSamples;
+    assert.ok(centerRatio > 0.08, `center square dark-ink ratio ${centerRatio.toFixed(3)}`);
+    assert.ok(gutterRatio < 0.01, `side gutters dark-ink ratio ${gutterRatio.toFixed(3)} (mark must sit in the square thumb)`);
+  });
+
+  it("uses the same dark-on-light mark for the tab and apple touch", () => {
+    assertDarkMarkOnLight("../../public/icon.png", 512, 512);
+    assertDarkMarkOnLight("../../public/apple-touch-icon.png", 180, 180);
+    assertDarkMarkOnLight("../../src/app/icon.png", 512, 512);
+    assertDarkMarkOnLight("../../src/app/apple-icon.png", 180, 180);
+  });
+
+  it("ships public/og.png beside the standalone server", () => {
+    const dockerfile = readFileSync(fileURLToPath(new URL("../../Dockerfile", import.meta.url)), "utf8");
+    const pkg = JSON.parse(
+      readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8"),
+    ) as { scripts: { build: string } };
+    assert.match(pkg.scripts.build, /stage-standalone-public\.mjs/);
+    const standaloneCopy = dockerfile.indexOf("/app/.next/standalone");
+    const publicCopy = dockerfile.lastIndexOf("/app/public ./public");
+    assert.ok(standaloneCopy > 0, "Dockerfile must copy the standalone server");
+    assert.ok(publicCopy > standaloneCopy, "public/ must be copied after standalone so /og.png is at the image root");
   });
 });
