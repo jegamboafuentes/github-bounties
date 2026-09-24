@@ -14,7 +14,19 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: appDir,
   // Keep the CDP SDK out of the webpack/turbopack graph. File tracing still
   // copies it (and its deps) into `.next/standalone` for Cloud Run.
-  serverExternalPackages: ["@coinbase/cdp-sdk", "@x402/core", "@x402/evm", "@x402/extensions", "@x402/svm"],
+  serverExternalPackages: [
+    "@coinbase/cdp-sdk",
+    "@x402/core",
+    "@x402/evm",
+    "@x402/extensions",
+    "@x402/svm",
+    "@modelcontextprotocol/sdk",
+    "swagger-ui-dist",
+  ],
+  outputFileTracingIncludes: {
+    "/api/docs": ["./node_modules/swagger-ui-dist/**/*"],
+    "/api/docs/assets/[file]": ["./node_modules/swagger-ui-dist/**/*"],
+  },
   turbopack: {
     root: appDir,
   },

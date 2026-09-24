@@ -86,6 +86,7 @@ Decisions, sequences, and failure modes:
 | Issue body + Gemini intelligence | [docs/bounty-intelligence.md](docs/bounty-intelligence.md) |
 | Sign-in identity + DEV transactional email (welcome and domain events, not remounted) | [docs/email.md](docs/email.md) |
 | Public stats (`GET /api/stats`) | [docs/stats.md](docs/stats.md) |
+| Read-only public API + MCP (V4-1) | [docs/api.md](docs/api.md) |
 | Google sign-in | [docs/google-signin.md](docs/google-signin.md) |
 | GitHub App + webhooks | [docs/github-app.md](docs/github-app.md), [docs/webhooks.md](docs/webhooks.md) |
 | Schema | [docs/v1-schema.md](docs/v1-schema.md) |

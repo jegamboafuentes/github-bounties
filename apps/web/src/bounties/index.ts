@@ -1,6 +1,6 @@
 export { normalizeBountyAmountUsdc } from "./amount";
 export { createBountyFromIssueUrl } from "./create";
-export { loadBountyIssueBody } from "./issue-body";
+export { loadBountyIssueBody, readStoredIssueBody } from "./issue-body";
 export {
   bountyStatusLabel,
   claimedByUntilLabel,
@@ -36,7 +36,15 @@ export {
 export { BountyError, isBountyError } from "./errors";
 export { expireClaimLocks, expireClaimLocksForBounty, drainExclusiveClaimLocks } from "./expire";
 export { fundBounty, topUpBounty } from "./fund";
-export { getBoardBounty, listBoardBounties, type BoardBounty } from "./list";
+export {
+  getBoardBounty,
+  listBoardBounties,
+  listBoardBountiesPage,
+  type BoardBounty,
+  type BoardKeyset,
+  type BoardListSort,
+  type BoardPageQuery,
+} from "./list";
 export {
   pendingHunterLinkCaption,
   type PendingHunterLink,

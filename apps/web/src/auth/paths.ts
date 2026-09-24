@@ -1,4 +1,4 @@
-/** Protected surface. Public: /, /about, /roadmap, /signin, /board, /bounties/[id], /api/health, /api/stats, /api/auth/*, POST /webhooks/github. */
+/** Protected surface. Public: /, /about, /roadmap, /signin, /board, /bounties/[id], /api/health, /api/stats, /api/v1/*, /api/docs, /mcp, /api/auth/*, POST /webhooks/github. */
 
 export const PROTECTED_PAGE_PREFIXES = [
   "/settings",
