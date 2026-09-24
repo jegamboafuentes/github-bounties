@@ -13,6 +13,7 @@ export type EscrowErrorCode =
   | "fund_hash_not_verified"
   | "fund_hash_reused"
   | "insufficient_bounty_funds"
+  | "destination_mismatch"
   | "missing_cdp_env"
   | "mainnet_refused"
   | "inbound_unconfirmed"

@@ -3,12 +3,15 @@ import {
   CDP_DEFAULT_NETWORK,
   CDP_ESCROW_ACCOUNT_NAME,
   CDP_FEE_ACCOUNT_NAME,
+  USDC_BASE_MAINNET,
+  USDC_BASE_SEPOLIA,
 } from "../lib/constants";
 import { EscrowError } from "./errors";
 import {
   cdpMissingEnvMessage,
   isDryRunLive,
   isMainnetAllowed,
+  isMainnetNetwork,
   probeCdpEnv,
   type CdpProbe,
   type CdpRailMode,
@@ -62,6 +65,14 @@ export type CdpRail = {
 
 export const MOCK_ESCROW_ADDRESS = "0x00000000000000000000000000000000e5c400";
 export const MOCK_FEE_ADDRESS = "0x00000000000000000000000000000000fee200";
+
+/**
+ * The only USDC contract an outbound transfer may send.
+ * Chosen from the rail network (env), never from request or database data.
+ */
+export function configuredUsdcContract(network: string): `0x${string}` {
+  return (isMainnetNetwork(network) ? USDC_BASE_MAINNET : USDC_BASE_SEPOLIA) as `0x${string}`;
+}
 
 export function mockTxHash(purpose: string, idempotencyKey: string): string {
   const hex = createHash("sha256").update(`mock:${purpose}:${idempotencyKey}`).digest("hex");
@@ -238,7 +249,7 @@ export function createCdpRail(env: EnvMap = process.env, probe = probeCdpEnv(env
         const sent = await wallets.escrow.transfer({
           to: input.to,
           amount: input.amountAtomic,
-          token: "usdc",
+          token: configuredUsdcContract(probe.network),
           network: probe.unsafeNetwork ? "base" : "base-sepolia",
           idempotencyKey: input.idempotencyKey,
         });

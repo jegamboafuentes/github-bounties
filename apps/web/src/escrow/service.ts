@@ -15,6 +15,8 @@ import {
 import { hostedCheckoutStatus } from "./hosted";
 import { assertCallerLockHash, assertFundTxHashAvailable } from "./fund-hash";
 import { resolveLockFundTxHash } from "./inbound";
+import { logMoneyAction, moneyResultCode, takeRequestId, type MoneyAction } from "./actor-log";
+import { payerDistinctFromEscrow, transferToStoredDestination } from "./destination-guard";
 import { requireBasePayoutAddress } from "./payout-address";
 import { assertPayoutCovered } from "./payout-guard";
 import { moneyIdempotencyKey } from "./idempotency";
@@ -64,6 +66,8 @@ export type EscrowServiceOpts = {
   now?: Date;
   /** Optional. Production uses process.env. Missing RESEND_API_KEY does not fail the money call. */
   email?: DomainEmailDeps;
+  /** Correlates Cloud Logging lines for one HTTP request or server action. */
+  requestId?: string | null;
 };
 
 function railOf(opts: EscrowServiceOpts): CdpRail {
@@ -148,6 +152,7 @@ export async function lockEscrowFunds(
   const split = splitFaceUsdc(bounty.amountUsdc);
   const fundKey = moneyIdempotencyKey(bountyId, "FUND_IN");
   const existingBeforeLock = await loadEscrow(opts.db, bountyId);
+  const requestId = takeRequestId(opts.requestId);
 
   let rail: CdpRail;
   let locked: Awaited<ReturnType<CdpRail["lockFace"]>>;
@@ -181,6 +186,16 @@ export async function lockEscrowFunds(
       reason: failure.reason,
       now,
     });
+    logMoneyAction({
+      action: "lock",
+      actorUserId,
+      bountyId,
+      destination: null,
+      amountUsdc: bounty.amountUsdc,
+      txHash: null,
+      result: failure.code,
+      requestId,
+    });
     throw failure.error;
   }
 
@@ -189,9 +204,29 @@ export async function lockEscrowFunds(
     .from(users)
     .where(eq(users.id, actorUserId))
     .limit(1);
-  // Keep the x402 payer when settle already stored it. Never take a caller address.
-  const funderAddress =
-    existingBeforeLock?.funderAddress?.trim() || poster?.walletAddress?.trim() || null;
+  // PROD bug (bounty bbcc9ee5): Lock used `poster wallet || escrow address`
+  // and overwrote the x402 sender with payTo (gb-escrow). Keep the verified
+  // x402 payer. Never store the escrow wallet, and never a caller address.
+  const escrowWallet = existingBeforeLock?.escrowAddress || locked.escrowAddress;
+  const x402Payer = payerDistinctFromEscrow(existingBeforeLock?.funderAddress, escrowWallet);
+  const posterWallet = payerDistinctFromEscrow(poster?.walletAddress, locked.escrowAddress);
+  const funderAddress = x402Payer || posterWallet || null;
+  if (rail.mode === "cdp" && Boolean(existingBeforeLock?.x402PaymentId?.trim()) && !x402Payer) {
+    logMoneyAction({
+      action: "lock",
+      actorUserId,
+      bountyId,
+      destination: null,
+      amountUsdc: bounty.amountUsdc,
+      txHash: locked.txHash,
+      result: "x402_settle_failed",
+      requestId,
+    });
+    throw new EscrowError(
+      "x402_settle_failed",
+      "x402 settle did not record the sending wallet. Lock will not store the escrow wallet as the funder.",
+    );
+  }
 
   await opts.db.transaction(async (tx) => {
     const [updated] = await tx
@@ -242,6 +277,17 @@ export async function lockEscrowFunds(
   if (!escrow) throw new EscrowError("bounty_not_found", "Escrow row missing after lock.");
 
   await notifyBountyFunded(opts.db, bountyId, opts.email);
+
+  logMoneyAction({
+    action: "lock",
+    actorUserId,
+    bountyId,
+    destination: funderAddress,
+    amountUsdc: bounty.amountUsdc,
+    txHash: locked.txHash,
+    result: "ok",
+    requestId,
+  });
 
   return {
     bountyId,
@@ -326,13 +372,17 @@ export async function settleEscrow(
     claimId?: string;
     scope?: SettleScope;
     participantId?: string | null;
-    /** Pool member's own Claim address. Ignored unless scope is pool_member. */
+    /**
+     * Ignored. Pool Claim writes the member's address onto the participant
+     * row first. The transfer re-reads that row or the member's saved wallet.
+     */
     poolPayoutAddress?: string | null;
   },
   opts: EscrowServiceOpts,
 ): Promise<SettleResult> {
   const now = opts.now ?? new Date();
   const scope: SettleScope = input.scope ?? "winner_and_fee";
+  const requestId = takeRequestId(opts.requestId);
   const rail = railOf(opts);
   const bounty = await loadBounty(opts.db, bountyId);
   const escrow = await loadEscrow(opts.db, bountyId);
@@ -377,7 +427,23 @@ export async function settleEscrow(
     throw new EscrowError("not_settleable", "Escrow is not locked (funded) — cannot settle.");
   }
 
-  const hunter = await resolveHunter(opts.db, bountyId, input);
+  let hunter: { userId: string; address: string; claimId: string };
+  try {
+    hunter = await resolveHunter(opts.db, bountyId, input);
+  } catch (err) {
+    logMoneyAction({
+      action: scope === "pool_member" ? "pool_claim" : "settle",
+      actorUserId: input.actorUserId ?? null,
+      bountyId,
+      claimId: input.claimId ?? null,
+      destination: null,
+      amountUsdc: bounty.amountUsdc,
+      txHash: null,
+      result: moneyResultCode(err),
+      requestId,
+    });
+    throw err;
+  }
   if (scope === "pool_member") {
     await assertPoolMemberActor(opts.db, freeze, input);
     if (!escrow.payoutTxHash) {
@@ -391,6 +457,17 @@ export async function settleEscrow(
     input.actorUserId !== bounty.posterUserId &&
     input.actorUserId !== hunter.userId
   ) {
+    logMoneyAction({
+      action: "settle",
+      actorUserId: input.actorUserId ?? null,
+      bountyId,
+      claimId: hunter.claimId,
+      destination: null,
+      amountUsdc: bounty.amountUsdc,
+      txHash: null,
+      result: "not_settler",
+      requestId,
+    });
     throw new EscrowError("not_settler", "Only the poster or the winning hunter can settle.");
   }
 
@@ -431,12 +508,7 @@ export async function settleEscrow(
     freeze.poolMembers.map(async (member) => ({
       id: member.id,
       userId: member.userId,
-      toAddress:
-        scope === "pool_member" &&
-        member.id === input.participantId &&
-        input.poolPayoutAddress?.trim()
-          ? input.poolPayoutAddress.trim()
-          : await resolvePoolMemberAddress(opts.db, member),
+      toAddress: await resolvePoolMemberAddress(opts.db, member),
     })),
   );
 
@@ -503,13 +575,31 @@ export async function settleEscrow(
 
     await markLegSubmitted(opts.db, row.id, now);
     const idempotencyKey = row.idempotencyKey || leg.idempotencyKey;
+    const legAction = settleLegAction(leg.kind, scope, input.actorUserId, hunter.userId);
     try {
-      const sent = await rail.transferUsdc({
+      const sent = await transferToStoredDestination({
+        db: opts.db,
+        bountyId,
         to: toAddress,
+        kind: leg.kind,
+        claimId: hunter.claimId,
+        participantId: leg.participantId,
+        rail,
         amountAtomic: leg.amountAtomic,
         idempotencyKey,
         purpose: leg.purpose,
-        kind: leg.railKind,
+        railKind: leg.railKind,
+      });
+      logMoneyAction({
+        action: legAction,
+        actorUserId: input.actorUserId ?? null,
+        bountyId,
+        claimId: leg.kind === "WINNER_PAYOUT" ? hunter.claimId : null,
+        destination: toAddress,
+        amountUsdc: leg.amountUsdc,
+        txHash: sent.txHash,
+        result: "ok",
+        requestId,
       });
       await markLegConfirmed(opts.db, {
         ledgerId: row.id,
@@ -546,6 +636,17 @@ export async function settleEscrow(
         });
       }
     } catch (err) {
+      logMoneyAction({
+        action: legAction,
+        actorUserId: input.actorUserId ?? null,
+        bountyId,
+        claimId: leg.kind === "WINNER_PAYOUT" ? hunter.claimId : null,
+        destination: toAddress,
+        amountUsdc: leg.amountUsdc,
+        txHash: null,
+        result: moneyResultCode(err),
+        requestId,
+      });
       await markLegFailed(opts.db, row.id, now);
       if (leg.kind === "WINNER_PAYOUT") {
         await persistSettleRailFail(
@@ -738,6 +839,20 @@ function finishSettleResult(args: {
     hostedCheckout: hostedCheckoutStatus(),
     reconcile: reconcileBountyNotes(toRecon(args.bountyId, args.faceUsdc, args.escrow, out)),
   };
+}
+
+function settleLegAction(
+  kind: PlannedLeg["kind"],
+  scope: SettleScope,
+  actorUserId: string | undefined,
+  hunterUserId: string,
+): MoneyAction {
+  if (kind === "FEE_OUT") return "fee_transfer";
+  if (kind === "POOL_PAYOUT") return "pool_claim";
+  if (kind === "WINNER_PAYOUT" && actorUserId && actorUserId === hunterUserId && scope !== "all") {
+    return "winner_claim";
+  }
+  return "settle";
 }
 
 /**
@@ -966,8 +1081,10 @@ export async function refundEscrow(
     });
   }
 
+  const requestId = takeRequestId(opts.requestId);
   const recordedPayer =
-    escrow.funderAddress?.trim() || (await walletOf(opts.db, bounty.posterUserId));
+    payerDistinctFromEscrow(escrow.funderAddress, escrow.escrowAddress) ||
+    (await walletOf(opts.db, bounty.posterUserId));
   const funderAddress = requireBasePayoutAddress(recordedPayer, "missing_funder_address");
 
   const split = splitFaceUsdc(bounty.amountUsdc);
@@ -984,13 +1101,42 @@ export async function refundEscrow(
     .set({ status: "refunding", funderAddress, updatedAt: now })
     .where(eq(escrows.id, escrow.id));
 
-  const sent = await rail.transferUsdc({
-    to: funderAddress,
-    amountAtomic: split.faceAtomic,
-    idempotencyKey: refundKey,
-    purpose: "refund",
-    kind: "REFUND_OUT",
-  });
+  let sent: { txHash: string };
+  try {
+    sent = await transferToStoredDestination({
+      db: opts.db,
+      bountyId,
+      to: funderAddress,
+      kind: "REFUND_OUT",
+      rail,
+      amountAtomic: split.faceAtomic,
+      idempotencyKey: refundKey,
+      purpose: "refund",
+      railKind: "REFUND_OUT",
+    });
+    logMoneyAction({
+      action: "refund",
+      actorUserId: input.actorUserId ?? null,
+      bountyId,
+      destination: funderAddress,
+      amountUsdc: split.faceUsdc,
+      txHash: sent.txHash,
+      result: "ok",
+      requestId,
+    });
+  } catch (err) {
+    logMoneyAction({
+      action: "refund",
+      actorUserId: input.actorUserId ?? null,
+      bountyId,
+      destination: funderAddress,
+      amountUsdc: split.faceUsdc,
+      txHash: null,
+      result: moneyResultCode(err),
+      requestId,
+    });
+    throw err;
+  }
 
   const bountyTerminal = input.reason === "expiry" ? "expired" : "cancelled";
   await opts.db.transaction(async (tx) => {
@@ -1066,13 +1212,46 @@ async function refundSplitContributions(input: {
     }
     const toAddress = requireBasePayoutAddress(leg.toAddress, "missing_funder_address");
     await assertPayoutCovered(opts.db, bountyId, leg.amountAtomic, rail.mode);
-    const sent = await rail.transferUsdc({
-      to: toAddress,
-      amountAtomic: leg.amountAtomic,
-      idempotencyKey: leg.idempotencyKey,
-      purpose: "refund",
-      kind: "REFUND_OUT",
-    });
+    const requestId = takeRequestId(opts.requestId);
+    let sent: { txHash: string };
+    try {
+      sent = await transferToStoredDestination({
+        db: opts.db,
+        bountyId,
+        to: toAddress,
+        kind: "REFUND_OUT",
+        contributionId: leg.contributionId,
+        rail,
+        amountAtomic: leg.amountAtomic,
+        idempotencyKey: leg.idempotencyKey,
+        purpose: "refund",
+        railKind: "REFUND_OUT",
+      });
+      logMoneyAction({
+        action: "refund",
+        actorUserId: null,
+        bountyId,
+        contributionId: leg.contributionId,
+        destination: toAddress,
+        amountUsdc: leg.amountUsdc,
+        txHash: sent.txHash,
+        result: "ok",
+        requestId,
+      });
+    } catch (err) {
+      logMoneyAction({
+        action: "refund",
+        actorUserId: null,
+        bountyId,
+        contributionId: leg.contributionId,
+        destination: toAddress,
+        amountUsdc: leg.amountUsdc,
+        txHash: null,
+        result: moneyResultCode(err),
+        requestId,
+      });
+      throw err;
+    }
     await markContributionRefunded(opts.db, leg.contributionId, sent.txHash, now);
     lastHash = sent.txHash;
   }

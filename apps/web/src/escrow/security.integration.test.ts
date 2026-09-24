@@ -9,7 +9,8 @@ import { loadDotenvFiles } from "../db/load-dotenv";
 import { bounties, claims, escrows, repos, users } from "../db/schema";
 import { EscrowError } from "./errors";
 import { probeCdpEnv } from "./env";
-import { createMockRail } from "./rail";
+import { recordExactInbound } from "./inbound";
+import { createMockRail, MOCK_ESCROW_ADDRESS } from "./rail";
 import { refundEscrow, settleEscrow } from "./service";
 
 loadDotenvFiles();
@@ -296,6 +297,41 @@ describe("escrow security hotfix", () => {
       assert.equal(escrow?.payoutTxHash, null);
     } finally {
       console.error = originalError;
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("keeps the x402 payer and never stores the escrow wallet as funder", async () => {
+    const { db, sql, posterId, fullName, rail } = await fixture();
+    try {
+      const created = await postBounty(db, posterId, fullName, 8, "6");
+      await assert.rejects(
+        () =>
+          recordExactInbound(db, {
+            bountyId: created.id,
+            txHash: `0xpayer${created.id.replace(/-/g, "").slice(0, 20)}00000000000000000000000001`,
+            x402PaymentId: "x402:escrow-as-payer",
+            escrowAddress: MOCK_ESCROW_ADDRESS,
+            resourceUrl: "https://dev.githubbounties.xyz/x402",
+            funderAddress: MOCK_ESCROW_ADDRESS,
+          }),
+        (err: unknown) => err instanceof EscrowError && err.code === "x402_settle_failed",
+      );
+      const hash = `0xrealpayer${created.id.replace(/-/g, "").slice(0, 16)}000000000000000000000001`;
+      await recordExactInbound(db, {
+        bountyId: created.id,
+        txHash: hash,
+        x402PaymentId: `x402:${hash}`,
+        escrowAddress: MOCK_ESCROW_ADDRESS,
+        resourceUrl: "https://dev.githubbounties.xyz/x402",
+        funderAddress: HUNTER_ADDRESS,
+      });
+      await db.update(users).set({ walletAddress: null }).where(eq(users.id, posterId));
+      await fundBounty(created.id, posterId, db, new Date(), { rail });
+      const [escrow] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
+      assert.equal(escrow?.funderAddress, HUNTER_ADDRESS);
+      assert.notEqual(escrow?.funderAddress?.toLowerCase(), MOCK_ESCROW_ADDRESS.toLowerCase());
+    } finally {
       await sql.end({ timeout: 5 });
     }
   });

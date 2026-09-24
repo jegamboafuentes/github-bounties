@@ -14,6 +14,8 @@ import {
 } from "../db/schema";
 import { isUniqueViolation } from "../db/errors";
 import { atomicToUsdc, usdcToAtomic } from "../lib/money";
+import { logMoneyAction, takeRequestId } from "./actor-log";
+import { payerDistinctFromEscrow } from "./destination-guard";
 import { EscrowError } from "./errors";
 import { assertFundTxHashAvailable } from "./fund-hash";
 import { requireBasePayoutAddress } from "./payout-address";
@@ -29,6 +31,7 @@ export type TopUpOpts = {
    * HTTP routes and server actions stay `caller` and cannot paste a live hash.
    */
   fundHashSource?: "caller" | "x402";
+  requestId?: string | null;
 };
 
 export type TopUpResult = {
@@ -259,18 +262,39 @@ export async function topUpFundedBounty(
   }
   const amountUsdc = normalizeBountyAmountUsdc(input.amountUsdc);
   const now = opts.now ?? new Date();
+  const requestId = takeRequestId(opts.requestId);
   await assertFundedTopUpOpen(opts.db, bountyId);
 
   const rail = opts.rail ?? resolveRail();
   const source = opts.fundHashSource ?? "caller";
   const pasted = input.fundTxHash?.trim() || "";
   if (rail.mode === "cdp" && source !== "x402") {
+    logMoneyAction({
+      action: "top_up",
+      actorUserId,
+      bountyId,
+      destination: null,
+      amountUsdc,
+      txHash: pasted || null,
+      result: "fund_hash_not_verified",
+      requestId,
+    });
     throw new EscrowError(
       "fund_hash_not_verified",
       "Live rail top-up must go through x402 settle. Paste-hash top-up is mock/local only.",
     );
   }
   if (rail.mode === "cdp" && !pasted) {
+    logMoneyAction({
+      action: "top_up",
+      actorUserId,
+      bountyId,
+      destination: null,
+      amountUsdc,
+      txHash: null,
+      result: "fund_hash_not_verified",
+      requestId,
+    });
     throw new EscrowError(
       "fund_hash_not_verified",
       "x402 top-up settle returned no transaction hash. Face was not increased.",
@@ -305,7 +329,31 @@ export async function topUpFundedBounty(
     .from(users)
     .where(eq(users.id, actorUserId))
     .limit(1);
-  const funderAddress = input.funderAddress?.trim() || actor?.walletAddress?.trim() || null;
+  // Caller funderAddress is ignored except the verified x402 payer.
+  // That payer must not be the escrow wallet (payTo).
+  let funderAddress: string | null;
+  if (source === "x402") {
+    const payer = payerDistinctFromEscrow(input.funderAddress, locked.escrowAddress);
+    if (!payer) {
+      logMoneyAction({
+        action: "top_up",
+        actorUserId,
+        bountyId,
+        destination: null,
+        amountUsdc,
+        txHash: fundTxHash,
+        result: "x402_settle_failed",
+        requestId,
+      });
+      throw new EscrowError(
+        "x402_settle_failed",
+        "x402 top-up payer must be the sending wallet, not the escrow wallet.",
+      );
+    }
+    funderAddress = requireBasePayoutAddress(payer, "missing_funder_address");
+  } else {
+    funderAddress = actor?.walletAddress?.trim() || null;
+  }
 
   const applied = await opts.db.transaction(async (tx) => {
     const database = tx as unknown as Database;
@@ -365,6 +413,17 @@ export async function topUpFundedBounty(
     return { row: inserted, faceUsdc, alreadyApplied: false };
   });
 
+  logMoneyAction({
+    action: "top_up",
+    actorUserId,
+    bountyId,
+    contributionId: applied.row.id,
+    destination: funderAddress,
+    amountUsdc: applied.row.amountUsdc,
+    txHash: fundTxHash,
+    result: "ok",
+    requestId,
+  });
   return toResult(bountyId, applied.row, applied.faceUsdc, applied.alreadyApplied);
 }
 

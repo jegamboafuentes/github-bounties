@@ -6,6 +6,7 @@ import {
   isEscrowError,
   jsonForUnknown,
   settleEscrow,
+  takeRequestId,
 } from "@/escrow";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ export async function POST(
     const result = await settleEscrow(
       id,
       { actorUserId: user.id },
-      { db: getRuntimeDb() },
+      { db: getRuntimeDb(), requestId: takeRequestId(_req.headers.get("x-request-id")) },
     );
     return Response.json(
       { ok: true, ...result },

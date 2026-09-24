@@ -6,13 +6,14 @@ import {
   isEscrowError,
   jsonForUnknown,
   refundEscrow,
+  takeRequestId,
 } from "@/escrow";
 
 export const dynamic = "force-dynamic";
 
 /** Poster cancel → full-face refund (or void if never funded). */
 export async function POST(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
   const user = await getCurrentPublicUser();
@@ -25,7 +26,7 @@ export async function POST(
     const result = await refundEscrow(
       id,
       { actorUserId: user.id, reason: "cancel" },
-      { db: getRuntimeDb() },
+      { db: getRuntimeDb(), requestId: takeRequestId(req.headers.get("x-request-id")) },
     );
     return Response.json(
       { ok: true, ...result },

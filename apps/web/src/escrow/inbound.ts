@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { escrows } from "../db/schema";
+import { payerDistinctFromEscrow } from "./destination-guard";
 import { EscrowError } from "./errors";
+import { requireBasePayoutAddress } from "./payout-address";
 
 /**
  * Choose the Lock fund hash.
@@ -90,6 +92,19 @@ export async function recordExactInbound(
     return { alreadyRecorded: true, txHash };
   }
 
+  // payTo is the escrow wallet. Storing it as funder_address made PROD
+  // refunds look like they should pay gb-escrow (bounty bbcc9ee5).
+  const payer = input.funderAddress?.trim() || "";
+  if (payer && !payerDistinctFromEscrow(payer, input.escrowAddress)) {
+    throw new EscrowError(
+      "x402_settle_failed",
+      "x402 payer is the escrow wallet (payTo), not the sender. Refusing to record it as funder_address.",
+    );
+  }
+  const funderAddress = payer
+    ? requireBasePayoutAddress(payer, "missing_funder_address")
+    : existing.funderAddress;
+
   await db
     .update(escrows)
     .set({
@@ -97,7 +112,7 @@ export async function recordExactInbound(
       x402PaymentId: paymentId || `x402:${txHash}`,
       x402Url: input.resourceUrl,
       escrowAddress: input.escrowAddress,
-      funderAddress: input.funderAddress?.trim() || existing.funderAddress,
+      funderAddress,
       failCode: null,
       failReason: null,
       updatedAt: now,

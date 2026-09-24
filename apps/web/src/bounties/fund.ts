@@ -30,7 +30,7 @@ export async function fundBounty(
   actorUserId: string,
   db: Database,
   now: Date = new Date(),
-  opts?: { rail?: CdpRail; fundTxHash?: string | null; email?: DomainEmailDeps },
+  opts?: { rail?: CdpRail; fundTxHash?: string | null; email?: DomainEmailDeps; requestId?: string | null },
 ): Promise<FundedBounty> {
   try {
     const railMode = opts?.rail?.mode ?? probeCdpEnv().mode;
@@ -41,6 +41,7 @@ export async function fundBounty(
       rail: opts?.rail,
       fundTxHash: opts?.fundTxHash,
       email: opts?.email,
+      requestId: opts?.requestId,
     });
     return {
       id: locked.bountyId,
@@ -65,7 +66,7 @@ export async function topUpBounty(
   input: { amountUsdc: string; fundTxHash?: string | null; funderAddress?: string | null },
   db: Database,
   now: Date = new Date(),
-  opts?: { rail?: CdpRail },
+  opts?: { rail?: CdpRail; requestId?: string | null },
 ): Promise<TopUpResult> {
   try {
     const railMode = opts?.rail?.mode ?? probeCdpEnv().mode;
@@ -74,6 +75,7 @@ export async function topUpBounty(
       db,
       now,
       rail: opts?.rail,
+      requestId: opts?.requestId,
     });
   } catch (err) {
     throw toFundError(err);

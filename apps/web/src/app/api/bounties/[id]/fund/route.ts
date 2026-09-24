@@ -9,6 +9,7 @@ import {
   isEscrowError,
   jsonForUnknown,
   probeCdpEnv,
+  takeRequestId,
 } from "@/escrow";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,7 @@ export async function POST(
     await assertCallerLockHash(getRuntimeDb(), id, fundTxHash, probeCdpEnv().mode);
     const funded = await fundBounty(id, user.id, getRuntimeDb(), new Date(), {
       fundTxHash,
+      requestId: takeRequestId(req.headers.get("x-request-id")),
     });
     const escrow = await getEscrowSnapshot(id, getRuntimeDb());
     return Response.json(

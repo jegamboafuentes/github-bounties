@@ -934,6 +934,14 @@ describe("V2-3 escrow multi-payee settle (mock rail)", () => {
       const aliceRow = (await db.select().from(poolParticipants).where(eq(poolParticipants.bountyId, created.id)))
         .find((row) => row.githubLogin === "alice");
       assert.ok(aliceRow);
+      await db
+        .update(users)
+        .set({ walletAddress: ALICE_ADDRESS })
+        .where(eq(users.id, aliceId));
+      await db
+        .update(poolParticipants)
+        .set({ payoutAddress: ALICE_ADDRESS })
+        .where(eq(poolParticipants.id, aliceRow.id));
 
       const poolPaid = await settleEscrow(
         created.id,
