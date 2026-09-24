@@ -74,7 +74,13 @@ export const listBountiesInputSchema = z
 export const apiErrorSchema = z
   .object({
     error: z.object({
-      code: z.enum(["validation_failed", "not_found", "rate_limited", "internal"]),
+      code: z.enum([
+        "validation_failed",
+        "not_found",
+        "method_not_allowed",
+        "rate_limited",
+        "internal",
+      ]),
       message: z.string(),
       details: z.unknown().nullable(),
     }),
@@ -97,7 +103,11 @@ const funderAvatarSchema = z
 
 export const payoutScheduleSchema = z
   .object({
-    faceUsdc: z.string().describe("Face the fee math uses. Top-ups increase this amount."),
+    faceUsdc: z
+      .string()
+      .describe(
+        "Face the fee math uses. Top-ups increase this amount. This is the posted face, not totalFundedUsdc.",
+      ),
     feeUsdc: z.string().describe("2% of face, taken at settlement."),
     feeBps: z.number().int(),
     poolBpsOfPostFee: z.number().int().describe("1500 = 15% of post-fee, not of face."),
@@ -123,19 +133,33 @@ export const publicBountySchema = z
       number: z.number().int(),
       title: z.string(),
     }),
-    status: z.string(),
+    status: z
+      .string()
+      .describe(
+        "Bounty status. pending_fund is a posted face with no confirmed lock. funded and claim_locked are open and locked. settling, settled, and settled_partial are payout. refunding means a return is in progress. cancelled and expired are terminal: the draft was voided before lock, or a locked bounty was refunded in full with no fee. refunded and void are terminal too. Read status before treating totalFundedUsdc as money still held.",
+      ),
     currency: z.string(),
-    amountUsdc: z.string().describe("Current face USDC, including top-ups."),
+    amountUsdc: z
+      .string()
+      .describe(
+        "Face USDC: the posted amount, including top-ups after lock. The fee schedule uses this. It is set when the bounty is created, before any contribution is confirmed.",
+      ),
     totalFundedUsdc: z
       .string()
-      .describe("Current face after top-ups. Top-ups increase the face; there is no separate original amount."),
+      .describe(
+        "Sum of confirmed bounty contributions (bounty_contributions rows with a recorded fund transaction), as 6-decimal USDC. 0.000000 when none are confirmed. This is not the face in amountUsdc. A pending_fund bounty can show a face while this is 0.000000. Cancelled, expired, refunding, and refunded bounties still return this confirmed sum; status says that sum was voided or returned and is not still locked.",
+      ),
     createdAt: isoDateTime,
     fundedAt: isoDateTime.nullable(),
     payout: payoutScheduleSchema,
     intelligence: intelBadgeSchema.nullable(),
     funders: z.object({
       count: z.number().int().describe("Distinct funders, including people past the avatar cap."),
-      avatars: z.array(funderAvatarSchema).describe("Up to 5 faces, most recent contribution first. Same stack as the board."),
+      avatars: z
+        .array(funderAvatarSchema)
+        .describe(
+          "Up to 5 distinct funders, newest contribution first. Same order as the board avatar stack: the first face is the newest and is drawn on top. The funders route uses the same recency order, one row per contribution.",
+        ),
     }),
     poster: z.object({
       displayName: z.string(),
@@ -200,8 +224,16 @@ export const bountyDetailResponseSchema = z
     ),
     escrow: z
       .object({
-        status: z.string(),
-        amountUsdc: z.string(),
+        status: z
+          .string()
+          .describe(
+            "Escrow status. pending means the face is not locked yet. refunded means the confirmed contributions were returned. A poster cancel or expiry stores bounty status cancelled or expired once that return finishes.",
+          ),
+        amountUsdc: z
+          .string()
+          .describe(
+            "Escrow face record. Not the confirmed contribution sum. Use bounty.totalFundedUsdc for money that has a recorded fund transaction.",
+          ),
         rail: z.string(),
         inboundRecorded: z.boolean(),
         failCode: z.string().nullable(),
@@ -241,7 +273,11 @@ export const funderContributionSchema = z
 export const funderListResponseSchema = z
   .object({
     bountyId: z.string().uuid(),
-    data: z.array(funderContributionSchema),
+    data: z
+      .array(funderContributionSchema)
+      .describe(
+        "One row per contribution, newest first (created time descending, then id descending). Same recency order as bounty.funders.avatars and the board avatar stack. Wallet addresses are omitted.",
+      ),
   })
   .openapi("FunderList");
 
@@ -279,6 +315,17 @@ const errorResponses = {
     description: "Per-IP limit on this instance. See Retry-After and RateLimit headers.",
     content: { "application/json": { schema: apiErrorSchema } },
   },
+  405: {
+    description:
+      "POST, PUT, PATCH, and DELETE are not allowed. The body is the same JSON error envelope. Allow lists the supported methods (RFC 9110).",
+    headers: {
+      Allow: {
+        description: "RFC 9110 Allow. These routes accept GET and OPTIONS.",
+        schema: { type: "string", example: "GET, OPTIONS" },
+      },
+    },
+    content: { "application/json": { schema: apiErrorSchema } },
+  },
   500: {
     description: "Unexpected server error.",
     content: { "application/json": { schema: apiErrorSchema } },
@@ -290,7 +337,7 @@ publicApiRegistry.registerPath({
   path: "/api/v1/bounties",
   summary: "List and filter the bounty board",
   description:
-    "Public board rows with keyset pagination. Intelligence filters use the cache only and do not call Gemini. The list payout is the empty-pool schedule; the live roster split is on the detail route.",
+    "Public board rows with keyset pagination. Intelligence filters use the cache only and do not call Gemini. amountUsdc is the face. totalFundedUsdc is the confirmed contribution sum (0.000000 when none). The list payout is the empty-pool schedule on the face; the live roster split is on the detail route. funders.avatars are newest contribution first.",
   request: { query: listBountiesInputSchema },
   responses: {
     200: {
@@ -298,6 +345,7 @@ publicApiRegistry.registerPath({
       content: { "application/json": { schema: bountyListResponseSchema } },
     },
     400: errorResponses[400],
+    405: errorResponses[405],
     429: errorResponses[429],
     500: errorResponses[500],
   },
@@ -308,7 +356,7 @@ publicApiRegistry.registerPath({
   path: "/api/v1/bounties/{id}",
   summary: "Read one bounty",
   description:
-    "Issue body snapshot, status, payout breakdown, pool roster, and read-only lock state. Wallet addresses are omitted. The issue body is the stored snapshot and is not refetched.",
+    "Issue body snapshot, status, payout breakdown, pool roster, and read-only lock state. Wallet addresses are omitted. The issue body is the stored snapshot and is not refetched. amountUsdc and payout.faceUsdc are the face. totalFundedUsdc is the confirmed contribution sum. status cancelled, expired, refunding, or refunded means that sum is not still locked.",
   request: { params: bountyIdParamsSchema },
   responses: {
     200: {
@@ -317,6 +365,7 @@ publicApiRegistry.registerPath({
     },
     400: errorResponses[400],
     404: errorResponses[404],
+    405: errorResponses[405],
     429: errorResponses[429],
     500: errorResponses[500],
   },
@@ -327,7 +376,7 @@ publicApiRegistry.registerPath({
   path: "/api/v1/bounties/{id}/funders",
   summary: "List contributions",
   description:
-    "One row per contribution, oldest first. Public fields only: display name, GitHub login, avatar, amount, and time.",
+    "One row per contribution, newest first (created time descending, then id descending). Same recency order as bounty.funders.avatars and the board avatar stack. Public fields only: display name, GitHub login, avatar, amount, and time. Wallet addresses are omitted.",
   request: { params: bountyIdParamsSchema },
   responses: {
     200: {
@@ -336,6 +385,7 @@ publicApiRegistry.registerPath({
     },
     400: errorResponses[400],
     404: errorResponses[404],
+    405: errorResponses[405],
     429: errorResponses[429],
     500: errorResponses[500],
   },
@@ -355,6 +405,7 @@ publicApiRegistry.registerPath({
     },
     400: errorResponses[400],
     404: errorResponses[404],
+    405: errorResponses[405],
     429: errorResponses[429],
     500: errorResponses[500],
   },
@@ -383,6 +434,7 @@ publicApiRegistry.registerPath({
         },
       },
     },
+    405: errorResponses[405],
     429: errorResponses[429],
     500: errorResponses[500],
   },
@@ -390,6 +442,9 @@ publicApiRegistry.registerPath({
 
 export const PUBLIC_API_DESCRIPTION = [
   "GitHub Bounties pays USDC on a public GitHub issue when a pull request that closes it is merged. Hunters work in parallel. This API is the read-only V4-1 surface: the board, one bounty, its funders, cached issue intelligence, and platform stats. It does not post, fund, claim, or move money, and it does not require an API key. The same data is already public on the website.",
+  "amountUsdc and payout.faceUsdc are the face (the posted amount, including top-ups). totalFundedUsdc is the sum of confirmed contributions, bounty_contributions rows with a recorded fund transaction, and is 0.000000 when there are none. It is not the face. status cancelled, expired, refunding, or refunded means that confirmed sum is not still locked.",
+  "POST, PUT, PATCH, and DELETE on /api/v1 return 405 with Allow: GET, OPTIONS (RFC 9110) and the JSON error envelope (code method_not_allowed).",
+  "Funder avatars and the funders route are newest contribution first, matching the board avatar stack. Avatars are distinct funders, capped at five. The funders route is one row per contribution.",
   "Rate limit: about 60 requests per minute per client IP, counted in memory on each Cloud Run instance. It is not a global limit across instances. The client IP is the last address in X-Forwarded-For (the hop Cloud Run appends). A limited response is HTTP 429 with error code rate_limited, Retry-After, and RateLimit-Limit, RateLimit-Remaining, and RateLimit-Reset headers.",
 ].join("\n\n");
 

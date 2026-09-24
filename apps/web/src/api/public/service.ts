@@ -7,10 +7,11 @@ import { readCachedBountyIntelligence } from "../../intelligence/load";
 import { getPoolRoster } from "../../bounties/roster";
 import { getPlatformStats } from "../../stats";
 import { PublicApiError } from "./errors";
+import { confirmedTotalFor, loadConfirmedFundedTotals } from "./funded";
 import {
   presentBountyDetail,
   presentCachedIntelligence,
-  presentFunderContribution,
+  presentFunderList,
   presentPublicBounty,
 } from "./present";
 import { cursorFromPageItem, keysetFromCursor, type BoardCursor } from "./query";
@@ -46,7 +47,13 @@ export function createPublicReadApi(db?: Database) {
           hasIntel: input.has_intel,
         },
       );
-      const data = page.bounties.map(presentPublicBounty);
+      const totals = await loadConfirmedFundedTotals(
+        resolve(),
+        page.bounties.map((bounty) => bounty.id),
+      );
+      const data = page.bounties.map((bounty) =>
+        presentPublicBounty(bounty, confirmedTotalFor(totals, bounty.id)),
+      );
       const last = data[data.length - 1];
       return {
         data,
@@ -61,16 +68,18 @@ export function createPublicReadApi(db?: Database) {
     async getBounty(id: string) {
       const database = resolve();
       const bounty = await requireBounty(id, database);
-      const [escrow, roster, issue] = await Promise.all([
+      const [escrow, roster, issue, totals] = await Promise.all([
         getEscrowSnapshot(id, database),
         getPoolRoster(id, database),
         readStoredIssueBody(id, database),
+        loadConfirmedFundedTotals(database, [id]),
       ]);
       if (!roster) {
         throw new PublicApiError("not_found", "Bounty not found.", null);
       }
       return presentBountyDetail({
         bounty,
+        totalFundedUsdc: confirmedTotalFor(totals, id),
         issueBody: issue?.markdown ?? null,
         roster,
         escrow,
@@ -82,10 +91,7 @@ export function createPublicReadApi(db?: Database) {
       await requireBounty(id, database);
       try {
         const rows = await listBountyContributions(id, database);
-        return {
-          bountyId: id,
-          data: rows.map(presentFunderContribution),
-        };
+        return presentFunderList(id, rows);
       } catch (err) {
         if (!isUndefinedTableError(err)) throw err;
         return { bountyId: id, data: [] };

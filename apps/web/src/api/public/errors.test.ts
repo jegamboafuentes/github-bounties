@@ -1,14 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { ZodError, z } from "zod";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { apiErrorResponse, publicApiErrorBody, zodErrorDetails, PUBLIC_API_ERROR_CODES } from "./errors";
 import { handlePublicRead } from "./http";
+import { methodNotAllowed, PUBLIC_READ_ALLOW } from "./methods";
 
 describe("public API error shape", () => {
   it("uses one envelope for every V4-1 code", async () => {
     const cases = [
       ["validation_failed", 400],
       ["not_found", 404],
+      ["method_not_allowed", 405],
       ["rate_limited", 429],
       ["internal", 500],
     ] as const;
@@ -53,5 +58,34 @@ describe("public API error shape", () => {
     assert.equal(response.headers.get("ratelimit-remaining"), "59");
     const body = await response.json();
     assert.equal(body.ok, true);
+  });
+
+  it("405 keeps the JSON error envelope and sets Allow: GET, OPTIONS", async () => {
+    const response = methodNotAllowed();
+    assert.equal(response.status, 405);
+    assert.equal(response.headers.get("allow"), PUBLIC_READ_ALLOW);
+    assert.equal(PUBLIC_READ_ALLOW, "GET, OPTIONS");
+    const body = await response.json();
+    assert.deepEqual(body, publicApiErrorBody("method_not_allowed", "Only GET and OPTIONS are allowed.", null));
+    assert.equal(response.headers.get("content-type")?.includes("application/json"), true);
+  });
+
+  it("every /api/v1 route answers POST, PUT, PATCH, and DELETE with methodNotAllowed", () => {
+    const root = join(dirname(fileURLToPath(import.meta.url)), "../../app/api/v1");
+    const routes = [
+      "bounties/route.ts",
+      "bounties/[id]/route.ts",
+      "bounties/[id]/funders/route.ts",
+      "bounties/[id]/intelligence/route.ts",
+      "stats/route.ts",
+      "openapi.json/route.ts",
+    ];
+    for (const route of routes) {
+      const source = readFileSync(join(root, route), "utf8");
+      assert.match(source, /methodNotAllowed/, route);
+      for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+        assert.match(source, new RegExp(`export function ${method}\\(`), `${route} ${method}`);
+      }
+    }
   });
 });

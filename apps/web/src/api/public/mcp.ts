@@ -8,7 +8,7 @@ import { listBountiesInputSchema, bountyIdParamsSchema } from "./schemas";
 const INSTRUCTIONS = [
   "Read-only GitHub Bounties tools. No API key.",
   "list_bounties filters the public board. get_bounty reads one bounty, including the stored issue body, payout breakdown, and pool roster.",
-  "list_funders returns public contribution rows (name, GitHub login, avatar, amount, time).",
+  "list_funders returns public contribution rows (name, GitHub login, avatar, amount, time), newest first.",
   "get_bounty_intelligence reads the Gemini cache only and must not be treated as a refresh.",
   "get_stats returns platform totals.",
   "These tools cannot post, fund, top up, claim, or cancel. The exclusive claim-lock is retired.",
@@ -46,7 +46,7 @@ export function createBountiesMcpServer(api: PublicReadApi): McpServer {
     {
       title: "List bounties",
       description:
-        "List public GitHub Bounties. Filter by repo (case-insensitive substring of owner/name), status, complexity S/M/L, language (substring of the cached stack), and has_intel. Sort by newest (default) or amount (face USDC, descending). Pass nextCursor back as cursor to read the next page. limit defaults to 20 and cannot exceed 100. Read-only. Does not call Gemini. Cache badges only.",
+        "List public GitHub Bounties. Filter by repo (case-insensitive substring of owner/name), status, complexity S/M/L, language (substring of the cached stack), and has_intel. Sort by newest (default) or amount (face USDC, descending). amountUsdc is the face. totalFundedUsdc is the sum of confirmed contributions with a recorded fund transaction, or 0.000000 when none are confirmed. It is not the face. status cancelled, expired, refunding, or refunded means that confirmed sum is not still locked. funders.avatars are distinct faces, newest contribution first. Pass nextCursor back as cursor to read the next page. limit defaults to 20 and cannot exceed 100. Read-only. Does not call Gemini. Cache badges only.",
       inputSchema: listBountiesInputSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
@@ -64,7 +64,7 @@ export function createBountiesMcpServer(api: PublicReadApi): McpServer {
     {
       title: "Get bounty",
       description:
-        "Read one public bounty by id. Includes the stored issue body (no GitHub refetch), status, fee and pool payout breakdown, pool roster, escrow status, and the retired claim-lock state (always read-only). Omits wallet addresses, emails, and Google ids.",
+        "Read one public bounty by id. Includes the stored issue body (no GitHub refetch), status, fee and pool payout breakdown, pool roster, escrow status, and the retired claim-lock state (always read-only). amountUsdc and payout.faceUsdc are the face. totalFundedUsdc is the confirmed contribution sum, or 0.000000 when none are confirmed. status cancelled, expired, refunding, or refunded means that sum is not still locked. funders.avatars are newest contribution first. Omits wallet addresses, emails, and Google ids.",
       inputSchema: bountyIdParamsSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
@@ -82,7 +82,7 @@ export function createBountiesMcpServer(api: PublicReadApi): McpServer {
     {
       title: "List funders",
       description:
-        "List each USDC contribution on a bounty, oldest first. Public fields only: display name, GitHub login, avatar URL, amount, and time. Does not return email, Google subject, or wallet address.",
+        "List each USDC contribution on a bounty, newest first (same recency order as the board avatar stack and bounty.funders.avatars). Public fields only: display name, GitHub login, avatar URL, amount, and time. Does not return email, Google subject, or wallet address.",
       inputSchema: bountyIdParamsSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
