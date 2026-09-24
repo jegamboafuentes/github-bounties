@@ -13,7 +13,7 @@ import {
   VOIDED_UNFUNDED_REASON,
 } from "./fail";
 import { hostedCheckoutStatus } from "./hosted";
-import { assertCallerLockHash, assertFundTxHashAvailable } from "./fund-hash";
+import { assertCallerLockHash, assertFundTxHashAvailable, normalizeFundTxHash } from "./fund-hash";
 import { resolveLockFundTxHash } from "./inbound";
 import { logMoneyAction, moneyResultCode, takeRequestId, type MoneyAction } from "./actor-log";
 import { payerDistinctFromEscrow, transferToStoredDestination } from "./destination-guard";
@@ -175,8 +175,9 @@ export async function lockEscrowFunds(
       fundTxHash,
       verifiedInbound: rail.mode === "cdp" && recordedByX402 && Boolean(fundTxHash),
     });
-    const lockedHash = locked.txHash.trim();
-    if (lockedHash && lockedHash !== fundTxHash) {
+    const lockedHash = normalizeFundTxHash(locked.txHash);
+    const requestedHash = fundTxHash ? normalizeFundTxHash(fundTxHash) : "";
+    if (lockedHash && lockedHash !== requestedHash) {
       await assertFundTxHashAvailable(opts.db, lockedHash, bountyId);
     }
   } catch (err) {
@@ -218,7 +219,7 @@ export async function lockEscrowFunds(
       bountyId,
       destination: null,
       amountUsdc: bounty.amountUsdc,
-      txHash: locked.txHash,
+      txHash: normalizeFundTxHash(locked.txHash),
       result: "x402_settle_failed",
       requestId,
     });
@@ -242,7 +243,7 @@ export async function lockEscrowFunds(
     const patch = {
       status: ESCROW_LOCKED,
       amountUsdc: bounty.amountUsdc,
-      fundTxHash: locked.txHash,
+      fundTxHash: normalizeFundTxHash(locked.txHash),
       escrowAddress: locked.escrowAddress,
       funderAddress,
       idempotencyKey: fundKey,
@@ -267,7 +268,7 @@ export async function lockEscrowFunds(
       bountyId,
       funderUserId: actorUserId,
       amountUsdc: bounty.amountUsdc,
-      fundTxHash: locked.txHash,
+      fundTxHash: normalizeFundTxHash(locked.txHash),
       funderAddress,
       now,
     });
@@ -284,7 +285,7 @@ export async function lockEscrowFunds(
     bountyId,
     destination: funderAddress,
     amountUsdc: bounty.amountUsdc,
-    txHash: locked.txHash,
+    txHash: normalizeFundTxHash(locked.txHash),
     result: "ok",
     requestId,
   });
@@ -295,7 +296,7 @@ export async function lockEscrowFunds(
     status: "funded",
     escrowStatus: "funded",
     fundedAt: now,
-    fundTxHash: locked.txHash,
+    fundTxHash: normalizeFundTxHash(locked.txHash),
     escrowAddress: locked.escrowAddress,
     feeAddress: locked.feeAddress,
     rail: rail.mode,
@@ -391,6 +392,11 @@ export async function settleEscrow(
   const split = splitPostFeePool(bounty.amountUsdc, freeze.eligibleCount, FEE_BPS, poolBps);
   const unpaidPool = freeze.poolMembers.filter((row) => !row.payoutTxHash);
 
+  // Settler rule before the idempotent return. A fully settled bounty used to
+  // answer 200 ok:true to every signed-in user, including a funder who is
+  // neither the poster nor the winning hunter.
+  await assertSettleAuthorized(opts.db, bounty, bountyId, scope, input, freeze, requestId);
+
   if (
     (bounty.status === "settled" || escrow?.status === "settled") &&
     escrow?.payoutTxHash &&
@@ -445,30 +451,12 @@ export async function settleEscrow(
     throw err;
   }
   if (scope === "pool_member") {
-    await assertPoolMemberActor(opts.db, freeze, input);
     if (!escrow.payoutTxHash) {
       throw new EscrowError(
         "not_settleable",
         "Winner must claim first. Pool shares stay reserved until the winner payout confirms.",
       );
     }
-  } else if (
-    input.actorUserId &&
-    input.actorUserId !== bounty.posterUserId &&
-    input.actorUserId !== hunter.userId
-  ) {
-    logMoneyAction({
-      action: "settle",
-      actorUserId: input.actorUserId ?? null,
-      bountyId,
-      claimId: hunter.claimId,
-      destination: null,
-      amountUsdc: bounty.amountUsdc,
-      txHash: null,
-      result: "not_settler",
-      requestId,
-    });
-    throw new EscrowError("not_settler", "Only the poster or the winning hunter can settle.");
   }
 
   const wallets = await rail.ensureWallets().catch((err: unknown) =>
@@ -853,6 +841,56 @@ function settleLegAction(
     return "winner_claim";
   }
   return "settle";
+}
+
+/**
+ * Poster or the winning hunter (winner/fee/all), or the frozen pool member.
+ * Runs before the idempotent settled return so a funder-only user gets
+ * `not_settler` on every bounty state, including one that is already settled.
+ * Missing `actorUserId` stays allowed for internal retries, same as before.
+ */
+async function assertSettleAuthorized(
+  db: Database,
+  bounty: { posterUserId: string; amountUsdc: string },
+  bountyId: string,
+  scope: SettleScope,
+  input: {
+    actorUserId?: string;
+    claimId?: string;
+    participantId?: string | null;
+  },
+  freeze: Awaited<ReturnType<typeof loadFrozenSettleSet>>,
+  requestId: string,
+): Promise<void> {
+  if (scope === "pool_member") {
+    await assertPoolMemberActor(db, freeze, input);
+    return;
+  }
+  if (!input.actorUserId || input.actorUserId === bounty.posterUserId) return;
+
+  let winnerUserId: string | null = null;
+  let claimId: string | null = input.claimId ?? null;
+  try {
+    const claim = await loadSettleClaim(db, bountyId, input.claimId);
+    winnerUserId = claim.hunterUserId;
+    claimId = claim.id;
+  } catch {
+    winnerUserId = null;
+  }
+  if (input.actorUserId !== winnerUserId) {
+    logMoneyAction({
+      action: "settle",
+      actorUserId: input.actorUserId,
+      bountyId,
+      claimId,
+      destination: null,
+      amountUsdc: bounty.amountUsdc,
+      txHash: null,
+      result: "not_settler",
+      requestId,
+    });
+    throw new EscrowError("not_settler", "Only the poster or the winning hunter can settle.");
+  }
 }
 
 /**

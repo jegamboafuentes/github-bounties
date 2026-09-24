@@ -1,13 +1,21 @@
 import { BASE_MAINNET_CAIP2 } from "../lib/constants";
+import { usdcToAtomic } from "../lib/money";
+import type { MoneyAction } from "./actor-log";
 import type { EnvMap } from "./env";
 import { isMainnetAllowed } from "./env";
 import { EscrowError } from "./errors";
+import {
+  assertFacilitatorSettlementMatches,
+  readX402Requirement,
+  type FacilitatorSettlementCheck,
+} from "./fund-hash";
 import {
   logX402PaidFailure,
   x402DollarPrice,
   x402FailureFromChallenge,
   x402NetworkCaip2,
   x402ResourceUrl,
+  x402UsdcAsset,
   x402UsdcEip712Extra,
 } from "./x402";
 
@@ -24,6 +32,8 @@ export type X402SellerSettled = {
   payer?: string;
   network?: string;
   body?: unknown;
+  /** Passed to the rail when this settle also locks or tops up. Already checked. */
+  facilitatorSettlement?: FacilitatorSettlementCheck;
 };
 
 export type X402SellerError = {
@@ -52,7 +62,13 @@ type ProcessResult = {
   paymentPayload?: unknown;
   paymentRequirements?: unknown;
   declaredExtensions?: Record<string, unknown>;
-  beforeHandlerSettlement?: { transaction?: string; payer?: string; network?: string };
+  beforeHandlerSettlement?: {
+    transaction?: string;
+    payer?: string;
+    network?: string;
+    amount?: string;
+    requirements?: unknown;
+  };
 };
 
 type HttpServer = {
@@ -75,9 +91,11 @@ type HttpServer = {
     transaction?: string;
     payer?: string;
     network?: string;
+    amount?: string;
     errorReason?: string;
     errorMessage?: string;
     headers?: Record<string, string>;
+    requirements?: unknown;
   }>;
 };
 
@@ -143,6 +161,8 @@ export async function processLiveX402Exact(input: {
   paymentHeader?: string;
   env?: EnvMap;
   description?: string;
+  actorUserId?: string | null;
+  moneyAction?: MoneyAction;
 }): Promise<X402SellerResult> {
   const caip2 = x402SellerNetworkCaip2(input.network, input.env);
 
@@ -333,33 +353,69 @@ export async function processLiveX402Exact(input: {
         },
       };
     }
-    txHash = settled.transaction?.trim() || txHash;
+    txHash = (settled.transaction?.trim() || txHash).toLowerCase();
     payer = settled.payer ?? payer;
     network = settled.network ?? network;
     headers = { ...headers, ...(settled.headers ?? {}) };
-  }
 
-  if (!txHash) {
-    throw new EscrowError(
-      "x402_settle_failed",
-      "x402 exact settlement returned no transaction hash. Do not mark funded.",
+    const issued = {
+      network: caip2,
+      payTo: input.payTo,
+      asset: x402UsdcAsset(input.network),
+      amount: usdcToAtomic(input.faceUsdc).toString(),
+    };
+    const requirements = readX402Requirement(settled.requirements ?? processed.paymentRequirements);
+    const accepted = readX402Requirement(
+      processed.paymentPayload && typeof processed.paymentPayload === "object"
+        ? (processed.paymentPayload as { accepted?: unknown }).accepted
+        : null,
     );
+    const facilitatorSettlement: FacilitatorSettlementCheck = {
+      bountyId: input.bountyId,
+      actorUserId: input.actorUserId ?? null,
+      requestId: input.req.headers.get("x-request-id"),
+      action: input.moneyAction ?? "lock",
+      txHash,
+      issued,
+      observed: {
+        network: settled.network ?? network,
+        payTo: requirements?.payTo,
+        asset: requirements?.asset,
+        amount: requirements?.amount,
+        settledAmount: settled.amount,
+        accepted,
+      },
+    };
+    assertFacilitatorSettlementMatches(facilitatorSettlement);
+
+    if (!txHash) {
+      throw new EscrowError(
+        "x402_settle_failed",
+        "x402 exact settlement returned no transaction hash. Do not mark funded.",
+      );
+    }
+
+    return {
+      kind: "settled",
+      settled: {
+        status: 200,
+        headers,
+        txHash,
+        payer,
+        network,
+        facilitatorSettlement,
+        body: {
+          ok: true,
+          inbound: "recorded",
+          fundTxHash: txHash,
+          resource: x402ResourceUrl(input.bountyId, new URL(input.req.url).origin),
+        },
+      },
+    };
   }
 
-  return {
-    kind: "settled",
-    settled: {
-      status: 200,
-      headers,
-      txHash,
-      payer,
-      network,
-      body: {
-        ok: true,
-        inbound: "recorded",
-        fundTxHash: txHash,
-        resource: x402ResourceUrl(input.bountyId, new URL(input.req.url).origin),
-      },
-    },
-  };
+  throw new EscrowError(
+    "x402_settle_failed",
+    "x402 exact settlement returned no facilitator settle response. Do not mark funded.",
+  );
 }

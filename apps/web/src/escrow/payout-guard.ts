@@ -27,7 +27,7 @@ export function withVerifiedTopUpHash(
   x402PaymentId: string | null | undefined,
   fundTxHash: string,
 ): string {
-  const hash = fundTxHash.trim();
+  const hash = fundTxHash.trim().toLowerCase();
   const existing = verifiedTopUpHashes(x402PaymentId);
   const hashes = existing.some((row) => row.toLowerCase() === hash.toLowerCase())
     ? existing
