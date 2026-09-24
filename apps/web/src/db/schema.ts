@@ -237,13 +237,27 @@ export const githubLinks = pgTable(
   ],
 );
 
+/**
+ * `app_install` — GitHub App installation webhooks own merge → Claim.
+ * `public_reference` — poster referenced a public repo; no installation token.
+ * `installation_id` is required for `app_install` and null for a pure public reference.
+ * A later App install upgrades the same `github_repo_id` row back to `app_install`.
+ */
+export const repoConnectionKindEnum = pgEnum("repo_connection_kind", [
+  "app_install",
+  "public_reference",
+]);
+
 export const repos = pgTable(
   "repos",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     githubRepoId: bigint("github_repo_id", { mode: "bigint" }).notNull(),
     fullName: text("full_name").notNull(),
-    installationId: bigint("installation_id", { mode: "bigint" }).notNull(),
+    installationId: bigint("installation_id", { mode: "bigint" }),
+    connectionKind: repoConnectionKindEnum("connection_kind")
+      .notNull()
+      .default("app_install"),
     connectedByUserId: uuid("connected_by_user_id")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
@@ -254,8 +268,13 @@ export const repos = pgTable(
     uniqueIndex("repos_github_repo_id_uidx").on(table.githubRepoId),
     index("repos_full_name_idx").on(table.fullName),
     index("repos_installation_id_idx").on(table.installationId),
+    index("repos_connection_kind_idx").on(table.connectionKind),
     index("repos_connected_by_user_id_idx").on(table.connectedByUserId),
     index("repos_is_active_idx").on(table.isActive),
+    check(
+      "repos_app_install_requires_installation",
+      sql`${table.connectionKind} <> 'app_install' OR ${table.installationId} IS NOT NULL`,
+    ),
   ],
 );
 
@@ -667,6 +686,7 @@ export const webhookDeliveries = pgTable("webhook_deliveries", {
     .defaultNow(),
 });
 
+export const repoConnectionKindValues = repoConnectionKindEnum.enumValues;
 export const bountyStatusValues = bountyStatusEnum.enumValues;
 export const claimLockStatusValues = claimLockStatusEnum.enumValues;
 export const escrowStatusValues = escrowStatusEnum.enumValues;

@@ -15,6 +15,8 @@ import {
   GITHUB_API,
   createInstallationToken,
   githubApiHeaders,
+  publicGitHubHeaders,
+  readGitHubPublicReadToken,
   type GitHubHttp,
   type InstallationId,
 } from "./api";
@@ -292,14 +294,18 @@ export async function fetchPoolPullRequests(args: {
   includePullNumbers?: number[];
   http?: GitHubHttp;
   jwt?: string;
+  env?: NodeJS.ProcessEnv;
 }): Promise<PoolPullRequest[]> {
-  if (args.installationId == null) return [];
-  const token = await createInstallationToken(args.installationId, {
-    http: args.http,
-    jwt: args.jwt,
-  });
   const http = args.http ?? defaultHttp;
-  const headers = githubApiHeaders(token);
+  const headers =
+    args.installationId != null
+      ? githubApiHeaders(
+          await createInstallationToken(args.installationId, {
+            http,
+            jwt: args.jwt,
+          }),
+        )
+      : publicGitHubHeaders(readGitHubPublicReadToken(args.env));
   const bountyRepo = `${args.owner}/${args.repo}`;
 
   const numbers = new Set<number>(args.includePullNumbers ?? []);

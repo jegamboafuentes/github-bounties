@@ -67,7 +67,7 @@ export async function loadBountyIntelligence(args: {
   githubIssueNumber: number;
   issueTitle: string;
   issueBody: string | null;
-  installationId: bigint;
+  installationId: bigint | null;
   db: Database;
   forceRefresh?: boolean;
   now?: Date;
@@ -236,7 +236,7 @@ function toReadyView(
 
 async function loadRepoContext(args: {
   repoFullName: string;
-  installationId: bigint;
+  installationId: bigint | null;
   githubHttp?: GitHubHttp;
 }): Promise<GitHubRepoContext> {
   const [owner, repo] = splitFullName(args.repoFullName);

@@ -1,12 +1,17 @@
 import type { Database } from "../db/client";
-import { bounties, escrows } from "../db/schema";
+import { bounties, escrows, type repos } from "../db/schema";
 import { isUniqueViolation } from "../db/errors";
 import {
   fetchIssue,
   type GitHubHttp,
   type GitHubIssueSnapshot,
 } from "../github/api";
-import { findActiveRepoByFullName } from "../github/persist";
+import { findActiveRepoByFullName, upsertPublicReferenceRepo } from "../github/persist";
+import {
+  isPublicGitHubError,
+  PublicGitHubError,
+  resolvePublicIssue,
+} from "../github/public-read";
 import { DEFAULT_CHAIN, DEFAULT_CURRENCY } from "../lib/constants";
 import { normalizeBountyAmountUsdc } from "./amount";
 import { BountyError } from "./errors";
@@ -31,9 +36,14 @@ export type CreatedBounty = {
   amountUsdc: string;
 };
 
+type RepoRow = typeof repos.$inferSelect;
+
 /**
  * Persist a bounty as `pending_fund` (the form is the draft; schema has no draft status).
- * Repo must already be App-connected and active.
+ *
+ * Public issue URLs do not need an App installation. Active `app_install` repos
+ * still resolve through the installation token. Closed issues and pull requests
+ * are rejected. `fetchIssueSnapshot` returning null skips the live read (tests).
  */
 export async function createBountyFromIssueUrl(
   input: CreateBountyInput,
@@ -41,11 +51,12 @@ export async function createBountyFromIssueUrl(
     db: Database;
     http?: GitHubHttp;
     jwt?: string;
+    env?: NodeJS.ProcessEnv;
     fetchIssueSnapshot?: (
       owner: string,
       repo: string,
       issueNumber: number,
-      installationId: bigint,
+      installationId: bigint | null,
     ) => Promise<GitHubIssueSnapshot | null>;
   },
 ): Promise<CreatedBounty> {
@@ -62,40 +73,18 @@ export async function createBountyFromIssueUrl(
   }
 
   const amountUsdc = normalizeBountyAmountUsdc(input.amountUsdc);
-  const repo = await findActiveRepoByFullName(parsed.fullName, opts.db);
-  if (!repo) {
-    throw new BountyError(
-      "repo_not_connected",
-      `${parsed.fullName} is not an App-connected repo. Connect GitHub from Settings first.`,
-    );
+  const existing = await findActiveRepoByFullName(parsed.fullName, opts.db);
+  const resolved = await resolveRepoAndIssue(parsed, existing, input.posterUserId, opts);
+  if (resolved.snapshot) {
+    assertPostableIssue(parsed.fullName, parsed.issueNumber, resolved.snapshot);
   }
 
-  let snapshot: GitHubIssueSnapshot | null = null;
-  if (input.title?.trim()) {
-    snapshot = {
-      title: input.title.trim(),
-      body: input.description?.trim() || null,
-      htmlUrl: parsed.url,
-      state: "open",
-    };
-  } else {
-    try {
-      const fetchFn =
-        opts.fetchIssueSnapshot ??
-        ((owner, name, number, installationId) =>
-          fetchIssue(owner, name, number, {
-            installationId,
-            http: opts.http,
-            jwt: opts.jwt,
-          }));
-      snapshot = await fetchFn(parsed.owner, parsed.repo, parsed.issueNumber, repo.installationId);
-    } catch {
-      snapshot = null;
-    }
-  }
-
+  const snapshot = resolved.snapshot;
   const fetchedFromGitHub = !input.title?.trim() && Boolean(snapshot);
-  const title = snapshot?.title?.trim() || `${parsed.fullName}#${parsed.issueNumber}`;
+  const title =
+    input.title?.trim() ||
+    snapshot?.title?.trim() ||
+    `${parsed.fullName}#${parsed.issueNumber}`;
   const descriptionSnapshot = clipIssueBody(
     input.description?.trim() || snapshot?.body || null,
   );
@@ -105,7 +94,7 @@ export async function createBountyFromIssueUrl(
       const [row] = await tx
         .insert(bounties)
         .values({
-          repoId: repo.id,
+          repoId: resolved.repo.id,
           githubIssueNumber: parsed.issueNumber,
           url: parsed.url,
           posterUserId: input.posterUserId,
@@ -156,4 +145,174 @@ export async function createBountyFromIssueUrl(
     }
     throw err;
   }
+}
+
+export function bountyErrorForPublicRead(
+  err: PublicGitHubError,
+  fullName: string,
+  issueNumber: number,
+): BountyError {
+  const ref = `${fullName}#${issueNumber}`;
+  switch (err.code) {
+    case "not_found":
+      return new BountyError(
+        "issue_not_found",
+        `${ref} was not found. Check the URL. Private repositories stay hidden unless the GitHub App is installed on them.`,
+      );
+    case "inaccessible":
+      return new BountyError(
+        "issue_inaccessible",
+        `${ref} is private or inaccessible. Only public issues can be posted without the GitHub App.`,
+      );
+    case "rate_limited":
+      return new BountyError(
+        "issue_rate_limited",
+        "GitHub rate limit reached while reading this public issue. Set GITHUB_PUBLIC_READ_TOKEN or retry in a few minutes.",
+      );
+    case "not_an_issue":
+      return new BountyError(
+        "not_an_issue",
+        `${ref} is a pull request, not an issue. Paste an issue URL.`,
+      );
+    default:
+      return new BountyError(
+        "github_unavailable",
+        `GitHub could not be reached for ${ref}${err.status ? ` (HTTP ${err.status})` : ""}.`,
+      );
+  }
+}
+
+function assertPostableIssue(
+  fullName: string,
+  issueNumber: number,
+  snapshot: GitHubIssueSnapshot,
+): void {
+  if (snapshot.pullRequest) {
+    throw bountyErrorForPublicRead(
+      new PublicGitHubError("not_an_issue", 200, "pull request"),
+      fullName,
+      issueNumber,
+    );
+  }
+  if (snapshot.state.toLowerCase() === "closed") {
+    throw new BountyError(
+      "issue_closed",
+      `${fullName}#${issueNumber} is already closed. Post a bounty on an open issue.`,
+    );
+  }
+}
+
+async function resolveRepoAndIssue(
+  parsed: { owner: string; repo: string; fullName: string; issueNumber: number },
+  existing: RepoRow | null,
+  posterUserId: string,
+  opts: {
+    db: Database;
+    http?: GitHubHttp;
+    jwt?: string;
+    env?: NodeJS.ProcessEnv;
+    fetchIssueSnapshot?: (
+      owner: string,
+      repo: string,
+      issueNumber: number,
+      installationId: bigint | null,
+    ) => Promise<GitHubIssueSnapshot | null>;
+  },
+): Promise<{ repo: RepoRow; snapshot: GitHubIssueSnapshot | null }> {
+  if (opts.fetchIssueSnapshot) {
+    if (!existing) {
+      throw new BountyError(
+        "issue_not_found",
+        `${parsed.fullName}#${parsed.issueNumber} was not found.`,
+      );
+    }
+    const snapshot = await opts.fetchIssueSnapshot(
+      parsed.owner,
+      parsed.repo,
+      parsed.issueNumber,
+      existing.installationId,
+    );
+    return { repo: existing, snapshot };
+  }
+
+  const useInstall =
+    existing?.connectionKind === "app_install" && existing.installationId != null;
+  if (useInstall && existing) {
+    try {
+      const snapshot = await fetchIssue(parsed.owner, parsed.repo, parsed.issueNumber, {
+        installationId: existing.installationId as bigint,
+        http: opts.http,
+        jwt: opts.jwt,
+      });
+      return { repo: existing, snapshot };
+    } catch (err) {
+      throw bountyErrorForInstalledFetch(err, parsed.fullName, parsed.issueNumber);
+    }
+  }
+
+  try {
+    const resolved = await resolvePublicIssue(parsed.owner, parsed.repo, parsed.issueNumber, {
+      http: opts.http,
+      env: opts.env,
+    });
+    assertPostableIssue(parsed.fullName, parsed.issueNumber, resolved.issue);
+    const repo = await upsertPublicReferenceRepo({
+      userId: posterUserId,
+      githubRepoId: resolved.githubRepoId,
+      fullName: resolved.fullName,
+      db: opts.db,
+    });
+    return { repo, snapshot: resolved.issue };
+  } catch (err) {
+    if (err instanceof BountyError) throw err;
+    if (isPublicGitHubError(err)) {
+      throw bountyErrorForPublicRead(err, parsed.fullName, parsed.issueNumber);
+    }
+    throw new BountyError(
+      "github_unavailable",
+      `GitHub could not be reached for ${parsed.fullName}#${parsed.issueNumber}.`,
+    );
+  }
+}
+
+function bountyErrorForInstalledFetch(
+  err: unknown,
+  fullName: string,
+  issueNumber: number,
+): BountyError {
+  const message = err instanceof Error ? err.message : "";
+  if (/pull request/i.test(message)) {
+    return bountyErrorForPublicRead(
+      new PublicGitHubError("not_an_issue", 200, message),
+      fullName,
+      issueNumber,
+    );
+  }
+  const status = Number(message.match(/HTTP (\d+)/)?.[1] ?? 0);
+  if (status === 404) {
+    return bountyErrorForPublicRead(
+      new PublicGitHubError("not_found", 404, message),
+      fullName,
+      issueNumber,
+    );
+  }
+  if (status === 429 || /rate limit/i.test(message)) {
+    return bountyErrorForPublicRead(
+      new PublicGitHubError("rate_limited", status || 429, message),
+      fullName,
+      issueNumber,
+    );
+  }
+  if (status === 401 || status === 403) {
+    return bountyErrorForPublicRead(
+      new PublicGitHubError("inaccessible", status, message),
+      fullName,
+      issueNumber,
+    );
+  }
+  return bountyErrorForPublicRead(
+    new PublicGitHubError("unavailable", status, message || "GitHub issue fetch failed"),
+    fullName,
+    issueNumber,
+  );
 }
