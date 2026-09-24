@@ -7,6 +7,7 @@ import {
   workingOnThisCaption,
 } from "@/bounties";
 import type { BoardBounty } from "@/bounties/list";
+import { FunderAvatarStack } from "@/components/funder-avatar-stack";
 import { GitHubAvatar } from "@/components/github-avatar";
 
 const COMPLEXITY_BADGE: Record<"S" | "M" | "L", string> = {
@@ -61,11 +62,14 @@ export function BountyCard({ bounty }: { bounty: BoardBounty }) {
             </p>
           ) : null}
         </div>
-        <div className="text-right">
-          <p className="text-lg font-semibold">
-            {formatUsdc(bounty.amountUsdc)} {bounty.currency}
-          </p>
-          <p className="text-xs text-zinc-500">{bountyStatusLabel(bounty.status)}</p>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <div className="text-right">
+            <p className="text-lg font-semibold">
+              {formatUsdc(bounty.amountUsdc)} {bounty.currency}
+            </p>
+            <p className="text-xs text-zinc-500">{bountyStatusLabel(bounty.status)}</p>
+          </div>
+          <FunderAvatarStack funders={bounty.funders} funderCount={bounty.funderCount} />
         </div>
       </div>
       {bounty.escrowFail ? (

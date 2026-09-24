@@ -22,6 +22,12 @@ import {
   readyIntelligenceBadge,
   type BoardIntelligenceBadge,
 } from "./intelligence";
+import {
+  emptyBoardFunders,
+  listBoardFunders,
+  type BoardFunder,
+  type BoardFunderSummary,
+} from "./funders";
 import { listWorkSignalsForBounties, type WorkSignalView } from "./signals";
 
 export type BoardFilters = {
@@ -44,6 +50,10 @@ export type BoardBounty = {
   posterUserId: string;
   /** Present when the poster has a `github_links` row. */
   posterGithubLogin: string | null;
+  /** Distinct funders, most recent contribution first. At most 5. */
+  funders: BoardFunder[];
+  /** Distinct funder total, including people past the visible avatar cap. */
+  funderCount: number;
   fundedAt: Date | null;
   createdAt: Date;
   /** Always null after V2-4 sunset drain. Kept so old readers do not throw. */
@@ -101,7 +111,11 @@ export async function listBoardBounties(
   });
 
   const ids = rows.map((row) => row.id);
-  const payoutByBounty = await listPayoutClaimsForBounties(db, ids);
+  const [payoutByBounty, signalsByBounty, fundersByBounty] = await Promise.all([
+    listPayoutClaimsForBounties(db, ids),
+    listWorkSignalsForBounties(db, ids),
+    listBoardFunders(db, ids),
+  ]);
   const pendingByBounty = await listPendingHunterLinksForBounties(
     db,
     rows
@@ -112,7 +126,6 @@ export async function listBoardBounties(
         repoFullName: row.repoFullName,
       })),
   );
-  const signalsByBounty = await listWorkSignalsForBounties(db, ids);
 
   return rows
     .map((row) =>
@@ -121,6 +134,7 @@ export async function listBoardBounties(
         payoutByBounty.get(row.id) ?? null,
         payoutByBounty.has(row.id) ? null : (pendingByBounty.get(row.id) ?? null),
         signalsByBounty.get(row.id) ?? [],
+        fundersByBounty.get(row.id) ?? emptyBoardFunders(),
       ),
     )
     .filter((bounty) => matchesBoardIntelligenceFilter(bounty.intelligence, filters));
@@ -137,7 +151,11 @@ export async function getBoardBounty(
   const row = rows[0];
   if (!row) return null;
 
-  const payoutByBounty = await listPayoutClaimsForBounties(db, [row.id]);
+  const [payoutByBounty, signalsByBounty, fundersByBounty] = await Promise.all([
+    listPayoutClaimsForBounties(db, [row.id]),
+    listWorkSignalsForBounties(db, [row.id]),
+    listBoardFunders(db, [row.id]),
+  ]);
   const payout = payoutByBounty.get(row.id) ?? null;
   const pendingByBounty = payout
     ? new Map()
@@ -148,12 +166,12 @@ export async function getBoardBounty(
           repoFullName: row.repoFullName,
         },
       ]);
-  const signalsByBounty = await listWorkSignalsForBounties(db, [row.id]);
   return toBoardBounty(
     row,
     payout,
     payout ? null : (pendingByBounty.get(row.id) ?? null),
     signalsByBounty.get(row.id) ?? [],
+    fundersByBounty.get(row.id) ?? emptyBoardFunders(),
   );
 }
 
@@ -247,6 +265,7 @@ function toBoardBounty(
   payout: PayoutClaimView | null,
   pendingHunterLink: PendingHunterLink | null,
   workSignals: WorkSignalView[],
+  funders: BoardFunderSummary,
 ): BoardBounty {
   return {
     id: row.id,
@@ -260,6 +279,8 @@ function toBoardBounty(
     posterDisplayName: row.posterDisplayName,
     posterUserId: row.posterUserId,
     posterGithubLogin: row.posterGithubLogin,
+    funders: funders.funders,
+    funderCount: funders.funderCount,
     fundedAt: row.fundedAt,
     createdAt: row.createdAt,
     activeLock: null,
