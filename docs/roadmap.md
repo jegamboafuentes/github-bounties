@@ -4,13 +4,15 @@ High-level versions for **GitHub Bounties**. This is not Lightning Bounties / LB
 
 The public `/roadmap` page reads the same items from [`apps/web/src/home/roadmap.ts`](../apps/web/src/home/roadmap.ts). Edit that constant (and this file) when a version actually ships. **Do not invent ship dates.**
 
-Refreshed **as of 2026-09-21**. Status words only — no Q-dates.
+Refreshed **as of 2026-09-24**. Status words only — the Funding wave date below is a recorded PROD ship date, not a forecast.
 
 | Status | Meaning |
 | --- | --- |
 | `shipped` | On `main` and in the product (PROD unless noted) |
-| `in_progress` | Work is underway; no public date |
-| `planned` | Intended; not scheduled |
+| `next` | Next. In planning; no public date |
+| `then` | After next. Not scheduled |
+| `later` | Later. No schedule |
+| `parked` | Parked. Not scheduled |
 
 ## Shipped
 
@@ -40,21 +42,41 @@ Pie / split visuals on bounty payout breakdown. Shipped on bounty pages.
 
 Related polish on PROD: board complexity/language badges + filters, Settings/Post connected-only copy, homepage motion/roadmap refresh. DEV header pill stays off on PROD.
 
-## Planned
+### Funding wave
 
-No committed dates. Order may change.
+**LIVE on PROD 2026-09-24.**
+
+1. Crowdfunding: USDC top-ups on already-funded bounties.
+2. Fund any open public GitHub issue without installing the GitHub App. Claim runs through the public merge poller.
+3. Funder avatars on the board cards and on the bounty page Funders list.
+
+## Next
+
+### V4 — API + MCP
+
+**In planning.** AI can use the whole platform the way a human does. A public API documented with OpenAPI/Swagger, and an MCP server for Cursor, Claude, and ChatGPT.
+
+## Then
+
+### V5 — GitHub-native /bounty
+
+Comment `/bounty <amount>` on an issue. USDC only. GitHub App required.
+
+## Later
+
+### V6+ — Agent economy
+
+AI agents hunt and fund bounties over x402.
+
+## Parked
+
+### BTC payouts
+
+Parked. No schedule.
 
 ### Hosted Coinbase checkout
 
-Planned / deferred (parked later). Still **disabled** until settlement fee / net proceeds equal face ([ADR 0001](adr/0001-cdp-x402-wallets.md)). Fund remains x402 `exact` to `gb-escrow`.
-
-### V4 — Public API + MCP
-
-HTTP API and MCP so agents can list, fund, and claim without a browser.
-
-### V5 — Agent economy
-
-Agent-native hunt and settlement on the same merge-is-truth rails. Exploratory.
+Parked until settlement fee / net proceeds equal face ([ADR 0001](adr/0001-cdp-x402-wallets.md)). Fund remains x402 `exact` to `gb-escrow`.
 
 ## Explicit non-goals for this doc
 

@@ -3,7 +3,7 @@
 export const ROADMAP_INTRO =
   "Upcoming versions, marked honestly. No invented ship dates.";
 
-export const ROADMAP_STATUSES = ["shipped", "in_progress", "planned"] as const;
+export const ROADMAP_STATUSES = ["shipped", "next", "then", "later", "parked"] as const;
 
 export type RoadmapStatus = (typeof ROADMAP_STATUSES)[number];
 
@@ -64,33 +64,57 @@ export const PUBLIC_ROADMAP = [
     status: "shipped",
   },
   {
-    id: "hosted-checkout",
-    version: "Later",
-    title: "Hosted Coinbase checkout",
+    id: "funding-wave",
+    version: "2026-09-24",
+    title: "Funding wave",
     summary:
-      "Planned / deferred. Parked until settlement fee / net proceeds equal face (ADR 0001). x402 exact remains the fund rail.",
-    status: "planned",
+      "LIVE on PROD 2026-09-24. Crowdfunding: USDC top-ups on already-funded bounties. Fund any open public GitHub issue without installing the GitHub App, with Claim running through the public merge poller. Funder avatars on the board cards and on the bounty page Funders list.",
+    status: "shipped",
   },
   {
     id: "v4",
     version: "V4",
-    title: "Public API + MCP",
+    title: "API + MCP",
     summary:
-      "HTTP API and MCP so agents can list, fund, and claim without a browser. No schedule.",
-    status: "planned",
+      "In planning. AI can use the whole platform the way a human does. Public API documented with OpenAPI/Swagger, and an MCP server for Cursor, Claude, and ChatGPT.",
+    status: "next",
   },
   {
     id: "v5",
     version: "V5",
-    title: "Agent economy",
+    title: "GitHub-native /bounty",
     summary:
-      "Agent-native hunt and settlement on the same merge-is-truth rails. Exploratory; no schedule.",
-    status: "planned",
+      "Comment `/bounty <amount>` on an issue. USDC only. GitHub App required.",
+    status: "then",
+  },
+  {
+    id: "v6",
+    version: "V6+",
+    title: "Agent economy",
+    summary: "AI agents hunt and fund bounties over x402.",
+    status: "later",
+  },
+  {
+    id: "btc-payouts",
+    version: "BTC",
+    title: "BTC payouts",
+    summary: "Parked. No schedule.",
+    status: "parked",
+  },
+  {
+    id: "hosted-checkout",
+    version: "Checkout",
+    title: "Hosted Coinbase checkout",
+    summary:
+      "Parked until settlement fee / net proceeds equal face (ADR 0001). x402 exact remains the fund rail.",
+    status: "parked",
   },
 ] as const satisfies readonly RoadmapItem[];
 
 export const ROADMAP_STATUS_LABEL: Record<RoadmapStatus, string> = {
   shipped: "Shipped",
-  in_progress: "In progress",
-  planned: "Planned",
+  next: "Next",
+  then: "Then",
+  later: "Later",
+  parked: "Parked",
 };
