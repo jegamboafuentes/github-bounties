@@ -4,6 +4,7 @@ import type { PoolRosterView, RosterMemberView } from "../../bounties/roster";
 import type { BountyContributionView } from "../../escrow/top-up";
 import type { EscrowSnapshot } from "../../escrow/read";
 import { FEE_BPS, POOL_BPS_OF_POST_FEE } from "../../lib/constants";
+import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
 import type { CachedIntelligenceResult } from "../../intelligence/load";
 
 function iso(value: Date | null | undefined): string | null {
@@ -48,7 +49,25 @@ export function rosterPayout(roster: PoolRosterView) {
   };
 }
 
-export function presentPublicBounty(bounty: BoardBounty) {
+/** Six-decimal USDC, matching numeric(20,6) on the wire. */
+export function usdcWire(value: string): string {
+  return atomicToUsdc(usdcToAtomic(value));
+}
+
+/**
+ * Contribution rows, newest first.
+ * Mirrors the board avatar stack (latest contribution on the left, on top).
+ * Tie-break is id descending, the reverse of the oldest-first contribution query.
+ */
+export function orderContributionsNewestFirst<T extends { createdAt: Date; id: string }>(
+  rows: readonly T[],
+): T[] {
+  return [...rows].sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id),
+  );
+}
+
+export function presentPublicBounty(bounty: BoardBounty, totalFundedUsdc: string) {
   return {
     id: bounty.id,
     issue: {
@@ -60,7 +79,7 @@ export function presentPublicBounty(bounty: BoardBounty) {
     status: bounty.status,
     currency: bounty.currency,
     amountUsdc: bounty.amountUsdc,
-    totalFundedUsdc: bounty.amountUsdc,
+    totalFundedUsdc: usdcWire(totalFundedUsdc),
     createdAt: bounty.createdAt.toISOString(),
     fundedAt: iso(bounty.fundedAt),
     payout: emptyPoolPayout(bounty.amountUsdc),
@@ -94,11 +113,12 @@ function presentMember(member: RosterMemberView) {
 
 export function presentBountyDetail(args: {
   bounty: BoardBounty;
+  totalFundedUsdc: string;
   issueBody: string | null;
   roster: PoolRosterView;
   escrow: EscrowSnapshot | null;
 }) {
-  const base = presentPublicBounty(args.bounty);
+  const base = presentPublicBounty(args.bounty, args.totalFundedUsdc);
   return {
     bounty: {
       ...base,
@@ -152,6 +172,13 @@ export function presentFunderContribution(row: BountyContributionView) {
     avatarUrl: row.avatarUrl,
     amountUsdc: row.amountUsdc,
     createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export function presentFunderList(bountyId: string, rows: readonly BountyContributionView[]) {
+  return {
+    bountyId,
+    data: orderContributionsNewestFirst(rows).map(presentFunderContribution),
   };
 }
 

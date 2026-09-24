@@ -36,5 +36,14 @@ describe("OpenAPI document", () => {
     for (const name of ["repo", "status", "complexity", "language", "has_intel", "sort", "limit", "cursor"]) {
       assert.ok(names.includes(name), name);
     }
+    const json = JSON.stringify(document);
+    assert.match(json, /Sum of confirmed bounty contributions/);
+    assert.match(json, /0\.000000 when none are confirmed/);
+    assert.match(json, /newest contribution first/);
+    assert.match(json, /GET, OPTIONS/);
+    assert.match(json, /method_not_allowed/);
+    for (const path of ROUTES) {
+      assert.ok(document.paths?.[path]?.get?.responses?.["405"], `${path} 405`);
+    }
   });
 });
