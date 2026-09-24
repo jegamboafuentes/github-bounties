@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import type { FundChainDisplayName } from "@/bounties/display";
 import { FEE_BPS, POOL_BPS_OF_POST_FEE, POOL_MAX_PAID } from "@/lib/constants";
-import { STORY_HEADING, STORY_LEDE, STORY_STEPS, type StoryStepId } from "@/home/story";
+import { storyChainCaption, STORY_HEADING, STORY_LEDE, STORY_STEPS, type StoryStepId } from "@/home/story";
 
 const feePct = FEE_BPS / 100;
 const poolPct = POOL_BPS_OF_POST_FEE / 100;
@@ -22,7 +23,7 @@ function FigureChrome({
   );
 }
 
-function StoryFigure({ id }: { id: StoryStepId }) {
+function StoryFigure({ id, chainName }: { id: StoryStepId; chainName: FundChainDisplayName }) {
   if (id === "paste") {
     return (
       <FigureChrome label="Issue URL">
@@ -114,13 +115,13 @@ function StoryFigure({ id }: { id: StoryStepId }) {
     <FigureChrome label="Base">
       <p className="text-2xl font-semibold tracking-tight">USDC</p>
       <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-        Any bring-your-own Base address. DEV uses Base Sepolia.
+        {storyChainCaption(chainName)}
       </p>
     </FigureChrome>
   );
 }
 
-export function HomeStory() {
+export function HomeStory({ chainName }: { chainName: FundChainDisplayName }) {
   return (
     <section id="story" className="home-section-story flex flex-col gap-4" aria-labelledby="home-story-heading">
       <div className="home-section-heading home-reveal-item">
@@ -137,7 +138,7 @@ export function HomeStory() {
           <div className="home-story-stage-frame">
             {STORY_STEPS.map((step) => (
               <div key={step.id} className="home-story-panel" data-story-panel={step.id}>
-                <StoryFigure id={step.id} />
+                <StoryFigure id={step.id} chainName={chainName} />
               </div>
             ))}
           </div>
@@ -176,7 +177,7 @@ export function HomeStory() {
                     className="home-story-inline mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-950"
                     aria-hidden="true"
                   >
-                    <StoryFigure id={step.id} />
+                    <StoryFigure id={step.id} chainName={chainName} />
                   </div>
                 </article>
               </li>
