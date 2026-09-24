@@ -16,7 +16,7 @@ import { probeCdpEnv } from "./env";
 
 loadDotenvFiles();
 
-const HUNTER_ADDRESS = "0x00000000000000000000000000000000h007e4";
+const HUNTER_ADDRESS = "0x1111111111111111111111111111111111111111";
 
 async function fixture() {
   const { db, sql } = createDb();
@@ -33,7 +33,7 @@ async function fixture() {
       googleSub: `poster-${suffix}`,
       email: `poster-${suffix}@example.com`,
       displayName: "Ada Poster",
-      walletAddress: "0x00000000000000000000000000000000f00d01",
+      walletAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     },
     {
       id: hunterId,
@@ -54,6 +54,27 @@ async function fixture() {
 
   const rail = createMockRail(probeCdpEnv({}));
   return { db, sql, suffix, posterId, hunterId, fullName, rail };
+}
+
+/** Settle now requires the merge-flow claim. Caller hunter fields are ignored. */
+async function markEligibleClaim(
+  db: ReturnType<typeof createDb>["db"],
+  bountyId: string,
+  hunterId: string,
+) {
+  const [existing] = await db
+    .select({ id: claims.id })
+    .from(claims)
+    .where(eq(claims.bountyId, bountyId))
+    .limit(1);
+  if (existing) return;
+  await db.insert(claims).values({
+    bountyId,
+    hunterUserId: hunterId,
+    status: "eligible",
+    prNumber: 9000,
+    payoutAddress: HUNTER_ADDRESS,
+  });
 }
 
 async function postBounty(
@@ -102,6 +123,7 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
     try {
       const created = await postBounty(db, posterId, fullName, 22);
       await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await markEligibleClaim(db, created.id, hunterId);
 
       const first = await settleEscrow(
         created.id,
@@ -158,6 +180,7 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
     try {
       const created = await postBounty(db, posterId, fullName, 23);
       await fundBounty(created.id, posterId, db, new Date(), { rail: failFeeOnce });
+      await markEligibleClaim(db, created.id, hunterId);
       const partial = await settleEscrow(
         created.id,
         { actorUserId: posterId, hunterUserId: hunterId, hunterPayoutAddress: HUNTER_ADDRESS },
@@ -338,6 +361,7 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
     try {
       const created = await postBounty(db, posterId, fullName, 30, "50");
       await fundBounty(created.id, posterId, db, new Date(), { rail: failHunterOnce });
+      await markEligibleClaim(db, created.id, hunterId);
 
       await assert.rejects(
         () =>
@@ -418,8 +442,8 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
   });
 });
 
-const ALICE_ADDRESS = "0x00000000000000000000000000000000a11ce0";
-const BOB_ADDRESS = "0x0000000000000000000000000000000000b0b0";
+const ALICE_ADDRESS = "0x2222222222222222222222222222222222222222";
+const BOB_ADDRESS = "0x3333333333333333333333333333333333333333";
 
 function githubId(): bigint {
   return BigInt(`0x${randomUUID().replace(/-/g, "").slice(0, 12)}`);
@@ -483,6 +507,7 @@ describe("V2-3 escrow multi-payee settle (mock rail)", () => {
     try {
       const created = await postBounty(db, posterId, fullName, 61);
       await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await markEligibleClaim(db, created.id, hunterId);
       await insertFreeze(db, {
         bountyId: created.id,
         winner: {
@@ -569,6 +594,7 @@ describe("V2-3 escrow multi-payee settle (mock rail)", () => {
     try {
       const created = await postBounty(db, posterId, fullName, 62);
       await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await markEligibleClaim(db, created.id, hunterId);
       await insertFreeze(db, {
         bountyId: created.id,
         winner: {
@@ -696,6 +722,7 @@ describe("V2-3 escrow multi-payee settle (mock rail)", () => {
     try {
       const created = await postBounty(db, posterId, fullName, 63);
       await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await markEligibleClaim(db, created.id, hunterId);
       await insertFreeze(db, {
         bountyId: created.id,
         winner: {
@@ -771,6 +798,7 @@ describe("V2-3 escrow multi-payee settle (mock rail)", () => {
     try {
       const created = await postBounty(db, posterId, fullName, 64);
       await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await markEligibleClaim(db, created.id, hunterId);
       await insertFreeze(db, {
         bountyId: created.id,
         winner: {
@@ -906,6 +934,14 @@ describe("V2-3 escrow multi-payee settle (mock rail)", () => {
       const aliceRow = (await db.select().from(poolParticipants).where(eq(poolParticipants.bountyId, created.id)))
         .find((row) => row.githubLogin === "alice");
       assert.ok(aliceRow);
+      await db
+        .update(users)
+        .set({ walletAddress: ALICE_ADDRESS })
+        .where(eq(users.id, aliceId));
+      await db
+        .update(poolParticipants)
+        .set({ payoutAddress: ALICE_ADDRESS })
+        .where(eq(poolParticipants.id, aliceRow.id));
 
       const poolPaid = await settleEscrow(
         created.id,

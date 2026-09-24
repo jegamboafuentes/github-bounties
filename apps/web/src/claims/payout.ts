@@ -48,6 +48,7 @@ export type ClaimPayoutOpts = {
   now?: Date;
   /** Optional. Production uses process.env. A missing Resend key does not fail Claim. */
   email?: DomainEmailDeps;
+  requestId?: string | null;
 };
 
 /**
@@ -103,8 +104,6 @@ export async function claimPayout(
       bountyId,
       {
         actorUserId,
-        hunterUserId: claim.hunterUserId,
-        hunterPayoutAddress: address,
         claimId: claim.id,
         scope: "winner_and_fee",
       },
@@ -174,12 +173,15 @@ export async function claimPoolPayout(
       .set({ walletAddress: address, updatedAt: now })
       .where(eq(users.id, actorUserId));
   }
-  if (!member.userId) {
-    await opts.db
-      .update(poolParticipants)
-      .set({ userId: actorUserId, skipReason: null, updatedAt: now })
-      .where(eq(poolParticipants.id, member.id));
-  }
+  await opts.db
+    .update(poolParticipants)
+    .set({
+      payoutAddress: address,
+      userId: member.userId ?? actorUserId,
+      skipReason: null,
+      updatedAt: now,
+    })
+    .where(eq(poolParticipants.id, member.id));
 
   let settled: SettleResult;
   try {
@@ -188,7 +190,6 @@ export async function claimPoolPayout(
       {
         actorUserId,
         participantId: member.id,
-        poolPayoutAddress: address,
         scope: "pool_member",
       },
       opts,

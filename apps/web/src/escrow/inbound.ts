@@ -1,15 +1,34 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { escrows } from "../db/schema";
+import { payerDistinctFromEscrow } from "./destination-guard";
 import { EscrowError } from "./errors";
+import { requireBasePayoutAddress } from "./payout-address";
 
+/**
+ * Choose the Lock fund hash.
+ * Mock/local may use a pasted hash (tests). The live CDP rail never prefers
+ * a pasted value: only the hash recorded by x402 settle for this bounty.
+ */
 export function resolveLockFundTxHash(input: {
   pasted?: string | null;
   recorded?: string | null;
+  railMode?: "mock" | "cdp";
+  /** True when `recorded` was written by x402 settle (`escrows.x402_payment_id`). */
+  recordedByX402?: boolean;
 }): string | undefined {
-  const pasted = input.pasted?.trim();
+  const pasted = input.pasted?.trim() || "";
+  const recorded = input.recorded?.trim() || "";
+  if (input.railMode === "cdp") {
+    if (pasted && (!input.recordedByX402 || pasted.toLowerCase() !== recorded.toLowerCase())) {
+      throw new EscrowError(
+        "fund_hash_not_verified",
+        "Live rail only accepts the fund transaction recorded by x402 settle for this bounty. Paste-hash Lock is mock/local only.",
+      );
+    }
+    return recorded || undefined;
+  }
   if (pasted) return pasted;
-  const recorded = input.recorded?.trim();
   return recorded || undefined;
 }
 
@@ -73,6 +92,19 @@ export async function recordExactInbound(
     return { alreadyRecorded: true, txHash };
   }
 
+  // payTo is the escrow wallet. Storing it as funder_address made PROD
+  // refunds look like they should pay gb-escrow (bounty bbcc9ee5).
+  const payer = input.funderAddress?.trim() || "";
+  if (payer && !payerDistinctFromEscrow(payer, input.escrowAddress)) {
+    throw new EscrowError(
+      "x402_settle_failed",
+      "x402 payer is the escrow wallet (payTo), not the sender. Refusing to record it as funder_address.",
+    );
+  }
+  const funderAddress = payer
+    ? requireBasePayoutAddress(payer, "missing_funder_address")
+    : existing.funderAddress;
+
   await db
     .update(escrows)
     .set({
@@ -80,7 +112,7 @@ export async function recordExactInbound(
       x402PaymentId: paymentId || `x402:${txHash}`,
       x402Url: input.resourceUrl,
       escrowAddress: input.escrowAddress,
-      funderAddress: input.funderAddress?.trim() || existing.funderAddress,
+      funderAddress,
       failCode: null,
       failReason: null,
       updatedAt: now,

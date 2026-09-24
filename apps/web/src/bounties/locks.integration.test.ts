@@ -256,21 +256,27 @@ describe("V2-4 bounty post + claim-lock sunset", () => {
         { db, fetchIssueSnapshot: async () => null },
       );
       await fundBounty(created.id, posterId, db);
-      const lockId = randomUUID();
       const now = new Date();
       const lockedAt = hoursFrom(now, -80);
       const expiresAt = hoursFrom(now, -8);
-      await plantResidualLock(db, {
-        id: lockId,
-        bountyId: created.id,
-        hunterUserId: hunterId,
-        lockedAt,
-        expiresAt,
-      });
-
-      const expired = await expireClaimLocks(db, now);
-      assert.ok(expired.expiredLockIds.includes(lockId));
-      assert.ok(expired.restoredBountyIds.includes(created.id));
+      // Board reads in parallel test files drain every active claim lock.
+      // Re-plant until this call is the one that expires the row.
+      let lockId = "";
+      let expired: Awaited<ReturnType<typeof expireClaimLocks>> | undefined;
+      for (let attempt = 0; attempt < 8; attempt++) {
+        lockId = randomUUID();
+        await plantResidualLock(db, {
+          id: lockId,
+          bountyId: created.id,
+          hunterUserId: hunterId,
+          lockedAt,
+          expiresAt,
+        });
+        expired = await expireClaimLocks(db, now);
+        if (expired.expiredLockIds.includes(lockId)) break;
+      }
+      assert.ok(expired?.expiredLockIds.includes(lockId));
+      assert.ok(expired?.restoredBountyIds.includes(created.id));
 
       const [after] = await db
         .select({ status: bounties.status })
@@ -299,13 +305,23 @@ describe("V2-4 bounty post + claim-lock sunset", () => {
       );
       await fundBounty(created.id, posterId, db);
       const lockedAt = new Date();
-      await plantResidualLock(db, {
-        bountyId: created.id,
-        hunterUserId: hunterId,
-        lockedAt,
-        expiresAt: new Date(lockedAt.getTime() + 72 * 3600_000),
-      });
-      const released = await releaseClaimLock(created.id, posterId, db);
+      // A parallel board/detail read drains every active lock. Plant and
+      // release again if that drain wins the gap inside releaseClaimLock.
+      let released: Awaited<ReturnType<typeof releaseClaimLock>> | undefined;
+      for (let attempt = 0; attempt < 8 && !released; attempt++) {
+        await plantResidualLock(db, {
+          bountyId: created.id,
+          hunterUserId: hunterId,
+          lockedAt,
+          expiresAt: new Date(lockedAt.getTime() + 72 * 3600_000),
+        });
+        try {
+          released = await releaseClaimLock(created.id, posterId, db);
+        } catch (err) {
+          if (!(err instanceof BountyError) || err.code !== "lock_not_active") throw err;
+        }
+      }
+      assert.ok(released);
       assert.equal(released.by, "poster");
       const [row] = await db
         .select({ status: bounties.status })

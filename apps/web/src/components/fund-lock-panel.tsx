@@ -24,6 +24,7 @@ export function FundLockPanel({
   fundAction,
   mode = "lock",
   topUpAction,
+  allowPastedFundHash = false,
 }: {
   bountyId: string;
   faceUsdc: string;
@@ -36,6 +37,8 @@ export function FundLockPanel({
   /** `topup` adds USDC to an already-funded bounty on the same x402 rail. */
   mode?: "lock" | "topup";
   topUpAction?: (formData: FormData) => void | Promise<void>;
+  /** Paste-hash Lock / top-up is mock/local only. Live rail is x402 settle. */
+  allowPastedFundHash?: boolean;
 }) {
   const fund = useFundWallet();
   const face = formatUsdc(faceUsdc);
@@ -204,7 +207,7 @@ export function FundLockPanel({
         </form>
       )}
 
-      {showPay && pasteAction ? (
+      {showPay && pasteAction && allowPastedFundHash ? (
         <details className="rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800">
           <summary className="cursor-pointer font-medium">
             Advanced: paste a fund tx hash
