@@ -8,7 +8,9 @@ export const SITE_DESCRIPTION =
 
 /**
  * Share card built from the header wordmark (`public/logo-wordmark.png`,
- * logo-1). Light site background so the dark mark stays readable.
+ * logo-1 / `public/brand/logo-1.png`). Dark scanline mark on `#fafafa`.
+ * Not logo-3 (light mark, vanishes on a white WhatsApp thumb) and not
+ * logo-6 (`logo-wordmark-on-dark.png`, for zinc-950 only).
  */
 export const OG_IMAGE_PATH = "/og.png";
 export const OG_IMAGE_WIDTH = 1200;
