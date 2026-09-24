@@ -173,6 +173,35 @@ describe("share and icon assets", () => {
     assertDarkMarkOnLight("../../public/og.png", OG_IMAGE_WIDTH, OG_IMAGE_HEIGHT);
   });
 
+  it("keeps the whole black wordmark inside WhatsApp's center square crop", () => {
+    const png = readPng("../../public/og.png");
+    const side = png.height;
+    const left = Math.floor((png.width - side) / 2);
+    const right = left + side;
+    let centerDark = 0;
+    let centerSamples = 0;
+    let gutterDark = 0;
+    let gutterSamples = 0;
+    const step = 3;
+    for (let y = 0; y < png.height; y += step) {
+      for (let x = 0; x < png.width; x += step) {
+        const [r, g, b] = png.rgb(x, y);
+        const dark = (r + g + b) / 3 < 40;
+        if (x >= left && x < right) {
+          centerSamples += 1;
+          if (dark) centerDark += 1;
+        } else {
+          gutterSamples += 1;
+          if (dark) gutterDark += 1;
+        }
+      }
+    }
+    const centerRatio = centerDark / centerSamples;
+    const gutterRatio = gutterDark / gutterSamples;
+    assert.ok(centerRatio > 0.08, `center square dark-ink ratio ${centerRatio.toFixed(3)}`);
+    assert.ok(gutterRatio < 0.01, `side gutters dark-ink ratio ${gutterRatio.toFixed(3)} (mark must sit in the square thumb)`);
+  });
+
   it("uses the same dark-on-light mark for the tab and apple touch", () => {
     assertDarkMarkOnLight("../../public/icon.png", 512, 512);
     assertDarkMarkOnLight("../../public/apple-touch-icon.png", 180, 180);
