@@ -19,37 +19,39 @@ This is **not** Lightning Bounties, LB1, or “Lightning Bounties 2”. Older pr
 
 ## Status now
 
-As of **2026-09-21**. No invented ship dates. V3-0 is **DEV only** — do not treat it as live on PROD.
+As of **2026-09-24**. No invented ship dates. `/roadmap`, About, and [docs/roadmap.md](docs/roadmap.md) use this list. Chain differs by environment; the versions do not.
 
-| Environment | URL | What’s live |
+| Environment | URL | Chain |
 | --- | --- | --- |
-| **PROD** | [githubbounties.xyz](https://githubbounties.xyz) | V1 core + V2 pool + FE epic. Real USDC on **Base mainnet**. |
-| **DEV** | [dev.githubbounties.xyz](https://dev.githubbounties.xyz) | Everything on PROD **plus V3-0**. Test USDC on **Base Sepolia**. |
+| **PROD** | [githubbounties.xyz](https://githubbounties.xyz) | Real USDC on **Base mainnet**. |
+| **DEV** | [dev.githubbounties.xyz](https://dev.githubbounties.xyz) | Test USDC on **Base Sepolia**. |
 
-### On PROD
+### Shipped
 
-- **V1 core** — Google sign-in, GitHub App, public board, post bounty, 2% fee at settlement
-- **Money** — CDP escrow (`gb-escrow`) + x402 / WalletConnect fund on Base mainnet
-- **V2 multi-hunter pool** ([ADR 0003](docs/adr/0003-v2-multi-hunter-pool.md)) — 15% of **post-fee** to up to 10 eligible hunters; exclusive 72h claim-lock is **retired**; live DEV dogfood done
-- **Manual pool Claim** ([#47](https://github.com/jegamboafuentes/github-bounties/pull/47)) — winner Claim settles winner + fee only (works without pool wallets); each pool member Claims their own share later
-- **FE** — homepage Anime.js + live stats + differentiators + public roadmap; bounty payout pie charts; public `GET /api/stats` (`schemaVersion` **1**)
+- **V1** — USDC escrow + merge is truth. Google sign-in, GitHub App, board, 2% fee, winner = merged PR author that closes funded #N.
+- **V2** — Parallel hunt + participation pool. V2-0…V2-5: 15% of post-fee to up to 10 hunters, signals, roster, claim-lock sunset. Live DEV dogfood done.
+- **V2.6** — Pool member self-claim. Manual pool Claim (#47) on PROD. Winner Claim pays winner + fee only. Each frozen pool hunter Claims their own share when they have a wallet.
+- **FE** — Homepage stats, roadmap, differentiators. Live platform stats, public roadmap, and vs-Lightning differentiators on the homepage. Same aggregates as GET /api/stats.
+- **FE-2** — Bounty detail split charts. Pie / split visuals on bounty payout breakdown. Shipped on bounty pages.
+- **V3-0** — Issue body + bounty intelligence. Shipped on PROD. Full GitHub issue + Gemini about/stack/complexity (AI estimates, cached). Related polish: board badges/filters, Settings/Post connected-only, homepage motion/roadmap refresh.
+- **Funding wave** — LIVE on PROD 2026-09-24. Crowdfunding: USDC top-ups on already-funded bounties. Fund any open public GitHub issue without installing the GitHub App, with Claim running through the public merge poller. Funder avatars on the board cards and on the bounty page Funders list.
 
-### On DEV only (not PROD)
+### Next
 
-- **V3-0** ([#48](https://github.com/jegamboafuentes/github-bounties/pull/48)) — full GitHub issue body on the bounty page; Gemini intelligence card (repo about / stack / complexity S·M·L) via server-only `GEMINI_API_KEY`
-- Stats: `repos.withBounties` replaces App-install “repos connected” (`schemaVersion` **2** on `main`)
-- Settings / Post show GitHub **connected vs not** (no repo dump)
-- Board complexity/language badges + filters; DEV header pill
-- **V3.x B** — public About page (next chapter of Lightning Bounties, same cofounders) and a homepage scroll story instead of the Modules list. UI only. No migration, no fee or escrow change. Not a PROD remount.
-- **Public `/roadmap`** — same `PUBLIC_ROADMAP` items as [docs/roadmap.md](docs/roadmap.md). Homepage keeps live stats, differentiators, and the scroll story; the roadmap block is not on home. About links the roadmap, the MIT Devpost, the Medium win story, and local cofounder photos. UI only. No migration. Remount DEV after merge. Do **not** remount PROD.
+- **V4 — API + MCP.** In planning. AI can use the whole platform the way a human does. Public API documented with OpenAPI/Swagger, and an MCP server for Cursor, Claude, and ChatGPT.
 
-### Not shipped / deferred
+### Then
 
-- Hosted Coinbase checkout: **planned / deferred** (ADR 0001; parked later)
-- V4 public API + MCP; V5 agent economy — planned, no dates
-- BTC / sats payouts: **deferred**
-- **V3 is not on PROD**
-- **V3.x A1–A2** transactional email is a DEV foundation (migrate `0006`, optional `RESEND_API_KEY`). A2 enqueues funder / winner / pool-claimable notes from the existing lock, eligibility, and winner-settlement writes. Not remounted. Not on PROD. Manual pool Claim is unchanged.
+- **V5 — GitHub-native /bounty.** Comment `/bounty <amount>` on an issue. USDC only. GitHub App required.
+
+### Later
+
+- **V6+ — Agent economy.** AI agents hunt and fund bounties over x402.
+
+### Parked
+
+- **BTC payouts.** Parked. No schedule.
+- **Hosted Coinbase checkout.** Parked until settlement fee / net proceeds equal face (ADR 0001). x402 exact remains the fund rail.
 
 Public roadmap copy: [docs/roadmap.md](docs/roadmap.md).
 
@@ -81,9 +83,10 @@ Decisions, sequences, and failure modes:
 | Bounty post, board, parallel hunt | [docs/bounties.md](docs/bounties.md) |
 | Escrow, 2% fee, x402 Lock | [docs/escrow.md](docs/escrow.md) |
 | Winner + pool Claim | [docs/claims.md](docs/claims.md) |
-| Issue body + Gemini intelligence (DEV) | [docs/bounty-intelligence.md](docs/bounty-intelligence.md) |
+| Issue body + Gemini intelligence | [docs/bounty-intelligence.md](docs/bounty-intelligence.md) |
 | Sign-in identity + DEV transactional email (welcome and domain events, not remounted) | [docs/email.md](docs/email.md) |
 | Public stats (`GET /api/stats`) | [docs/stats.md](docs/stats.md) |
+| Read-only public API + MCP (V4-1) | [docs/api.md](docs/api.md) |
 | Google sign-in | [docs/google-signin.md](docs/google-signin.md) |
 | GitHub App + webhooks | [docs/github-app.md](docs/github-app.md), [docs/webhooks.md](docs/webhooks.md) |
 | Schema | [docs/v1-schema.md](docs/v1-schema.md) |
@@ -123,7 +126,7 @@ No secrets belong in git. App private keys (`*.pem`) are gitignored. Empty place
 
 - GCP project is still **`experiment-jegf`** (`42206083192`). DEV and PROD are **separate** Cloud Run services, Cloud SQL instances, and Secret Manager stacks. Do not remount DEV onto the apex.
 - Suggested names: DEV `github-bounties-web` / `github-bounties-staging`; PROD `github-bounties-web-prod` / `github-bounties-prod`. See [docs/prod-cutover.md](docs/prod-cutover.md).
-- Hosted Coinbase checkout stays disabled. BTC/sats payouts are deferred.
+- Hosted Coinbase checkout and BTC payouts are parked (see [docs/roadmap.md](docs/roadmap.md)).
 
 ## Sandbox / historical spikes
 

@@ -37,6 +37,37 @@ export function shouldRefreshIssueBody(args: {
 }
 
 /**
+ * Stored issue snapshot only. Does not call GitHub and does not write.
+ * The public API uses this so a read cannot refresh or persist a body.
+ */
+export async function readStoredIssueBody(
+  bountyId: string,
+  db: Database,
+): Promise<BountyIssueBody | null> {
+  const [row] = await db
+    .select({
+      descriptionSnapshot: bounties.descriptionSnapshot,
+      title: bounties.title,
+      githubIssueNumber: bounties.githubIssueNumber,
+      repoFullName: repos.fullName,
+      installationId: repos.installationId,
+    })
+    .from(bounties)
+    .innerJoin(repos, eq(repos.id, bounties.repoId))
+    .where(eq(bounties.id, bountyId))
+    .limit(1);
+  if (!row) return null;
+  return {
+    markdown: row.descriptionSnapshot,
+    title: row.title,
+    refreshed: false,
+    repoFullName: row.repoFullName,
+    githubIssueNumber: row.githubIssueNumber,
+    installationId: row.installationId,
+  };
+}
+
+/**
  * Load the full GitHub issue body for the bounty detail page.
  * Uses the stored snapshot when fresh; otherwise fetches via the App
  * installation token or public REST when the repo has no installation.

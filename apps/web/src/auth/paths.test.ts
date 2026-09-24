@@ -20,11 +20,19 @@ describe("protected paths", () => {
     assert.equal(isProtectedApiPath("/api/github/connect"), true);
     assert.equal(isProtectedApiPath("/api/health"), false);
     assert.equal(isProtectedApiPath("/api/stats"), false);
+    assert.equal(isProtectedApiPath("/api/v1/bounties"), false);
+    assert.equal(isProtectedApiPath("/api/v1/stats"), false);
+    assert.equal(isProtectedApiPath("/api/docs"), false);
+    assert.equal(isProtectedApiPath("/mcp"), false);
     assert.equal(isProtectedApiPath("/api/auth/signin"), false);
     assert.equal(isProtectedApiPath("/api/auth/callback/google"), false);
 
     assert.equal(isProtectedPath("/api/me"), true);
     assert.equal(isProtectedPath("/api/health"), false);
     assert.equal(isProtectedPath("/api/stats"), false);
+    assert.equal(isProtectedPath("/api/v1/bounties"), false);
+    assert.equal(isProtectedPath("/api/v1/openapi.json"), false);
+    assert.equal(isProtectedPath("/api/docs"), false);
+    assert.equal(isProtectedPath("/mcp"), false);
   });
 });

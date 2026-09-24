@@ -48,6 +48,86 @@ export type IntelligenceCachePort = {
   write: typeof writeIntelligenceCache;
 };
 
+export type CachedIntelligenceResult =
+  | {
+      cached: true;
+      status: "ready";
+      repoAbout: string;
+      languageStack: string;
+      complexity: "S" | "M" | "L";
+      model: string | null;
+      generatedAt: string;
+      estimateLabel: string;
+    }
+  | {
+      cached: true;
+      status: "error";
+      reason: string;
+      generatedAt: string;
+      estimateLabel: string;
+    }
+  | {
+      cached: false;
+      status: "not_cached";
+      estimateLabel: string;
+    };
+
+/**
+ * Cache read for the public API and MCP. Never calls Gemini, never fetches
+ * GitHub, and never writes the cache — including when the row is missing,
+ * stale, or an error. Callers must not pass this result into
+ * {@link loadBountyIntelligence}.
+ */
+export async function readCachedBountyIntelligence(args: {
+  bountyId: string;
+  db: Database;
+  read?: IntelligenceCachePort["read"];
+}): Promise<CachedIntelligenceResult> {
+  const read = args.read ?? readIntelligenceCache;
+  const estimateLabel = INTELLIGENCE_ESTIMATE_LABEL;
+  let row: IntelligenceCacheRow | null = null;
+  try {
+    row = await read(args.bountyId, args.db);
+  } catch (err) {
+    const classified = classifyIntelligenceFailure(err);
+    logIntelligenceEvent("bounty_intelligence_cache_read_failed", {
+      bountyId: args.bountyId,
+      error: classified.code,
+      pgCode: classified.pgCode,
+    });
+    return { cached: false, status: "not_cached", estimateLabel };
+  }
+  if (!row) return { cached: false, status: "not_cached", estimateLabel };
+  const generatedAt = row.generatedAt.toISOString();
+  if (
+    row.status === "ready" &&
+    row.repoAbout &&
+    row.languageStack &&
+    (row.complexity === "S" || row.complexity === "M" || row.complexity === "L")
+  ) {
+    return {
+      cached: true,
+      status: "ready",
+      repoAbout: row.repoAbout,
+      languageStack: row.languageStack,
+      complexity: row.complexity,
+      model: row.model,
+      generatedAt,
+      estimateLabel,
+    };
+  }
+  if (row.status === "error") {
+    return {
+      cached: true,
+      status: "error",
+      reason: sanitizeIntelligenceErrorReason(row.errorReason) ?? "error",
+      generatedAt,
+      estimateLabel,
+    };
+  }
+  return { cached: false, status: "not_cached", estimateLabel };
+}
+
 const EMPTY_REPO: GitHubRepoContext = {
   description: null,
   language: null,

@@ -1,3 +1,4 @@
+import type { FundChainDisplayName } from "../bounties/display";
 import { FEE_BPS, POOL_BPS_OF_POST_FEE, POOL_MAX_PAID } from "../lib/constants";
 
 /**
@@ -10,6 +11,11 @@ const feePct = FEE_BPS / 100;
 const poolPct = POOL_BPS_OF_POST_FEE / 100;
 const winnerPct = 100 - poolPct;
 const postFeeOfFace = 100 - feePct;
+
+/** Figure caption for the Base step. Chain name comes from the existing fund runtime. */
+export function storyChainCaption(chainName: FundChainDisplayName): string {
+  return `Any bring-your-own Base address. Settlement uses ${chainName}.`;
+}
 
 export const STORY_HEADING = "How a bounty moves";
 
@@ -76,6 +82,6 @@ export const STORY_STEPS: readonly StoryStep[] = [
     kicker: "06",
     title: "Global Base settlement",
     detail: "USDC on Base",
-    body: "Settlement is USDC on Base, to any bring-your-own Base address. DEV runs on Base Sepolia. The chain is Base — not Lightning, and not a second network.",
+    body: "Settlement is USDC on Base, to any bring-your-own Base address. The chain is Base — not Lightning, and not a second network.",
   },
 ];

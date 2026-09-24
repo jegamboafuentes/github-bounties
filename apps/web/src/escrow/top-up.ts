@@ -49,6 +49,8 @@ export type BountyContributionView = {
   id: string;
   funderUserId: string;
   displayName: string;
+  /** Linked GitHub login when the funder has connected GitHub. */
+  githubLogin: string | null;
   amountUsdc: string;
   funderAddress: string | null;
   fundTxHash: string;
@@ -180,6 +182,7 @@ export async function listBountyContributions(
     id: row.id,
     funderUserId: row.funderUserId,
     displayName: row.displayName,
+    githubLogin: row.githubLogin,
     amountUsdc: row.amountUsdc,
     funderAddress: row.funderAddress,
     fundTxHash: row.fundTxHash,

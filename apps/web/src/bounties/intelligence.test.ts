@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   intelligenceFilterActive,
   matchesBoardIntelligenceFilter,
+  matchesListIntelligenceFilter,
   parseComplexityFilter,
   readyIntelligenceBadge,
 } from "./intelligence";
@@ -42,5 +43,15 @@ describe("board intelligence badges + filters", () => {
     assert.equal(matchesBoardIntelligenceFilter(ready, { complexity: "S" }), false);
     assert.equal(matchesBoardIntelligenceFilter(ready, { language: "typescript" }), true);
     assert.equal(matchesBoardIntelligenceFilter(ready, { language: "Go" }), false);
+  });
+
+  it("has_intel keeps or drops a ready badge without changing complexity rules", () => {
+    assert.equal(matchesListIntelligenceFilter(ready, { hasIntel: true }), true);
+    assert.equal(matchesListIntelligenceFilter(null, { hasIntel: true }), false);
+    assert.equal(matchesListIntelligenceFilter(null, { hasIntel: false }), true);
+    assert.equal(matchesListIntelligenceFilter(ready, { hasIntel: false }), false);
+    assert.equal(matchesListIntelligenceFilter(ready, { hasIntel: true, complexity: "M" }), true);
+    assert.equal(matchesListIntelligenceFilter(ready, { hasIntel: false, complexity: "M" }), false);
+    assert.equal(matchesListIntelligenceFilter(null, {}), true);
   });
 });

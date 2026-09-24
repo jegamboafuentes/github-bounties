@@ -4,7 +4,7 @@ import type { GitHubHttp } from "../github/api";
 import { intelligenceFingerprint } from "./cache";
 import type { GeminiHttp } from "./gemini";
 import type { IntelligenceCachePort } from "./load";
-import { loadBountyIntelligence } from "./load";
+import { loadBountyIntelligence, readCachedBountyIntelligence } from "./load";
 
 const BOUNTY_ID = "11111111-1111-1111-1111-111111111111";
 
@@ -250,5 +250,44 @@ describe("loadBountyIntelligence", () => {
       assert.equal(view.reason, "error");
       assert.equal(view.errorReason, "gemini_timeout");
     }
+  });
+});
+
+describe("readCachedBountyIntelligence", () => {
+  it("returns the stored row and does not call Gemini or write", async () => {
+    let reads = 0;
+    const view = await readCachedBountyIntelligence({
+      bountyId: BOUNTY_ID,
+      db: {} as never,
+      read: async () => {
+        reads += 1;
+        return {
+          bountyId: BOUNTY_ID,
+          status: "ready",
+          repoAbout: "A sample repo",
+          languageStack: "TypeScript",
+          complexity: "S",
+          model: "gemini-test",
+          sourceFingerprint: "abc",
+          errorReason: null,
+          generatedAt: new Date("2026-09-01T00:00:00.000Z"),
+          createdAt: new Date("2026-09-01T00:00:00.000Z"),
+          updatedAt: new Date("2026-09-01T00:00:00.000Z"),
+        };
+      },
+    });
+    assert.equal(reads, 1);
+    assert.equal(view.status, "ready");
+    if (view.status === "ready") {
+      assert.equal(view.complexity, "S");
+      assert.equal(view.generatedAt, "2026-09-01T00:00:00.000Z");
+    }
+    const missing = await readCachedBountyIntelligence({
+      bountyId: BOUNTY_ID,
+      db: {} as never,
+      read: async () => null,
+    });
+    assert.equal(missing.status, "not_cached");
+    assert.equal(missing.cached, false);
   });
 });
