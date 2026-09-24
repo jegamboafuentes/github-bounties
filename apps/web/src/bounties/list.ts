@@ -19,6 +19,9 @@ import { isUndefinedTableError, logIntelligenceEvent } from "../intelligence/err
 import { expireClaimLocks } from "./expire";
 import {
   matchesBoardIntelligenceFilter,
+  matchesListIntelligenceFilter,
+  parseComplexityFilter,
+  parseLanguageFilter,
   readyIntelligenceBadge,
   type BoardIntelligenceBadge,
 } from "./intelligence";
@@ -35,6 +38,22 @@ export type BoardFilters = {
   status?: (typeof bountyStatusValues)[number] | string;
   complexity?: string;
   language?: string;
+};
+
+export type BoardListSort = "newest" | "amount";
+
+/** Keyset position. Opaque on the wire; decoded by the public API. */
+export type BoardKeyset =
+  | { sort: "newest"; createdAt: Date; id: string }
+  | { sort: "amount"; amountUsdc: string; id: string };
+
+export type BoardPageQuery = {
+  /** Page size. The query fetches one extra row to detect a next page. */
+  limit: number;
+  sort?: BoardListSort;
+  cursor?: BoardKeyset | null;
+  /** Ready cached badge only, or exclude those rows. Omit to leave intel open. */
+  hasIntel?: boolean;
 };
 
 export type BoardBounty = {
@@ -110,6 +129,60 @@ export async function listBoardBounties(
     status,
   });
 
+  return (await hydrateBoardRows(db, rows)).filter((bounty) =>
+    matchesBoardIntelligenceFilter(bounty.intelligence, filters),
+  );
+}
+
+/**
+ * Keyset page over the same board query. Omit this from the website board,
+ * which still calls {@link listBoardBounties} and loads every matching row.
+ * Complexity, language, and hasIntel are applied in SQL so a page is not
+ * shortened by the in-memory badge filter. That filter still runs as a check.
+ */
+export async function listBoardBountiesPage(
+  db: Database,
+  filters: BoardFilters = {},
+  page: BoardPageQuery,
+  now: Date = new Date(),
+): Promise<{ bounties: BoardBounty[]; hasMore: boolean }> {
+  await expireClaimLocks(db, now);
+
+  const repoFilter = filters.repo?.trim();
+  const statusFilter = filters.status?.trim();
+  const status =
+    statusFilter && statusFilter !== "all" && STATUS_SET.has(statusFilter)
+      ? (statusFilter as (typeof bountyStatusValues)[number])
+      : undefined;
+  const sort = page.sort ?? "newest";
+  if (page.cursor && page.cursor.sort !== sort) {
+    throw new Error("board cursor sort does not match the requested sort");
+  }
+
+  const rows = await queryBoardRows(db, {
+    repoFilter,
+    status,
+    page: {
+      sort,
+      limit: page.limit + 1,
+      cursor: page.cursor ?? null,
+      complexity: parseComplexityFilter(filters.complexity),
+      language: parseLanguageFilter(filters.language),
+      hasIntel: page.hasIntel,
+    },
+  });
+  const hydrated = (await hydrateBoardRows(db, rows)).filter((bounty) =>
+    matchesListIntelligenceFilter(bounty.intelligence, {
+      complexity: filters.complexity,
+      language: filters.language,
+      hasIntel: page.hasIntel,
+    }),
+  );
+  const hasMore = hydrated.length > page.limit;
+  return { bounties: hydrated.slice(0, page.limit), hasMore };
+}
+
+async function hydrateBoardRows(db: Database, rows: ListRow[]): Promise<BoardBounty[]> {
   const ids = rows.map((row) => row.id);
   const [payoutByBounty, signalsByBounty, fundersByBounty] = await Promise.all([
     listPayoutClaimsForBounties(db, ids),
@@ -127,17 +200,15 @@ export async function listBoardBounties(
       })),
   );
 
-  return rows
-    .map((row) =>
-      toBoardBounty(
-        row,
-        payoutByBounty.get(row.id) ?? null,
-        payoutByBounty.has(row.id) ? null : (pendingByBounty.get(row.id) ?? null),
-        signalsByBounty.get(row.id) ?? [],
-        fundersByBounty.get(row.id) ?? emptyBoardFunders(),
-      ),
-    )
-    .filter((bounty) => matchesBoardIntelligenceFilter(bounty.intelligence, filters));
+  return rows.map((row) =>
+    toBoardBounty(
+      row,
+      payoutByBounty.get(row.id) ?? null,
+      payoutByBounty.has(row.id) ? null : (pendingByBounty.get(row.id) ?? null),
+      signalsByBounty.get(row.id) ?? [],
+      fundersByBounty.get(row.id) ?? emptyBoardFunders(),
+    ),
+  );
 }
 
 export async function getBoardBounty(
@@ -196,15 +267,28 @@ type ListRow = {
   intelLanguageStack: string | null;
 };
 
+type PageQuery = {
+  sort: BoardListSort;
+  limit: number;
+  cursor?: BoardKeyset | null;
+  complexity?: "S" | "M" | "L";
+  language?: string;
+  hasIntel?: boolean;
+};
+
 async function queryBoardRows(
   db: Database,
   opts: {
     bountyId?: string;
     repoFilter?: string;
     status?: (typeof bountyStatusValues)[number];
+    page?: PageQuery;
   },
 ): Promise<ListRow[]> {
   const whereClause = boardWhere(opts);
+  const keyset = opts.page ? keysetWhere(opts.page.sort, opts.page.cursor) : undefined;
+  const intelClause = opts.page ? listIntelWhere(opts.page) : undefined;
+  const where = and(whereClause, keyset, intelClause);
   try {
     const query = db
       .select({
@@ -219,8 +303,9 @@ async function queryBoardRows(
       .leftJoin(githubLinks, eq(githubLinks.userId, bounties.posterUserId))
       .leftJoin(escrows, eq(escrows.bountyId, bounties.id))
       .leftJoin(bountyIntelligence, eq(bountyIntelligence.bountyId, bounties.id))
-      .where(whereClause);
+      .where(where);
     if (opts.bountyId) return await query.limit(1);
+    if (opts.page) return await query.orderBy(...orderFor(opts.page.sort)).limit(opts.page.limit);
     return await query.orderBy(desc(bounties.createdAt));
   } catch (err) {
     if (!isUndefinedTableError(err)) throw err;
@@ -235,8 +320,12 @@ async function queryBoardRows(
       .innerJoin(users, eq(users.id, bounties.posterUserId))
       .leftJoin(githubLinks, eq(githubLinks.userId, bounties.posterUserId))
       .leftJoin(escrows, eq(escrows.bountyId, bounties.id))
-      .where(whereClause);
-    const rows = opts.bountyId ? await query.limit(1) : await query.orderBy(desc(bounties.createdAt));
+      .where(and(whereClause, keyset));
+    const rows = opts.bountyId
+      ? await query.limit(1)
+      : opts.page
+        ? await query.orderBy(...orderFor(opts.page.sort)).limit(opts.page.limit)
+        : await query.orderBy(desc(bounties.createdAt));
     return rows.map((row) => ({
       ...row,
       intelStatus: null,
@@ -244,6 +333,58 @@ async function queryBoardRows(
       intelLanguageStack: null,
     }));
   }
+}
+
+function orderFor(sort: BoardListSort) {
+  if (sort === "amount") return [desc(bounties.amountUsdc), desc(bounties.id)] as const;
+  return [desc(bounties.createdAt), desc(bounties.id)] as const;
+}
+
+function keysetWhere(sort: BoardListSort, cursor: BoardKeyset | null | undefined) {
+  if (!cursor || cursor.sort !== sort) return undefined;
+  if (cursor.sort === "amount") {
+    return sql`(
+      ${bounties.amountUsdc} < cast(${cursor.amountUsdc} as numeric)
+      or (
+        ${bounties.amountUsdc} = cast(${cursor.amountUsdc} as numeric)
+        and ${bounties.id} < cast(${cursor.id} as uuid)
+      )
+    )`;
+  }
+  const createdAt = cursor.createdAt.toISOString();
+  return sql`(
+    ${bounties.createdAt} < cast(${createdAt} as timestamptz)
+    or (
+      ${bounties.createdAt} = cast(${createdAt} as timestamptz)
+      and ${bounties.id} < cast(${cursor.id} as uuid)
+    )
+  )`;
+}
+
+/** Same predicate as {@link matchesListIntelligenceFilter}, pushed into SQL for paging. */
+function listIntelWhere(page: Pick<PageQuery, "complexity" | "language" | "hasIntel">) {
+  const ready = sql`(
+    ${bountyIntelligence.status} = 'ready'
+    and ${bountyIntelligence.complexity} in ('S', 'M', 'L')
+    and nullif(btrim(coalesce(${bountyIntelligence.languageStack}, '')), '') is not null
+  )`;
+  const parts = [];
+  if (page.hasIntel === true) parts.push(ready);
+  // NOT (unknown) is unknown, which WHERE drops. Coalesce so a missing badge stays in a has_intel=false page.
+  if (page.hasIntel === false) parts.push(sql`not coalesce((${ready}), false)`);
+  if (page.complexity || page.language) {
+    if (page.hasIntel !== false) parts.push(ready);
+    if (page.complexity) {
+      parts.push(sql`${bountyIntelligence.complexity} = ${page.complexity}`);
+    }
+    if (page.language) {
+      parts.push(
+        sql`${bountyIntelligence.languageStack} ilike ${`%${escapeLike(page.language)}%`}`,
+      );
+    }
+  }
+  if (parts.length === 0) return undefined;
+  return sql`(${sql.join(parts, sql` and `)})`;
 }
 
 function boardWhere(opts: {

@@ -54,3 +54,22 @@ export function matchesBoardIntelligenceFilter(
   if (language && !badge.languageStack.toLowerCase().includes(language)) return false;
   return true;
 }
+
+export type ListIntelligenceFilters = BoardIntelligenceFilters & {
+  /** true: ready badge required. false: ready badge excluded. Omit to leave it open. */
+  hasIntel?: boolean;
+};
+
+/**
+ * Board complexity/language rules, plus an optional ready-badge requirement.
+ * `hasIntel: false` together with complexity or language matches nothing,
+ * because those filters already require a ready badge.
+ */
+export function matchesListIntelligenceFilter(
+  badge: BoardIntelligenceBadge | null,
+  filters: ListIntelligenceFilters = {},
+): boolean {
+  if (filters.hasIntel === true && !badge) return false;
+  if (filters.hasIntel === false && badge) return false;
+  return matchesBoardIntelligenceFilter(badge, filters);
+}

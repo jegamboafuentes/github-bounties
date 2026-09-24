@@ -46,7 +46,7 @@ As of **2026-09-21**. No invented ship dates. V3-0 is **DEV only** — do not tr
 ### Not shipped / deferred
 
 - Hosted Coinbase checkout: **planned / deferred** (ADR 0001; parked later)
-- V4 public API + MCP; V5 agent economy — planned, no dates
+- V4-1 read-only public API and MCP are in the app ([docs/api.md](docs/api.md)). API keys, writes, and money endpoints are V4-2 and later. V5 agent economy — planned, no dates
 - BTC / sats payouts: **deferred**
 - **V3 is not on PROD**
 - **V3.x A1–A2** transactional email is a DEV foundation (migrate `0006`, optional `RESEND_API_KEY`). A2 enqueues funder / winner / pool-claimable notes from the existing lock, eligibility, and winner-settlement writes. Not remounted. Not on PROD. Manual pool Claim is unchanged.
@@ -84,6 +84,7 @@ Decisions, sequences, and failure modes:
 | Issue body + Gemini intelligence (DEV) | [docs/bounty-intelligence.md](docs/bounty-intelligence.md) |
 | Sign-in identity + DEV transactional email (welcome and domain events, not remounted) | [docs/email.md](docs/email.md) |
 | Public stats (`GET /api/stats`) | [docs/stats.md](docs/stats.md) |
+| Read-only public API + MCP (V4-1) | [docs/api.md](docs/api.md) |
 | Google sign-in | [docs/google-signin.md](docs/google-signin.md) |
 | GitHub App + webhooks | [docs/github-app.md](docs/github-app.md), [docs/webhooks.md](docs/webhooks.md) |
 | Schema | [docs/v1-schema.md](docs/v1-schema.md) |
