@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { PublicApiError } from "../public/errors";
 import { authorizeClaimCaller } from "./claim-auth";
+import { claimLegDestination } from "./claim-leg";
 import type { ClaimAuthContext } from "./deps";
 
 const bounty: NonNullable<ClaimAuthContext["bounty"]> = {
@@ -45,5 +46,13 @@ describe("pool claim auth order", () => {
         return true;
       },
     );
+  });
+
+  it("uses the paid address, otherwise the saved wallet", () => {
+    const paid = "0x1111111111111111111111111111111111111111";
+    const saved = "0x2222222222222222222222222222222222222222";
+    assert.equal(claimLegDestination(paid, saved), paid);
+    assert.equal(claimLegDestination("  ", saved), saved);
+    assert.equal(claimLegDestination(null, null), null);
   });
 });

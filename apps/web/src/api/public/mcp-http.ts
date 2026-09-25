@@ -8,8 +8,10 @@ import { createBountiesMcpServer } from "./mcp";
 import {
   invalidParamsRateHeaders,
   rewriteMcpInvalidParamsResponse,
+  toolClassForMcpTool,
   toolNameFromMcpRequest,
 } from "./mcp-invalid-params";
+import { logMcpToolCall } from "./mcp-log";
 import { publicReadApi } from "./service";
 
 function withMcpCors(response: Response, rateHeaders?: Record<string, string>): Response {
@@ -62,7 +64,20 @@ export function handleMcpHttp(request: Request, deps?: AccessDeps): Promise<Resp
   return dispatchMcp(request, deps);
 }
 
+function logSchemaReject(toolName: string | null, started: number, apiKeyId: string | null, userId: string | null): void {
+  if (!toolName) return;
+  logMcpToolCall({
+    tool: toolName,
+    apiKeyId,
+    userId,
+    outcome: "validation_failed",
+    latencyMs: Math.max(0, Date.now() - started),
+    rateClass: toolClassForMcpTool(toolName),
+  });
+}
+
 async function dispatchMcp(request: Request, deps?: AccessDeps): Promise<Response> {
+  const started = Date.now();
   const raw = request.method === "GET" || request.method === "HEAD" ? "" : await request.text();
   const replay = replayRequest(request, raw);
   const toolName = toolNameFromMcpRequest(parseJson(raw));
@@ -77,7 +92,8 @@ async function dispatchMcp(request: Request, deps?: AccessDeps): Promise<Respons
         });
         await server.connect(transport);
         const handled = await transport.handleRequest(replay);
-        const { response } = await rewriteMcpInvalidParamsResponse(handled);
+        const { response, rewritten } = await rewriteMcpInvalidParamsResponse(handled);
+        if (rewritten) logSchemaReject(toolName, started, null, null);
         return withMcpCors(response);
       },
       { cors: true },
@@ -86,6 +102,9 @@ async function dispatchMcp(request: Request, deps?: AccessDeps): Promise<Respons
   const access = await mcpAccessFromRequest(replay, deps);
   const { value, headers } = await captureKeyedRateHeaders(() => serveMcp(replay, access));
   const { response, rewritten } = await rewriteMcpInvalidParamsResponse(value);
+  if (rewritten && !(access instanceof Response)) {
+    logSchemaReject(toolName, started, access.principal?.keyId ?? null, access.principal?.userId ?? null);
+  }
   const rateHeaders = rewritten
     ? invalidParamsRateHeaders(toolName)
     : Object.keys(headers).length > 0

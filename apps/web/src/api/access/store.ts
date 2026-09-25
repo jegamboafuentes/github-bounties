@@ -32,6 +32,8 @@ import {
   saveEmailNotificationPreferences,
 } from "../../profile/settings";
 import { PublicApiError } from "../public/errors";
+import { claimLegDestination } from "./claim-leg";
+import { refundApiSummary } from "./refund-summary";
 import type { AccessDeps, ApiKeyRecord, ClaimLegView, PoolLegAuth, SpendRow, WinnerLegAuth } from "./deps";
 import type { IdempotencyRow } from "./policy";
 
@@ -540,12 +542,17 @@ export function createAccessDeps(
         .from(bounties)
         .where(eq(bounties.id, input.bountyId))
         .limit(1);
+      const summary = refundApiSummary({
+        legs: result.legs,
+        destination: escrow?.funderAddress?.trim() || result.legs[0]?.destination || null,
+        refundTxHash: result.refundTxHash,
+      });
       return {
         bountyId: input.bountyId,
         status: result.bountyStatus,
-        refundTxHash: result.refundTxHash,
+        refundTxHash: summary.refundTxHash,
         amountUsdc: bounty?.amountUsdc ?? "0.000000",
-        destination: escrow?.funderAddress?.trim() || result.legs[0]?.destination || "",
+        destination: summary.destination,
         legs: result.legs,
       };
     },
@@ -567,10 +574,13 @@ export function createAccessDeps(
           amountUsdc: claims.payoutUsdc,
           txHash: claims.payoutTxHash,
           paidAt: claims.paidAt,
+          payoutAddress: claims.payoutAddress,
+          walletAddress: users.walletAddress,
           createdAt: bounties.createdAt,
         })
         .from(claims)
         .innerJoin(bounties, eq(bounties.id, claims.bountyId))
+        .innerJoin(users, eq(users.id, claims.hunterUserId))
         .where(
           and(eq(claims.hunterUserId, userId), bountyId ? eq(claims.bountyId, bountyId) : sql`true`),
         )
@@ -584,10 +594,13 @@ export function createAccessDeps(
           txHash: poolParticipants.payoutTxHash,
           paidAt: poolParticipants.paidAt,
           skipReason: poolParticipants.skipReason,
+          payoutAddress: poolParticipants.payoutAddress,
+          walletAddress: users.walletAddress,
           createdAt: bounties.createdAt,
         })
         .from(poolParticipants)
         .innerJoin(bounties, eq(bounties.id, poolParticipants.bountyId))
+        .leftJoin(users, eq(users.id, poolParticipants.userId))
         .where(
           and(
             eq(poolParticipants.role, "pool"),
@@ -609,6 +622,7 @@ export function createAccessDeps(
           amountUsdc: row.amountUsdc,
           txHash: row.txHash,
           paidAt: row.paidAt?.toISOString() ?? null,
+          destination: claimLegDestination(row.payoutAddress, row.walletAddress),
           createdAt: row.createdAt,
         })),
         ...poolRows.map((row) => ({
@@ -619,6 +633,7 @@ export function createAccessDeps(
           amountUsdc: row.shareUsdc,
           txHash: row.txHash,
           paidAt: row.paidAt?.toISOString() ?? null,
+          destination: claimLegDestination(row.payoutAddress, row.walletAddress),
           createdAt: row.createdAt,
         })),
       ];

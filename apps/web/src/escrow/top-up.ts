@@ -60,6 +60,8 @@ export type BountyContributionView = {
   amountUsdc: string;
   funderAddress: string | null;
   fundTxHash: string;
+  /** Set once this contribution's refund transfer is confirmed. */
+  refundTxHash: string | null;
   createdAt: Date;
   /**
    * https picture for this contribution's funder.
@@ -174,6 +176,7 @@ export async function listBountyContributions(
       amountUsdc: bountyContributions.amountUsdc,
       funderAddress: bountyContributions.funderAddress,
       fundTxHash: bountyContributions.fundTxHash,
+      refundTxHash: bountyContributions.refundTxHash,
       createdAt: bountyContributions.createdAt,
       userAvatarUrl: users.avatarUrl,
       githubAvatarUrl: githubLinks.githubAvatarUrl,
@@ -192,6 +195,7 @@ export async function listBountyContributions(
     amountUsdc: row.amountUsdc,
     funderAddress: row.funderAddress,
     fundTxHash: row.fundTxHash,
+    refundTxHash: row.refundTxHash,
     createdAt: row.createdAt,
     avatarUrl: resolveFunderAvatarUrl({
       avatarUrl: row.userAvatarUrl,

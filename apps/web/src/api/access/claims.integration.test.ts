@@ -198,8 +198,10 @@ describe("V4-3 API claims and refund (mock rail)", () => {
       assert.equal(aliceRow?.payoutTxHash, (pool.body as { txHash?: string }).txHash);
 
       const mine = await handleMyClaims(alice, fx.deps);
-      const legs = (mine.body as { claims: { kind: string; txHash: string | null; bountyId: string }[] }).claims;
-      assert.equal(legs.some((leg) => leg.bountyId === created.id && leg.kind === "pool" && leg.txHash), true);
+      const legs = (mine.body as { claims: { kind: string; txHash: string | null; bountyId: string; destination: string | null }[] }).claims;
+      const poolLeg = legs.find((leg) => leg.bountyId === created.id && leg.kind === "pool" && leg.txHash);
+      assert.ok(poolLeg);
+      assert.equal(poolLeg.destination?.toLowerCase(), ALICE);
       assert.equal(legs.some((leg) => leg.kind === "winner"), false);
       const [bounty] = await fx.db.select().from(bounties).where(eq(bounties.id, created.id));
       assert.equal(bounty?.status, "settled_partial");

@@ -38,6 +38,24 @@ export type PlannedLeg = {
 };
 
 /**
+ * A later leg must not move an earlier leg's paid_at.
+ * The first confirmation wins; a pool claim after the winner claim keeps the winner time.
+ */
+export function keptPaidAt(existing: Date | null | undefined, now: Date): Date {
+  return existing ?? now;
+}
+
+/**
+ * Ledger inserts used to leave created_at on the database clock (`defaultNow()`)
+ * while updates wrote updated_at from a JavaScript Date captured earlier.
+ * When those clocks disagree, updated_at can precede created_at. Never do that.
+ */
+export function ledgerUpdatedAt(createdAt: Date | null | undefined, now: Date): Date {
+  if (!createdAt) return now;
+  return createdAt.getTime() > now.getTime() ? createdAt : now;
+}
+
+/**
  * Winner Claim pays FEE_OUT + WINNER_PAYOUT only. Each pool member later
  * claims their own POOL_PAYOUT. `all` is the V2-3 ops/poster retry path.
  */
@@ -234,6 +252,7 @@ export async function ensurePendingLegs(
   db: Database,
   bountyId: string,
   legs: readonly PlannedLeg[],
+  now: Date = new Date(),
 ): Promise<(typeof allocationLedger.$inferSelect)[]> {
   for (const leg of legs) {
     try {
@@ -245,6 +264,8 @@ export async function ensurePendingLegs(
         toAddress: leg.toAddress,
         idempotencyKey: leg.idempotencyKey,
         status: "pending",
+        createdAt: now,
+        updatedAt: now,
       });
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
@@ -253,15 +274,33 @@ export async function ensurePendingLegs(
   return loadAllocationLegs(db, bountyId);
 }
 
+async function stampLedger(
+  db: Database,
+  ledgerId: string,
+  now: Date,
+  patch: {
+    status?: "pending" | "submitted" | "confirmed" | "failed";
+    txHash?: string;
+    toAddress?: string | null;
+  },
+): Promise<void> {
+  const [row] = await db
+    .select({ createdAt: allocationLedger.createdAt })
+    .from(allocationLedger)
+    .where(eq(allocationLedger.id, ledgerId))
+    .limit(1);
+  await db
+    .update(allocationLedger)
+    .set({ ...patch, updatedAt: ledgerUpdatedAt(row?.createdAt, now) })
+    .where(eq(allocationLedger.id, ledgerId));
+}
+
 export async function markLegSubmitted(
   db: Database,
   ledgerId: string,
   now: Date,
 ): Promise<void> {
-  await db
-    .update(allocationLedger)
-    .set({ status: "submitted", updatedAt: now })
-    .where(eq(allocationLedger.id, ledgerId));
+  await stampLedger(db, ledgerId, now, { status: "submitted" });
 }
 
 export async function markLegConfirmed(
@@ -273,15 +312,11 @@ export async function markLegConfirmed(
     now: Date;
   },
 ): Promise<void> {
-  await db
-    .update(allocationLedger)
-    .set({
-      status: "confirmed",
-      txHash: args.txHash,
-      toAddress: args.toAddress,
-      updatedAt: args.now,
-    })
-    .where(eq(allocationLedger.id, args.ledgerId));
+  await stampLedger(db, args.ledgerId, args.now, {
+    status: "confirmed",
+    txHash: args.txHash,
+    toAddress: args.toAddress,
+  });
 }
 
 export async function markLegFailed(
@@ -289,10 +324,7 @@ export async function markLegFailed(
   ledgerId: string,
   now: Date,
 ): Promise<void> {
-  await db
-    .update(allocationLedger)
-    .set({ status: "failed", updatedAt: now })
-    .where(eq(allocationLedger.id, ledgerId));
+  await stampLedger(db, ledgerId, now, { status: "failed" });
 }
 
 export async function markPoolParticipantPaid(
@@ -304,12 +336,17 @@ export async function markPoolParticipantPaid(
     now: Date;
   },
 ): Promise<void> {
+  const [current] = await db
+    .select({ paidAt: poolParticipants.paidAt })
+    .from(poolParticipants)
+    .where(eq(poolParticipants.id, args.participantId))
+    .limit(1);
   await db
     .update(poolParticipants)
     .set({
       payoutAddress: args.payoutAddress,
       payoutTxHash: args.payoutTxHash,
-      paidAt: args.now,
+      paidAt: keptPaidAt(current?.paidAt, args.now),
       skipReason: null,
       updatedAt: args.now,
     })
@@ -338,7 +375,7 @@ export async function voidPendingAllocationLegs(
   now: Date,
 ): Promise<number> {
   const pending = await db
-    .select({ id: allocationLedger.id })
+    .select({ id: allocationLedger.id, createdAt: allocationLedger.createdAt })
     .from(allocationLedger)
     .where(
       and(
@@ -348,15 +385,12 @@ export async function voidPendingAllocationLegs(
       ),
     );
   if (pending.length === 0) return 0;
-  await db
-    .update(allocationLedger)
-    .set({ status: "failed", updatedAt: now })
-    .where(
-      inArray(
-        allocationLedger.id,
-        pending.map((row) => row.id),
-      ),
-    );
+  for (const row of pending) {
+    await db
+      .update(allocationLedger)
+      .set({ status: "failed", updatedAt: ledgerUpdatedAt(row.createdAt, now) })
+      .where(eq(allocationLedger.id, row.id));
+  }
   return pending.length;
 }
 

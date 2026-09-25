@@ -30,6 +30,7 @@ import { WorkSignalsPanel } from "@/components/work-signals-panel";
 import { getRuntimeDb } from "@/db/runtime";
 import { githubLinks } from "@/db/schema";
 import { getEscrowSnapshot, listBountyContributions, probeCdpEnv } from "@/escrow";
+import { refundLegTxHashes } from "@/escrow/refund-display";
 import { presentFundingTransactions } from "@/api/public/present";
 import { loadBountyIntelligence } from "@/intelligence/load";
 import { classifyIntelligenceFailure } from "@/intelligence/errors";
@@ -91,6 +92,10 @@ export default async function BountyDetailPage({
     mainnet: mainnetExplorer,
   });
   const topUps = funding.filter((row) => row.kind === "top_up");
+  const refundTxs = refundLegTxHashes({
+    contributionRefundTxHashes: contributions.map((row) => row.refundTxHash),
+    escrowRefundTxHash: escrow?.refundTxHash,
+  });
   const issue = await loadBountyIssueBody(bounty.id, db).catch(() => null);
   const intelligence = await loadBountyIntelligence({
     bountyId: bounty.id,
@@ -230,9 +235,7 @@ export default async function BountyDetailPage({
             currency={bounty.currency}
             payout={bounty.payout}
             canClaim={canClaimPayout}
-            defaultAddress={
-              user?.wallet_address || bounty.payout.payoutAddress || ""
-            }
+            savedWallet={user?.wallet_address ?? ""}
             action={claimPayoutAction}
             signedIn={Boolean(user)}
             signInHref={signInHref}
@@ -282,10 +285,16 @@ export default async function BountyDetailPage({
                 <dd className="break-all sm:col-span-2">{escrow.feeTxHash}</dd>
               </div>
             ) : null}
-            {escrow.refundTxHash ? (
+            {refundTxs.length > 0 ? (
               <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
-                <dt className="text-xs uppercase tracking-wide text-zinc-500">Refund tx</dt>
-                <dd className="break-all sm:col-span-2">{escrow.refundTxHash}</dd>
+                <dt className="text-xs uppercase tracking-wide text-zinc-500">
+                  {refundTxs.length === 1 ? "Refund tx" : "Refund txs"}
+                </dt>
+                <dd className="flex flex-col gap-1 sm:col-span-2">
+                  {refundTxs.map((hash) => (
+                    <ExplorerTx key={hash} hash={hash} mainnet={mainnetExplorer} />
+                  ))}
+                </dd>
               </div>
             ) : null}
           </dl>

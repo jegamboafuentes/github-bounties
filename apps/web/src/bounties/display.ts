@@ -31,7 +31,7 @@ export const HOSTED_CHECKOUT_DISABLED_COPY =
 export const X402_EXACT_FUND_COPY = x402ExactFundCopy("Base Sepolia");
 
 export const CLAIM_PAYOUT_COPY =
-  "Eligible winner only: the merged pull request author claims their winner share + the 2% platform fee to a bring-your-own Base address. Pool members claim their own frozen shares separately. Missing pool wallets do not block the winner.";
+  "Eligible winner only: the merged pull request author claims their winner share + the 2% platform fee to the Base wallet saved in Settings. Pool members claim their own frozen shares separately. Missing pool wallets do not block the winner.";
 
 export const POOL_PAYOUT_COPY =
   "Frozen 85/15 of post-fee (ADR 0003). Winner Claim pays winner + fee only. Each pool participant Claims their equal share when they have a Settings payout wallet. Already-paid shares show Paid. Unlinked or wallet-less members stay retryable; their share is not redistributed.";

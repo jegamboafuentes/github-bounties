@@ -2,7 +2,18 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { encodeAbiParameters, getAddress, pad, type Hex } from "viem";
 import { TRANSFER_TOPIC, type TxLog } from "../../scripts/security/match-usdc-transfer";
-import { applyGuardDecision, assessFundingLeg, bountyIsAtRisk, type FundingLegRecord } from "./legacy-funding";
+import type { Database } from "../db/client";
+import {
+  applyGuardDecision,
+  assessFundingLeg,
+  bountyIsAtRisk,
+  logLegacyFundVerified,
+  parseReconcileCliArgs,
+  reconcileFundingScan,
+  reconcileLegacyFunding,
+  reconcileSummaryLine,
+  type FundingLegRecord,
+} from "./legacy-funding";
 import { coverageDecision } from "./payout-legs";
 import { verifiedInflowAtomic, withVerifiedTopUpHash } from "./payout-guard";
 
@@ -193,5 +204,133 @@ describe("legacy funding assessment", () => {
       applyGuardDecision({ apply: true, mainnet: false, allowProdFlag: false, allowProdEnv: false }),
       { ok: true },
     );
+  });
+
+  it("scans open or unfinished bounties by default and everything with --include-settled", () => {
+    const open = ["funded", "claim_locked", "settling", "settled_partial", "refunding"] as const;
+    for (const status of open) {
+      assert.equal(
+        reconcileFundingScan({ bountyStatus: status, escrowStatus: "settled", includeSettled: false }),
+        true,
+        status,
+      );
+    }
+    for (const status of ["funded", "settling", "settled_partial", "refunding"] as const) {
+      assert.equal(
+        reconcileFundingScan({ bountyStatus: "settled", escrowStatus: status, includeSettled: false }),
+        true,
+        status,
+      );
+    }
+    for (const status of ["settled", "refunded", "cancelled", "expired", "void", "pending_fund"] as const) {
+      assert.equal(
+        reconcileFundingScan({ bountyStatus: status, escrowStatus: "settled", includeSettled: false }),
+        false,
+        status,
+      );
+    }
+    assert.equal(
+      reconcileFundingScan({ bountyStatus: "settled", escrowStatus: "settled", includeSettled: true }),
+      true,
+    );
+    assert.deepEqual(parseReconcileCliArgs(["--apply", "--include-settled"]), {
+      apply: true,
+      allowProdFlag: false,
+      includeSettled: true,
+    });
+    assert.throws(() => parseReconcileCliArgs(["--settled"]), /Unknown argument/);
+    const line = reconcileSummaryLine({
+      scanned: 4,
+      flagged: 1,
+      filter: "open",
+      mode: "dry-run",
+      mainnet: false,
+      atRiskLegs: 1,
+      recordable: 1,
+      recorded: 0,
+    });
+    assert.match(line, /scanned=4/);
+    assert.match(line, /flagged=1/);
+    assert.match(line, /filter=open/);
+  });
+
+  it("logs bounty, hash, amount, and outcome when a verified hash is cached", async () => {
+    const hash = `0x${"fd".repeat(32)}`;
+    const bountyId = "b99a9163-4ef8-4f73-b051-e404b569bc17";
+    const updates: { x402PaymentId?: string }[] = [];
+    const rows = [
+      [{ id: "escrow-1", x402PaymentId: null, escrowAddress: ESCROW, fundTxHash: OTHER, amountUsdc: "1.000000", funderAddress: PAYER }],
+      [{ id: "contrib-1", amountUsdc: "1.000000", fundTxHash: hash, funderAddress: PAYER }],
+      [],
+      [],
+    ];
+    const db = {
+      select() {
+        return {
+          from() {
+            return {
+              where() {
+                const batch = rows.shift() ?? [];
+                return Object.assign(Promise.resolve(batch), {
+                  limit: async (count: number) => batch.slice(0, count),
+                });
+              },
+            };
+          },
+        };
+      },
+      update() {
+        return {
+          set(values: { x402PaymentId?: string }) {
+            return {
+              where: async () => {
+                updates.push(values);
+              },
+            };
+          },
+        };
+      },
+    } as unknown as Database;
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      const recorded = await reconcileLegacyFunding(
+        db,
+        bountyId,
+        async () => ({ ok: true, status: "success", logs: [transferLog(PAYER, 1_000_000n)] }),
+        {},
+      );
+      assert.deepEqual(recorded, [hash]);
+    } finally {
+      console.log = original;
+    }
+    assert.match(updates[0]?.x402PaymentId ?? "", new RegExp(hash, "i"));
+    const parsed = JSON.parse(lines[0] ?? "{}") as {
+      event?: string;
+      bountyId?: string;
+      hash?: string;
+      amountUsdc?: string;
+      outcome?: string;
+    };
+    assert.equal(parsed.event, "legacy_fund_verified");
+    assert.equal(parsed.bountyId, bountyId);
+    assert.equal(parsed.hash, hash);
+    assert.equal(parsed.amountUsdc, "1.000000");
+    assert.equal(parsed.outcome, "cached");
+    assert.equal(JSON.stringify(parsed).includes("logs"), false);
+
+    const direct: string[] = [];
+    console.log = (line?: unknown) => {
+      direct.push(String(line));
+    };
+    try {
+      logLegacyFundVerified({ bountyId, hash, amountUsdc: "1.000000", outcome: "cached" });
+    } finally {
+      console.log = original;
+    }
+    assert.equal(JSON.parse(direct[0] ?? "{}").outcome, "cached");
   });
 });
