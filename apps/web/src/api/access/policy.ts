@@ -146,6 +146,7 @@ export function assertKeyMatchesServer(token: string, env: NodeJS.ProcessEnv = p
 }
 
 const ADDRESS_KEY = /(address|wallet|payto|payer|destination)/i;
+const USER_OVERRIDE_KEY = /^(hunteruserid|hunterid|userid|actoruserid|participantid|claimid|payee)$/i;
 const ETH_ADDRESS = /0x[a-fA-F0-9]{40}/;
 
 /** The request body cannot carry an address. Field names and 0x values are both rejected. */
@@ -173,6 +174,25 @@ export function assertNoAddress(value: unknown, path = ""): void {
       "Request body cannot include an address.",
       { path: path || "(body)" },
     );
+  }
+}
+
+/** The caller is the key owner. A body cannot name another user or claim row. */
+export function assertNoUserOverride(value: unknown, path = ""): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertNoUserOverride(item, `${path}[${index}]`));
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (USER_OVERRIDE_KEY.test(key)) {
+      throw new PublicApiError(
+        "validation_failed",
+        "The caller is the API key owner. Do not send a user id.",
+        { path: path ? `${path}.${key}` : key },
+      );
+    }
+    assertNoUserOverride(child, path ? `${path}.${key}` : key);
   }
 }
 
@@ -366,7 +386,7 @@ export function readIdempotencyKey(value: string | null | undefined, required: b
     if (!required) return null;
     throw new PublicApiError(
       "idempotency_key_required",
-      "Idempotency-Key is required on fund, top-up, and cancel.",
+      "Idempotency-Key is required on fund, top-up, cancel, claim, and refund.",
     );
   }
   if (key.length > 200 || !/^[A-Za-z0-9._:-]+$/.test(key)) {
@@ -384,10 +404,18 @@ const DOMAIN_STATUS: Record<string, number> = {
   issue_not_found: 404,
   not_found: 404,
   not_poster: 403,
+  not_winner: 403,
+  not_hunter: 403,
+  not_pool_member: 403,
+  not_settler: 403,
+  not_eligible: 403,
+  hunter_not_linked: 403,
   forbidden_scope: 403,
   bounty_exists: 409,
   not_fundable: 409,
   not_refundable: 409,
+  not_settleable: 409,
+  pool_not_ready: 409,
   already_cancelled: 409,
   not_claimable: 409,
   conflict: 409,

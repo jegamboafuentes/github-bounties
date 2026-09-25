@@ -1,7 +1,9 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { isBountyError } from "../../bounties/errors";
+import { isClaimError } from "../../claims";
 import type { ApiKeyScope } from "../../db/schema";
+import { logMoneyAction, moneyResultCode } from "../../escrow/actor-log";
 import { isEscrowError } from "../../escrow/errors";
 import type { FacilitatorSettlementCheck } from "../../escrow/fund-hash";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
@@ -12,8 +14,9 @@ import {
 } from "../../escrow/x402";
 import { PublicApiError, publicApiErrorBody, zodErrorDetails } from "../public/errors";
 import { acceptBountyId } from "../public/query";
-import { createBountyBodySchema, fundBodySchema, topUpBodySchema } from "./openapi";
-import type { AccessDeps, ApiKeyRecord, PublicApiKey } from "./deps";
+import { authorizeClaimCaller } from "./claim-auth";
+import { createBountyBodySchema, claimBodySchema, fundBodySchema, refundBodySchema, topUpBodySchema } from "./openapi";
+import type { AccessDeps, ApiKeyRecord, ClaimKind, PerformedClaim, PublicApiKey } from "./deps";
 
 export type { PublicApiKey };
 import {
@@ -23,6 +26,7 @@ import {
   assertCapsAtOrBelow,
   assertKeyMatchesServer,
   assertNoAddress,
+  assertNoUserOverride,
   assertSpendWithinCaps,
   decideIdempotency,
   generateApiKey,
@@ -252,6 +256,9 @@ export async function runAuthed(
 
 function asApiError(err: unknown): PublicApiError {
   if (err instanceof PublicApiError) return err;
+  if (isClaimError(err)) {
+    return new PublicApiError(err.code, err.message, null, statusForDomainCode(err.code));
+  }
   if (isBountyError(err) || isEscrowError(err)) {
     const details =
       isEscrowError(err) && (err.missing || err.details)
@@ -574,7 +581,7 @@ export async function handleCancel(
       if (bounty.status !== "pending_fund") {
         throw new PublicApiError(
           "not_refundable",
-          "Only unfunded bounties can be cancelled on the API. Funded cancel and refund is not available yet.",
+          "Only unfunded bounties can be cancelled here. Funded cancel is POST /api/v1/bounties/{id}/refund with a money-scope key.",
           { status: bounty.status },
           409,
         );
@@ -862,6 +869,263 @@ function sellerFailure(live: { kind: "challenge" | "error"; challenge?: { body?:
       live.challenge?.body ?? null,
     ),
   };
+}
+
+function auditMoney(
+  principal: ApiPrincipal,
+  input: {
+    action: "winner_claim" | "pool_claim" | "refund";
+    bountyId: string;
+    leg: "WINNER_PAYOUT" | "POOL_PAYOUT" | "REFUND_OUT";
+    result: string;
+    requestId: string;
+    destination?: string | null;
+    amountUsdc?: string | null;
+    txHash?: string | null;
+    claimId?: string | null;
+  },
+): void {
+  logMoneyAction({
+    action: input.action,
+    actorUserId: principal.userId,
+    bountyId: input.bountyId,
+    claimId: input.claimId ?? null,
+    destination: input.destination ?? null,
+    amountUsdc: input.amountUsdc ?? null,
+    txHash: input.txHash ?? null,
+    result: input.result,
+    requestId: input.requestId,
+    apiKeyId: principal.keyId,
+    leg: input.leg,
+  });
+}
+
+function claimLeg(kind: ClaimKind): "WINNER_PAYOUT" | "POOL_PAYOUT" {
+  return kind === "pool" ? "POOL_PAYOUT" : "WINNER_PAYOUT";
+}
+
+function claimAction(kind: ClaimKind): "winner_claim" | "pool_claim" {
+  return kind === "pool" ? "pool_claim" : "winner_claim";
+}
+
+export function claimResponseBody(performed: PerformedClaim): Record<string, unknown> {
+  return {
+    id: performed.bountyId,
+    kind: performed.kind,
+    status: performed.status,
+    bountyStatus: performed.bountyStatus,
+    amountUsdc: performed.amountUsdc,
+    txHash: performed.txHash,
+    destination: performed.destination,
+    claimId: performed.claimId,
+    participantId: performed.participantId,
+  };
+}
+
+export async function handleClaim(
+  principal: ApiPrincipal,
+  bountyId: string,
+  body: unknown,
+  idempotencyKey: string,
+  deps: AccessDeps,
+): Promise<ApiResult> {
+  let id = bountyId;
+  let kind: ClaimKind = "winner";
+  let savedWallet: string | null = null;
+  try {
+    await requireMoneyReady(principal, deps);
+    id = acceptBountyId(bountyId);
+    assertNoAddress(body);
+    assertNoUserOverride(body);
+    const parsed = claimBodySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new PublicApiError(
+        "validation_failed",
+        "kind must be winner or pool. The body cannot include an address or a user id.",
+        zodErrorDetails(parsed.error),
+      );
+    }
+    kind = parsed.data.kind;
+    const ctx = await deps.loadClaimAuthz(principal.userId, id, kind);
+    savedWallet = ctx.walletAddress;
+    authorizeClaimCaller(principal.userId, kind, ctx);
+  } catch (err) {
+    auditMoney(principal, {
+      action: claimAction(kind),
+      bountyId: id,
+      leg: claimLeg(kind),
+      result: moneyResultCode(err),
+      requestId: idempotencyKey,
+      destination: savedWallet,
+    });
+    throw err;
+  }
+
+  const path = `/api/v1/bounties/${id}/claim`;
+  return withIdempotency(
+    {
+      principal,
+      method: "POST",
+      path,
+      body: { kind },
+      idempotencyKey,
+      hasPayment: false,
+    },
+    deps,
+    async () => {
+      try {
+        const performed = await deps.performClaim({
+          bountyId: id,
+          actorUserId: principal.userId,
+          kind,
+          requestId: idempotencyKey,
+          apiKeyId: principal.keyId,
+        });
+        auditMoney(principal, {
+          action: claimAction(kind),
+          bountyId: id,
+          leg: claimLeg(kind),
+          result: "ok",
+          requestId: idempotencyKey,
+          destination: performed.destination,
+          amountUsdc: performed.amountUsdc,
+          txHash: performed.txHash,
+          claimId: performed.claimId,
+        });
+        return { status: 200, body: claimResponseBody(performed) };
+      } catch (err) {
+        auditMoney(principal, {
+          action: claimAction(kind),
+          bountyId: id,
+          leg: claimLeg(kind),
+          result: moneyResultCode(err),
+          requestId: idempotencyKey,
+          destination: savedWallet,
+        });
+        throw err;
+      }
+    },
+  );
+}
+
+export async function handleRefund(
+  principal: ApiPrincipal,
+  bountyId: string,
+  body: unknown,
+  idempotencyKey: string,
+  deps: AccessDeps,
+): Promise<ApiResult> {
+  let id = bountyId;
+  let face: string | null = null;
+  try {
+    await requireMoneyReady(principal, deps);
+    id = acceptBountyId(bountyId);
+    assertNoAddress(body);
+    assertNoUserOverride(body);
+    const parsed = refundBodySchema.safeParse(body ?? {});
+    if (!parsed.success) {
+      throw new PublicApiError(
+        "validation_failed",
+        "Refund does not take an address or a destination.",
+        zodErrorDetails(parsed.error),
+      );
+    }
+    const bounty = await deps.loadMoneyBounty(id);
+    if (!bounty) throw new PublicApiError("not_found", "Bounty not found.");
+    face = bounty.amountUsdc;
+    if (bounty.posterUserId !== principal.userId) {
+      throw new PublicApiError("not_poster", "Only the poster can refund this bounty.", null, 403);
+    }
+    if (bounty.status === "pending_fund") {
+      throw new PublicApiError(
+        "not_refundable",
+        "This bounty is not funded. Cancel an unfunded draft with POST /cancel.",
+        { status: bounty.status },
+        409,
+      );
+    }
+  } catch (err) {
+    auditMoney(principal, {
+      action: "refund",
+      bountyId: id,
+      leg: "REFUND_OUT",
+      result: moneyResultCode(err),
+      requestId: idempotencyKey,
+      destination: null,
+      amountUsdc: face,
+    });
+    throw err;
+  }
+
+  return withIdempotency(
+    {
+      principal,
+      method: "POST",
+      path: `/api/v1/bounties/${id}/refund`,
+      body: {},
+      idempotencyKey,
+      hasPayment: false,
+    },
+    deps,
+    async () => {
+      try {
+        const refunded = await deps.performRefund({
+          bountyId: id,
+          actorUserId: principal.userId,
+          requestId: idempotencyKey,
+          apiKeyId: principal.keyId,
+        });
+        auditMoney(principal, {
+          action: "refund",
+          bountyId: id,
+          leg: "REFUND_OUT",
+          result: "ok",
+          requestId: idempotencyKey,
+          destination: refunded.destination,
+          amountUsdc: refunded.amountUsdc,
+          txHash: refunded.refundTxHash,
+        });
+        return {
+          status: 200,
+          body: {
+            id,
+            status: refunded.status,
+            refundTxHash: refunded.refundTxHash,
+            amountUsdc: refunded.amountUsdc,
+            destination: refunded.destination,
+          },
+        };
+      } catch (err) {
+        auditMoney(principal, {
+          action: "refund",
+          bountyId: id,
+          leg: "REFUND_OUT",
+          result: moneyResultCode(err),
+          requestId: idempotencyKey,
+          destination: null,
+          amountUsdc: face,
+        });
+        throw err;
+      }
+    },
+  );
+}
+
+export async function handleBountyClaims(
+  principal: ApiPrincipal,
+  bountyId: string,
+  deps: AccessDeps,
+): Promise<ApiResult> {
+  requireScope(principal.scopes, "read");
+  const id = acceptBountyId(bountyId);
+  const legs = await deps.listClaims(principal.userId, id);
+  return { status: 200, body: { bountyId: id, legs } };
+}
+
+export async function handleMyClaims(principal: ApiPrincipal, deps: AccessDeps): Promise<ApiResult> {
+  requireScope(principal.scopes, "read");
+  const claims = await deps.listClaims(principal.userId, null);
+  return { status: 200, body: { claims } };
 }
 
 export function requirePrincipal(principal: ApiPrincipal | null | undefined): ApiPrincipal {

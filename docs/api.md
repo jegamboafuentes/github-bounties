@@ -1,6 +1,6 @@
 # Public API and MCP
 
-Anonymous reads (V4-1) need no API key. V4-2 adds Bearer API keys for `/me`, posting, work signals, unfunded cancel, and headless x402 fund / top-up. Money over the API is DEV-only until `API_MONEY_ENABLED` is turned on for mainnet. The handlers call the same server functions as the website, so the 2% fee (`FEE_BPS` 200), the 15% pool (`POOL_BPS_OF_POST_FEE` 1500), and the retired claim-lock are unchanged.
+Anonymous reads (V4-1) need no API key. V4-2 adds Bearer API keys for `/me`, posting, work signals, unfunded cancel, and headless x402 fund / top-up. V4-3 adds winner claim, pool claim, payout status, and funded refund. Money over the API is DEV-only until `API_MONEY_ENABLED` is turned on for mainnet. The handlers call the same server functions as the website, so the 2% fee (`FEE_BPS` 200), the 15% pool (`POOL_BPS_OF_POST_FEE` 1500), and the retired claim-lock are unchanged.
 
 V4-2 migration: `0011_api_access` (`api_keys`, `api_request_log`, `api_spend_ledger`, `api_idempotency_keys`). Apply it on DEV before creating keys. `0010` is reserved for a parallel security migration and is not part of this change.
 
@@ -127,7 +127,7 @@ claude mcp add --transport http github-bounties https://dev.githubbounties.xyz/m
 
 Authorization is `Authorization: Bearer <key>` on `/api/v1` and `/mcp`. Cookies are ignored. `src/proxy.ts` does not session-gate those paths.
 
-MCP lists every tool to anonymous callers. Keyed tools stay in that list. Each one starts its description with `Requires API key (read scope)`, `Requires API key (write scope)`, or `Requires API key with money scope; DEV only`. Calling a keyed tool without a Bearer key returns `isError: true` and the `unauthorized` envelope (`error.code`, `error.message`, `error.details.scope`). The handler does not run.
+MCP lists 19 tools to anonymous callers. OpenAPI publishes 18 operations, each with its own `operationId`. Keyed tools stay in that list. Each one starts its description with `Requires API key (read scope)`, `Requires API key (write scope)`, or `Requires API key with money scope; DEV only`. Calling a keyed tool without a Bearer key returns `isError: true` and the `unauthorized` envelope (`error.code`, `error.message`, `error.details.scope`). The handler does not run.
 
 Create a key on Settings → API keys. The plaintext is shown once. DEV keys start with `gb_test_`. Mainnet keys start with `gb_live_`. The server stores HMAC-SHA256 (`API_KEY_HMAC_SECRET`) plus a display prefix. Any signed-in user can create a key. The `money` scope stays disabled until that user has a saved payout wallet and a linked GitHub account. There are no agent-owned accounts.
 
@@ -142,15 +142,19 @@ Spend ceilings (a user can lower these, not raise them):
 
 `API_MONEY_ENABLED` defaults **on** for `base-sepolia` and **off** for `CDP_NETWORK=base`. Set it to `0` to disable money on DEV. Do not set it on PROD until a later sign-off.
 
-Authenticated limits, counted in `api_request_log` (shared across Cloud Run instances): read 120/minute, write 20/minute, money 10/hour. Anonymous reads stay at the V4-1 per-IP limit. `GET /api/v1/me`, `GET /api/v1/me/usage`, and `GET /api/v1/me/bounties` need the `read` scope. Post, work-signal, and unfunded cancel need `write`. Fund and top-up need `money`.
+Authenticated limits, counted in `api_request_log` (shared across Cloud Run instances): read 120/minute, write 20/minute, money 10/hour. Anonymous reads stay at the V4-1 per-IP limit. `GET /api/v1/me`, `GET /api/v1/me/usage`, `GET /api/v1/me/bounties`, `GET /api/v1/me/claims`, and `GET /api/v1/bounties/{id}/claims` need the `read` scope. Post, work-signal, and unfunded cancel need `write`. Fund, top-up, claim, and refund need `money`.
 
 `GET /api/v1/me/usage` returns this key's effective per-transaction cap, daily cap, USDC spent today (UTC day, reserved and recorded rows in `api_spend_ledger`), remaining today, and up to 50 recent ledger entries. Each entry has `amountUsdc`, `kind` (`fund` or `top_up`), `bountyId`, `txHash`, and `createdAt`. It never includes another user's rows. The MCP tool is `get_my_usage`.
 
-`Idempotency-Key` is required on fund, top-up, and cancel. The same key and body replay the stored response. A different body returns `idempotency_conflict`. Fund and top-up: the first call returns **402** `payment_required` (amount is the face or the top-up amount, `payTo` is escrow, `approval_url` is the bounty page, `PAYMENT-REQUIRED` header). Retry with `PAYMENT-SIGNATURE` or `X-PAYMENT` and the same idempotency key. The server settles through the CDP facilitator and then calls `lockEscrowFunds` or `topUpFundedBounty`. The body cannot include an address or a pasted transaction hash. Caps are checked before the 402 and again before the spend is recorded.
+`Idempotency-Key` is required on fund, top-up, cancel, claim, and refund. The same key and body replay the stored response. A different body returns `idempotency_conflict`. Fund and top-up: the first call returns **402** `payment_required` (amount is the face or the top-up amount, `payTo` is escrow, `approval_url` is the bounty page, `PAYMENT-REQUIRED` header). Retry with `PAYMENT-SIGNATURE` or `X-PAYMENT` and the same idempotency key. The server settles through the CDP facilitator and then calls `lockEscrowFunds` or `topUpFundedBounty`. The body cannot include an address or a pasted transaction hash. Caps are checked before the 402 and again before the spend is recorded.
 
-Cancel is unfunded (`pending_fund`) only. Funded cancel is not on this API. Cancelling a bounty that is already `cancelled` returns **409** `already_cancelled` ("This bounty is already cancelled.") and does not move USDC. The same `Idempotency-Key` still replays the stored response. Settle, the retired claim-lock, claims, wallet changes, and GitHub disconnect are not exposed.
+Cancel is unfunded (`pending_fund`) only. Cancelling a bounty that is already `cancelled` returns **409** `already_cancelled` ("This bounty is already cancelled.") and does not move USDC. The same `Idempotency-Key` still replays the stored response. Funded cancel is `POST /api/v1/bounties/{id}/refund`. It calls `refundEscrow` and pays the recorded on-chain payer (the x402 sender stored on the escrow when that address is not the escrow wallet, otherwise the poster's saved wallet; a split refund uses each contribution's recorded funder). A caller-supplied address is rejected. The retired claim-lock, wallet changes, and GitHub disconnect are not exposed.
 
-Error codes: `unauthorized`, `key_revoked`, `forbidden_scope`, `rate_limited`, `validation_failed`, `not_found`, `conflict`, `payment_required`, `spend_cap_exceeded`, `idempotency_key_required`, `idempotency_conflict`, `wallet_not_set`, `github_not_linked`, `already_cancelled`, plus bounty and escrow domain codes unchanged (`bounty_exists`, `not_poster`, `not_fundable`, `not_refundable`, …).
+Winner claim is `POST /api/v1/bounties/{id}/claim` with `{ "kind": "winner" }`. Pool claim uses `{ "kind": "pool" }`. Both call `claimPayout` / `claimPoolPayout`, which call `settleEscrow` (`winner_and_fee` or `pool_member`). The payout address is the wallet saved on the key owner. The body cannot include an address, destination, `hunterUserId`, or any other user id. The key needs the `money` scope and a linked GitHub login that matches the winning PR author or that caller's own frozen pool row. Otherwise the response is 403 `not_winner` or `not_pool_member`. Authz runs before an idempotent replay. Settler checks inside `settleEscrow` (`not_settler`, facilitator, `payTo`) are unchanged.
+
+`GET /api/v1/bounties/{id}/claims` is the caller's own legs on that bounty. `GET /api/v1/me/claims` is those legs across bounties. Both return status, amount, and tx hash. They omit other hunters.
+
+Error codes: `unauthorized`, `key_revoked`, `forbidden_scope`, `rate_limited`, `validation_failed`, `not_found`, `conflict`, `payment_required`, `spend_cap_exceeded`, `idempotency_key_required`, `idempotency_conflict`, `wallet_not_set`, `github_not_linked`, `already_cancelled`, `not_winner`, `not_pool_member`, plus bounty and escrow domain codes unchanged (`bounty_exists`, `not_poster`, `not_fundable`, `not_settler`, …).
 
 ```bash
 curl -sS https://dev.githubbounties.xyz/api/v1/me \
@@ -178,6 +182,23 @@ curl -sS -X POST https://dev.githubbounties.xyz/api/v1/bounties/$BOUNTY_ID/top-u
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: top-1" \
   -d '{"amountUsdc":"2"}'
+curl -sS -X POST https://dev.githubbounties.xyz/api/v1/bounties/$BOUNTY_ID/claim \
+  -H "Authorization: Bearer $GB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: claim-winner-1" \
+  -d '{"kind":"winner"}'
+curl -sS -X POST https://dev.githubbounties.xyz/api/v1/bounties/$BOUNTY_ID/claim \
+  -H "Authorization: Bearer $GB_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: claim-pool-1" \
+  -d '{"kind":"pool"}'
+curl -sS https://dev.githubbounties.xyz/api/v1/bounties/$BOUNTY_ID/claims \
+  -H "Authorization: Bearer $GB_API_KEY"
+curl -sS https://dev.githubbounties.xyz/api/v1/me/claims \
+  -H "Authorization: Bearer $GB_API_KEY"
+curl -sS -X POST https://dev.githubbounties.xyz/api/v1/bounties/$BOUNTY_ID/refund \
+  -H "Authorization: Bearer $GB_API_KEY" \
+  -H "Idempotency-Key: refund-1"
 ```
 
 Cursor (`.cursor/mcp.json`), key from the environment:
@@ -202,12 +223,16 @@ claude mcp add --transport http github-bounties-dev https://dev.githubbounties.x
   --header "Authorization: Bearer ${GB_API_KEY}"
 ```
 
-An agent with a Base Sepolia CDP server wallet can post and fund a DEV bounty end to end with `apps/web/scripts/dev-agent-fund.ts` (not run in CI):
+Keyed MCP tools start with the scope they require. Money tools start with `Requires API key with money scope; DEV only`. Claim and refund tools are `claim_winner`, `claim_pool`, and `refund_bounty`. Status tools are `get_bounty_claims` and `list_my_claims`.
+
+An agent with a Base Sepolia CDP server wallet can post and fund a DEV bounty end to end with `apps/web/scripts/dev-agent-fund.ts` (not run in CI). After a winning merge, `apps/web/scripts/dev-agent-claim.ts` claims to the saved wallet or refunds a funded bounty to the recorded payer:
 
 ```bash
 cd apps/web
 GB_API_KEY=gb_test_... ISSUE_URL=https://github.com/octo/hello/issues/42 AMOUNT_USDC=5 \
   npx tsx scripts/dev-agent-fund.ts
+GB_API_KEY=gb_test_... BOUNTY_ID=... KIND=winner \
+  npx tsx scripts/dev-agent-claim.ts
 ```
 
 ### Env and secrets Ops must mount on DEV
@@ -219,4 +244,4 @@ GB_API_KEY=gb_test_... ISSUE_URL=https://github.com/octo/hello/issues/42 AMOUNT_
 | `API_PER_TX_CAP_USDC` | Plain env, optional | Admin ceiling. Default 50 on DEV, 25 on PROD. Users cannot raise their keys above this. |
 | `API_DAILY_CAP_USDC` | Plain env, optional | Admin ceiling. Default 200 on DEV, 100 on PROD. |
 
-Migration DEV needs: `0011_api_access`.
+Migration DEV needs: `0011_api_access`. V4-3 does not add a migration.

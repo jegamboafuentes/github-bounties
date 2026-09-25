@@ -119,14 +119,20 @@ describe("MCP read tools", () => {
     await client.connect(clientTransport);
 
     const listed = await client.listTools();
+    const toolNames = listed.tools.map((tool) => tool.name);
+    assert.equal(new Set(toolNames).size, toolNames.length);
+    assert.equal(toolNames.length, 19);
     assert.deepEqual(
-      listed.tools.map((tool) => tool.name).sort(),
+      [...toolNames].sort(),
       [
         "cancel_bounty",
+        "claim_pool",
+        "claim_winner",
         "clear_work_signal",
         "create_bounty",
         "fund_bounty",
         "get_bounty",
+        "get_bounty_claims",
         "get_bounty_intelligence",
         "get_me",
         "get_my_usage",
@@ -134,10 +140,20 @@ describe("MCP read tools", () => {
         "list_bounties",
         "list_funders",
         "list_my_bounties",
+        "list_my_claims",
+        "refund_bounty",
         "signal_working",
         "top_up_bounty",
       ],
     );
+    for (const name of ["claim_winner", "claim_pool", "refund_bounty", "fund_bounty", "top_up_bounty"]) {
+      const tool = listed.tools.find((item) => item.name === name);
+      assert.match(tool?.description ?? "", /^Requires API key with money scope; DEV only/);
+    }
+    for (const name of ["get_me", "list_my_bounties", "get_bounty_claims", "list_my_claims"]) {
+      const tool = listed.tools.find((item) => item.name === name);
+      assert.match(tool?.description ?? "", /^Requires API key \(read scope\)/);
+    }
     const listTool = listed.tools.find((tool) => tool.name === "list_bounties");
     assert.match(listTool?.description ?? "", /has_intel/);
     assert.match(listTool?.description ?? "", /totalFundedUsdc/);
@@ -153,12 +169,17 @@ describe("MCP read tools", () => {
       get_me: /^Requires API key \(read scope\)/,
       get_my_usage: /^Requires API key \(read scope\)/,
       list_my_bounties: /^Requires API key \(read scope\)/,
+      get_bounty_claims: /^Requires API key \(read scope\)/,
+      list_my_claims: /^Requires API key \(read scope\)/,
       create_bounty: /^Requires API key \(write scope\)/,
       signal_working: /^Requires API key \(write scope\)/,
       clear_work_signal: /^Requires API key \(write scope\)/,
       cancel_bounty: /^Requires API key \(write scope\)/,
       fund_bounty: /^Requires API key with money scope; DEV only/,
       top_up_bounty: /^Requires API key with money scope; DEV only/,
+      claim_winner: /^Requires API key with money scope; DEV only/,
+      claim_pool: /^Requires API key with money scope; DEV only/,
+      refund_bounty: /^Requires API key with money scope; DEV only/,
     };
     for (const tool of listed.tools) {
       const prefix = keyedPrefix[tool.name];

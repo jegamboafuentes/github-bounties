@@ -3,11 +3,15 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { publicApiErrorBody, type PublicApiErrorBody } from "../public/errors";
 import type { McpAccess } from "./http";
 import {
+  handleBountyClaims,
   handleCancel,
+  handleClaim,
   handleCreateBounty,
   handleFund,
   handleMe,
   handleMyBounties,
+  handleMyClaims,
+  handleRefund,
   handleUsage,
   handleTopUp,
   handleWorkSignal,
@@ -16,10 +20,14 @@ import {
   runAuthed,
   type ApiResult,
 } from "./handlers";
+import { assertNoAddress, assertNoUserOverride } from "./policy";
 import {
+  bountyClaimsToolSchema,
   cancelToolSchema,
+  claimToolSchema,
   createBountyToolSchema,
   fundToolSchema,
+  refundToolSchema,
   topUpToolSchema,
   workSignalToolSchema,
 } from "./openapi";
@@ -162,7 +170,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Cancel an unfunded bounty",
       description:
-        "Requires API key (write scope). Only pending_fund. Funded cancel is not available. A bounty that is already cancelled returns already_cancelled. idempotencyKey is required and matches the REST Idempotency-Key.",
+        "Requires API key (write scope). Only pending_fund. Funded cancel is refund_bounty. A bounty that is already cancelled returns already_cancelled. idempotencyKey is required and matches the REST Idempotency-Key.",
       inputSchema: cancelToolSchema,
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
@@ -215,6 +223,90 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
           access?.origin ?? "https://dev.githubbounties.xyz",
           access!.deps,
         ),
+      ),
+  );
+
+  server.registerTool(
+    "claim_winner",
+    {
+      title: "Claim the winner share",
+      description:
+        "Requires API key with money scope; DEV only. Pays the winner share to the wallet saved for this key's user. The linked GitHub login must match the merged pull request author. idempotencyKey is required. Do not send an address, destination, or user id.",
+      inputSchema: claimToolSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) => {
+      assertNoAddress(args);
+      assertNoUserOverride(args);
+      return guarded(access, "money", `tool:claim_winner ${args.id}`, args.id, () =>
+        handleClaim(requirePrincipal(access?.principal), args.id, { kind: "winner" }, args.idempotencyKey, access!.deps),
+      );
+    },
+  );
+
+  server.registerTool(
+    "claim_pool",
+    {
+      title: "Claim the caller's pool share",
+      description:
+        "Requires API key with money scope; DEV only. Pays this key owner's frozen pool share to their saved wallet. It does not pay any other member. idempotencyKey is required. Do not send an address, destination, or user id.",
+      inputSchema: claimToolSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) => {
+      assertNoAddress(args);
+      assertNoUserOverride(args);
+      return guarded(access, "money", `tool:claim_pool ${args.id}`, args.id, () =>
+        handleClaim(requirePrincipal(access?.principal), args.id, { kind: "pool" }, args.idempotencyKey, access!.deps),
+      );
+    },
+  );
+
+  server.registerTool(
+    "refund_bounty",
+    {
+      title: "Refund a funded bounty",
+      description:
+        "Requires API key with money scope; DEV only. Poster only. The refund goes to the recorded on-chain payer, never a caller-supplied address. idempotencyKey is required. Unfunded drafts use cancel_bounty.",
+      inputSchema: refundToolSchema,
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+    },
+    async (args) => {
+      assertNoAddress(args);
+      assertNoUserOverride(args);
+      return guarded(access, "money", `tool:refund_bounty ${args.id}`, args.id, () =>
+        handleRefund(requirePrincipal(access?.principal), args.id, {}, args.idempotencyKey, access!.deps),
+      );
+    },
+  );
+
+  server.registerTool(
+    "get_bounty_claims",
+    {
+      title: "Payout status for my legs",
+      description:
+        "Requires API key (read scope). This caller's winner and pool legs on one bounty: status, amount, and tx hash. Other hunters are omitted.",
+      inputSchema: bountyClaimsToolSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) =>
+      guarded(access, "read", `tool:get_bounty_claims ${args.id}`, args.id, () =>
+        handleBountyClaims(requirePrincipal(access?.principal), args.id, access!.deps),
+      ),
+  );
+
+  server.registerTool(
+    "list_my_claims",
+    {
+      title: "My claims",
+      description:
+        "Requires API key (read scope). This caller's claims across bounties, with status and tx hashes.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async () =>
+      guarded(access, "read", "tool:list_my_claims", null, () =>
+        handleMyClaims(requirePrincipal(access?.principal), access!.deps),
       ),
   );
 }

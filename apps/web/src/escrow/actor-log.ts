@@ -24,6 +24,10 @@ export type MoneyActionLog = {
   txHash?: string | null;
   result: "ok" | string;
   requestId: string;
+  /** API key that initiated the call. Absent for website and webhook actions. */
+  apiKeyId?: string | null;
+  /** WINNER_PAYOUT, POOL_PAYOUT, or REFUND_OUT when the API names the leg. */
+  leg?: string | null;
 };
 
 const REQUEST_ID_RE = /^[A-Za-z0-9._:-]{1,80}$/;
@@ -54,6 +58,8 @@ export function logMoneyAction(entry: MoneyActionLog): void {
     txHash: entry.txHash ?? null,
     result: entry.result,
     requestId: entry.requestId,
+    ...(entry.apiKeyId ? { apiKeyId: entry.apiKeyId } : {}),
+    ...(entry.leg ? { leg: entry.leg } : {}),
   };
   if (inbound) line.payer = entry.payer ?? null;
   else line.destination = entry.destination ?? null;
