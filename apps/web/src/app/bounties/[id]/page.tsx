@@ -159,16 +159,18 @@ export default async function BountyDetailPage({
           {LOCK_NOT_MONEY_COPY}
         </p>
 
-        <WorkSignalsPanel
-          bountyId={bounty.id}
-          signals={bounty.workSignals}
-          viewerUserId={user?.id}
-          canSignal={canSignal}
-          signedIn={Boolean(user)}
-          signInHref={signInHref}
-          signalAction={signalWorkingOnThisAction}
-          clearAction={clearWorkSignalAction}
-        />
+        {bounty.status === "cancelled" ? null : (
+          <WorkSignalsPanel
+            bountyId={bounty.id}
+            signals={bounty.workSignals}
+            viewerUserId={user?.id}
+            canSignal={canSignal}
+            signedIn={Boolean(user)}
+            signInHref={signInHref}
+            signalAction={signalWorkingOnThisAction}
+            clearAction={clearWorkSignalAction}
+          />
+        )}
 
         {roster ? (
           <PoolRoster

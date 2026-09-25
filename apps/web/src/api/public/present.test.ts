@@ -240,6 +240,41 @@ describe("confirmed funded total", () => {
       assert.equal(detail.bounty.payout.faceUsdc, face);
     }
   });
+
+  it("returns an empty work-signal list for a cancelled bounty and keeps signals when open", () => {
+    const signaledAt = new Date("2026-09-01T00:00:00.000Z");
+    const signal = {
+      id: "sig-1",
+      bountyId: BOUNTY_ID,
+      userId: "user-2",
+      githubLogin: "octocat",
+      hunterLabel: "octocat",
+      signaledAt,
+    };
+    const cancelled = presentBountyDetail({
+      bounty: board({ status: "cancelled", amountUsdc: "10.000000", workSignals: [signal] }),
+      totalFundedUsdc: "10.000000",
+      issueBody: null,
+      roster: roster("10.000000"),
+      escrow: null,
+    });
+    assert.deepEqual(cancelled.workSignals, []);
+
+    const funded = presentBountyDetail({
+      bounty: board({ status: "funded", amountUsdc: "10.000000", workSignals: [signal] }),
+      totalFundedUsdc: "10.000000",
+      issueBody: null,
+      roster: roster("10.000000"),
+      escrow: null,
+    });
+    assert.deepEqual(funded.workSignals, [
+      {
+        githubLogin: "octocat",
+        hunterLabel: "octocat",
+        signaledAt: signaledAt.toISOString(),
+      },
+    ]);
+  });
 });
 
 describe("shared roster payout", () => {

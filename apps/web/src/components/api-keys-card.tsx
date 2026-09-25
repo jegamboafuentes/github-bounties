@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { useRouter } from "next/navigation";
 import { createApiKeyAction, revokeApiKeyAction, type ApiKeyActionState } from "@/app/actions/api-keys";
+import { usdcToAtomic } from "@/lib/money";
 
 export type ApiKeyListItem = {
   id: string;
@@ -74,6 +75,33 @@ function RevokeKeyButton({ keyId }: { keyId: string }) {
       </button>
     </form>
   );
+}
+
+/** Two-decimal dollars for a stored 6-decimal USDC cap. Invalid input stays as written. */
+export function formatCapMoney(usdc: string): string {
+  try {
+    const atomic = usdcToAtomic(usdc);
+    const negative = atomic < 0n;
+    const abs = negative ? -atomic : atomic;
+    const cents = (abs + 5_000n) / 10_000n;
+    const dollars = cents / 100n;
+    const frac = (cents % 100n).toString().padStart(2, "0");
+    const grouped = dollars.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return `${negative ? "-" : ""}$${grouped}.${frac}`;
+  } catch {
+    return usdc;
+  }
+}
+
+/** Same amount as {@link formatCapMoney}, without the dollar sign, for cap inputs. */
+export function formatCapInput(usdc: string): string {
+  const shown = formatCapMoney(usdc);
+  if (shown === usdc) return usdc;
+  return shown.replace(/[$,]/g, "");
+}
+
+function keyHasMoneyScope(key: ApiKeyListItem): boolean {
+  return key.scopes.includes("money");
 }
 
 export type ApiKeysCardProps = {
@@ -170,8 +198,9 @@ export function ApiKeysPanel({
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Keys belong to this Google account. Format <code>{prefix}…</code>, shown once, stored as an
           HMAC. Scopes are read, write, and money. Money needs a saved payout wallet and a linked
-          GitHub account. Caps start at {ceilings.perTxUsdc} USDC per payment and {ceilings.dailyUsdc}{" "}
-          USDC per UTC day. You can lower them here. Raising them is an admin change.
+          GitHub account. Caps start at {formatCapMoney(ceilings.perTxUsdc)} per payment and{" "}
+          {formatCapMoney(ceilings.dailyUsdc)} per UTC day. You can lower them here. Raising them is
+          an admin change.
         </p>
       </div>
 
@@ -214,7 +243,7 @@ export function ApiKeysPanel({
               name="perTxCapUsdc"
               inputMode="decimal"
               autoComplete="off"
-              defaultValue={ceilings.perTxUsdc}
+              defaultValue={formatCapInput(ceilings.perTxUsdc)}
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
             />
           </label>
@@ -224,7 +253,7 @@ export function ApiKeysPanel({
               name="dailyCapUsdc"
               inputMode="decimal"
               autoComplete="off"
-              defaultValue={ceilings.dailyUsdc}
+              defaultValue={formatCapInput(ceilings.dailyUsdc)}
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
             />
           </label>
@@ -281,7 +310,10 @@ export function ApiKeysPanel({
               <code className="text-xs">{key.prefix}…</code>
             </div>
             <p className="text-xs text-zinc-500">
-              {key.env} · {key.scopes.join(", ") || "no scopes"} · cap {key.perTxCapUsdc} / {key.dailyCapUsdc} USDC
+              {key.env} · {key.scopes.join(", ") || "no scopes"}
+              {keyHasMoneyScope(key)
+                ? ` · ${formatCapMoney(key.perTxCapUsdc)} / ${formatCapMoney(key.dailyCapUsdc)} per day`
+                : ""}
             </p>
             <p className="text-xs text-zinc-500">
               Created {key.createdAt}

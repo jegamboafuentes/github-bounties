@@ -169,4 +169,32 @@ describe("shown-once API key secret", () => {
     assert.equal(panel()?.textContent?.includes(s4), false);
     assert.deepEqual(created, ["s1", "s2", "s3", "s4", "s5"]);
   });
+
+  it("hides caps on a read-only key and shows money-key caps as dollars per day", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const readOnly = keyRow("read-only", tokenFor("read-only"));
+    const money = {
+      ...keyRow("pay", tokenFor("pay")),
+      scopes: ["read", "money"] as ApiKeyListItem["scopes"],
+    };
+    keys = [readOnly, money];
+    draw();
+
+    const items = [...host.querySelectorAll("li")].map((node) => node.textContent ?? "");
+    const readOnlyText = items.find((text) => text.includes("read-only"));
+    const moneyText = items.find((text) => text.includes("pay"));
+    assert.ok(readOnlyText);
+    assert.ok(moneyText);
+    assert.equal(readOnlyText.includes("50.000000"), false);
+    assert.equal(readOnlyText.includes("200.000000"), false);
+    assert.equal(readOnlyText.includes("USDC"), false);
+    assert.equal(readOnlyText.includes("$"), false);
+    assert.equal(readOnlyText.includes("per day"), false);
+    assert.match(readOnlyText, /test · read/);
+    assert.match(moneyText, /\$50\.00 \/ \$200\.00 per day/);
+    assert.equal(moneyText.includes("50.000000"), false);
+    assert.equal(moneyText.includes("200.000000"), false);
+  });
 });
