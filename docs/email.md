@@ -92,7 +92,7 @@ Then remount DEV with `./infra/gcloud/deploy-web.sh` so the optional secret atta
 - Welcome is not backfilled to accounts that existed before `0006`.
 - There is no background worker. Pending mail for a user is attempted on their next sign-in and when a domain hook for that user runs again.
 - Recipients are `users.email` only. Private GitHub emails are never read. Blank and `*@users.noreply.github.com` / `*@noreply.github.com` addresses are skipped and the money or claim write still succeeds.
-- `user_notification_preferences` (migration `0012_profile_notification_prefs`) stores four flags: `bounty_funded`, `pr_merged`, `bounty_settled`, `pool_claimable`. No row means all four stay on. `welcome` is not a flag and still sends once. Enqueue skips a disabled template (`preference_disabled`) and does not insert. Deliver marks an already queued row `failed` with `last_error` `notification_preference_disabled` and does not call Resend. Settings shows the same toggles on DEV and PROD. Delivery stays DEV-only.
+- `user_notification_preferences` (migration `0012_profile_notification_prefs`) stores four flags: `bounty_funded`, `pr_merged`, `bounty_settled`, `pool_claimable`. No row means all four stay on. `welcome` is not a flag and still sends once. Enqueue skips a disabled template (`preference_disabled`) and does not insert. Deliver marks an already queued row `failed` with `last_error` `notification_preference_disabled` and does not call Resend. Settings shows the same toggles on DEV and PROD.
 - Pool Claim stays manual and per participant. These emails do not move USDC.
 
 ### Not invented
