@@ -8,7 +8,7 @@ import type { PublicReadApi } from "./service";
 import { listBountiesInputSchema, bountyIdParamsSchema } from "./schemas";
 
 const INSTRUCTIONS = [
-  "GitHub Bounties tools. Anonymous calls can read the public board. Write and money tools need Authorization: Bearer with an API key (gb_test_ on DEV, gb_live_ on mainnet). No cookies.",
+  "GitHub Bounties tools. Anonymous calls can read the public board and can list every tool. Tools that need a key say so at the start of the description. Calling one without Authorization: Bearer returns unauthorized and does not run the handler. No cookies.",
   "list_bounties filters the public board. get_bounty reads one bounty, including the stored issue body, payout breakdown, and pool roster.",
   "list_funders returns public contribution rows (name, GitHub login, avatar, amount, time), newest first.",
   "get_bounty_intelligence reads the Gemini cache only and must not be treated as a refresh.",
