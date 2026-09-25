@@ -68,6 +68,11 @@ function memory(options?: {
 }) {
   const keys: ApiKeyRecord[] = [];
   const logs: { id: string; keyId: string; route: string; status: number; createdAt: Date }[] = [];
+  const profiles = new Map<string, { id: string; displayName: string; displayNameCustom: boolean; email: string }>();
+  const prefRows = new Map<
+    string,
+    { bountyFunded: boolean; prMerged: boolean; bountySettled: boolean; poolClaimable: boolean }
+  >();
   const spends: SpendRow[] = [];
   const idem = new Map<string, IdempotencyRow>();
   const calls = { lock: 0, topUp: 0, seller: 0, inbound: 0, cancel: 0, create: 0, claim: 0, refund: 0 };
@@ -162,6 +167,63 @@ function memory(options?: {
         email: "ada@example.com",
         walletAddress: options?.wallet === false ? null : PAYER,
         githubLogin: options?.github === false ? null : "ada",
+      };
+    },
+    async loadAccountProfile(userId) {
+      return (
+        profiles.get(userId) ?? {
+          id: userId,
+          displayName: "Ada",
+          displayNameCustom: false,
+          email: "ada@example.com",
+        }
+      );
+    },
+    async saveDisplayName(userId, displayName) {
+      const current = profiles.get(userId) ?? {
+        id: userId,
+        displayName: "Ada",
+        displayNameCustom: false,
+        email: "ada@example.com",
+      };
+      const next = { ...current, id: userId, displayName, displayNameCustom: true };
+      profiles.set(userId, next);
+      return next;
+    },
+    async loadEmailNotificationPreferences(userId) {
+      return (
+        prefRows.get(userId) ?? {
+          bountyFunded: true,
+          prMerged: true,
+          bountySettled: true,
+          poolClaimable: true,
+        }
+      );
+    },
+    async saveEmailNotificationPreferences(userId, patch) {
+      const current = prefRows.get(userId) ?? {
+        bountyFunded: true,
+        prMerged: true,
+        bountySettled: true,
+        poolClaimable: true,
+      };
+      const next = { ...current };
+      if (patch.bountyFunded !== undefined) next.bountyFunded = patch.bountyFunded;
+      if (patch.prMerged !== undefined) next.prMerged = patch.prMerged;
+      if (patch.bountySettled !== undefined) next.bountySettled = patch.bountySettled;
+      if (patch.poolClaimable !== undefined) next.poolClaimable = patch.poolClaimable;
+      prefRows.set(userId, next);
+      return next;
+    },
+    async loadLinkedAccounts(userId) {
+      const profile = profiles.get(userId);
+      return {
+        google: { email: profile?.email ?? "ada@example.com" },
+        github:
+          options?.github === false
+            ? null
+            : { login: "ada", id: "583231", linkedAt: "2026-09-01T00:00:00.000Z" },
+        wallet: { address: options?.wallet === false ? null : PAYER },
       };
     },
     async listMyBounties() {
@@ -1143,5 +1205,189 @@ describe("V4-3 claims, status, and funded refund", () => {
     const config = readFileSync(join(root, "../../../next.config.ts"), "utf8");
     assert.match(config, /\/settings/);
     assert.match(config, /no-store/);
+  });
+});
+
+describe("profile, notifications, and linked accounts", () => {
+  it("reads profile and linked accounts on the read limit", async () => {
+    const bag = memory();
+    const { token } = await principal(bag.deps, ["read"]);
+    const profile = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/profile", {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      { kind: "profile" },
+      bag.deps,
+    );
+    assert.equal(profile.status, 200);
+    assert.equal(profile.headers.get("ratelimit-remaining"), "119");
+    const body = (await profile.json()) as {
+      displayName: string;
+      displayNameCustom: boolean;
+      email: string;
+    };
+    assert.equal(body.displayName, "Ada");
+    assert.equal(body.displayNameCustom, false);
+    assert.equal(body.email, "ada@example.com");
+    assert.equal("google_sub" in body, false);
+
+    const linked = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/linked-accounts", {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      { kind: "linked-accounts" },
+      bag.deps,
+    );
+    assert.equal(linked.status, 200);
+    const accounts = (await linked.json()) as {
+      google: { email: string };
+      github: { login: string; id: string } | null;
+      wallet: { address: string | null };
+    };
+    assert.equal(accounts.google.email, "ada@example.com");
+    assert.equal(accounts.github?.login, "ada");
+    assert.equal(accounts.github?.id, "583231");
+    assert.equal(accounts.wallet.address, PAYER);
+
+    const unlinked = memory({ github: false, wallet: false });
+    const { token: bare } = await principal(unlinked.deps, ["read"]);
+    const bareAccounts = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/linked-accounts", {
+        headers: { authorization: `Bearer ${bare}` },
+      }),
+      { kind: "linked-accounts" },
+      unlinked.deps,
+    );
+    const bareBody = (await bareAccounts.json()) as { github: null; wallet: { address: string | null } };
+    assert.equal(bareBody.github, null);
+    assert.equal(bareBody.wallet.address, null);
+  });
+
+  it("updates the display name on the write limit and rejects wallet and unknown fields", async () => {
+    const bag = memory();
+    const { token: reader } = await principal(bag.deps, ["read"]);
+    const denied = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/profile", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${reader}`, "content-type": "application/json" },
+        body: JSON.stringify({ displayName: "Ada Lovelace" }),
+      }),
+      { kind: "profile-patch" },
+      bag.deps,
+    );
+    assert.equal(denied.status, 403);
+    assert.equal(((await denied.json()) as { error: { code: string } }).error.code, "forbidden_scope");
+
+    const writerBag = memory();
+    const { token } = await principal(writerBag.deps, ["write"]);
+    const wallet = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/profile", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ displayName: "Ada", walletAddress: PAYER }),
+      }),
+      { kind: "profile-patch" },
+      writerBag.deps,
+    );
+    assert.equal(wallet.status, 400);
+    assert.equal(wallet.headers.get("ratelimit-remaining"), "19");
+    const walletBody = (await wallet.json()) as { error: { code: string; details: { fields: string[] } } };
+    assert.equal(walletBody.error.code, "wallet_change_human_only");
+    assert.deepEqual(walletBody.error.details.fields, ["walletAddress"]);
+    assert.equal((await writerBag.deps.loadAccountProfile(USER))?.displayNameCustom, false);
+
+    const unknown = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/profile", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ displayName: "Ada", email: "other@example.com" }),
+      }),
+      { kind: "profile-patch" },
+      writerBag.deps,
+    );
+    assert.equal(unknown.status, 400);
+    assert.equal(((await unknown.json()) as { error: { code: string } }).error.code, "validation_failed");
+
+    const tooLong = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/profile", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ displayName: "A".repeat(81) }),
+      }),
+      { kind: "profile-patch" },
+      writerBag.deps,
+    );
+    assert.equal(tooLong.status, 400);
+    assert.match(((await tooLong.json()) as { error: { message: string } }).error.message, /1–80/);
+
+    const saved = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/profile", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ displayName: "  Ada   Lovelace  " }),
+      }),
+      { kind: "profile-patch" },
+      writerBag.deps,
+    );
+    assert.equal(saved.status, 200);
+    const savedBody = (await saved.json()) as { displayName: string; displayNameCustom: boolean };
+    assert.equal(savedBody.displayName, "Ada Lovelace");
+    assert.equal(savedBody.displayNameCustom, true);
+  });
+
+  it("patches one notification flag and rejects a wallet field", async () => {
+    const bag = memory();
+    const { token } = await principal(bag.deps, ["read", "write"]);
+    const before = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/notification-preferences", {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      { kind: "notification-preferences" },
+      bag.deps,
+    );
+    assert.equal(before.status, 200);
+    const defaults = (await before.json()) as { email: { bountyFunded: boolean; poolClaimable: boolean } };
+    assert.equal(defaults.email.bountyFunded, true);
+    assert.equal(defaults.email.poolClaimable, true);
+
+    const patched = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/notification-preferences", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ email: { poolClaimable: false } }),
+      }),
+      { kind: "notification-preferences-patch" },
+      bag.deps,
+    );
+    assert.equal(patched.status, 200);
+    assert.equal(patched.headers.get("ratelimit-limit"), "20");
+    const prefs = (await patched.json()) as { email: { bountyFunded: boolean; poolClaimable: boolean } };
+    assert.equal(prefs.email.poolClaimable, false);
+    assert.equal(prefs.email.bountyFunded, true);
+
+    const wallet = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/notification-preferences", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ email: { bountyFunded: false }, payoutAddress: PAYER }),
+      }),
+      { kind: "notification-preferences-patch" },
+      bag.deps,
+    );
+    assert.equal(wallet.status, 400);
+    assert.equal(((await wallet.json()) as { error: { code: string } }).error.code, "wallet_change_human_only");
+    assert.equal((await bag.deps.loadEmailNotificationPreferences(USER)).bountyFunded, true);
+
+    const welcome = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/notification-preferences", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ email: { welcome: false } }),
+      }),
+      { kind: "notification-preferences-patch" },
+      bag.deps,
+    );
+    assert.equal(welcome.status, 400);
+    assert.equal(((await welcome.json()) as { error: { code: string } }).error.code, "validation_failed");
   });
 });

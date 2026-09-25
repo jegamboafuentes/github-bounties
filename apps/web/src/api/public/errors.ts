@@ -25,6 +25,7 @@ export const API_V2_ERROR_CODES = [
   "wallet_not_set",
   "github_not_linked",
   "already_cancelled",
+  "wallet_change_human_only",
 ] as const;
 
 export const API_ERROR_CODES = [...PUBLIC_API_ERROR_CODES, ...API_V2_ERROR_CODES] as const;
@@ -57,6 +58,7 @@ const STATUS_FOR_CODE: Record<ApiErrorCode, number> = {
   wallet_not_set: 403,
   github_not_linked: 403,
   already_cancelled: 409,
+  wallet_change_human_only: 400,
 };
 
 export class PublicApiError extends Error {

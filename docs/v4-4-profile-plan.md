@@ -1,6 +1,6 @@
 # V4-4 Profile and settings parity (plan)
 
-Status: plan only. Do not implement until the product owner approves the draft pull request.
+Status: approved and implemented on this branch. The request and response shapes below are the short form. `docs/api.md` is the operator reference.
 
 This slice adds Bearer-key reads and writes for the signed-in user's display name and email notification preferences, plus a read-only linked-accounts view. Wallet add/change, GitHub link/unlink, and email address changes stay on the session Settings page. The 2% fee, the 15% pool, money paths, the retired claim-lock, agent-owned accounts, and BTC are out of scope.
 

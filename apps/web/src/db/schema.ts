@@ -134,6 +134,11 @@ export const users = pgTable(
       withTimezone: true,
       mode: "date",
     }),
+    /**
+     * True after the user saves a display name (Settings or PATCH /api/v1/me/profile).
+     * Google sign-in keeps refreshing display_name only while this is false.
+     */
+    displayNameCustom: boolean("display_name_custom").notNull().default(false),
     ...timestamps,
   },
   (table) => [
@@ -213,6 +218,21 @@ export const emailOutbox = pgTable(
     check("email_outbox_to_email_present", sql`length(trim(${table.toEmail})) > 0`),
   ],
 );
+
+/**
+ * Email notification flags for one user. A missing row means every flag is on.
+ * Welcome is not stored here; it stays always-on.
+ */
+export const userNotificationPreferences = pgTable("user_notification_preferences", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "restrict" }),
+  emailBountyFunded: boolean("email_bounty_funded").notNull().default(true),
+  emailPrMerged: boolean("email_pr_merged").notNull().default(true),
+  emailBountySettled: boolean("email_bounty_settled").notNull().default(true),
+  emailPoolClaimable: boolean("email_pool_claimable").notNull().default(true),
+  ...timestamps,
+});
 
 /** One GitHub account per user (`user_id` unique) and one user per GitHub id. */
 export const githubLinks = pgTable(

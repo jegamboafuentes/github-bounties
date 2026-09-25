@@ -25,6 +25,39 @@ export const fundBodySchema = z
   .strict()
   .openapi("FundBody");
 
+export const profilePatchSchema = z
+  .object({
+    displayName: z.string().describe("1–80 characters. No control characters, angle brackets, or a wallet address."),
+  })
+  .strict()
+  .openapi("ProfilePatch");
+
+const emailPreferenceFlags = {
+  bountyFunded: z.boolean().optional().describe("Email when a bounty this user posted locks."),
+  prMerged: z.boolean().optional().describe("Email when this user's pull request wins."),
+  bountySettled: z.boolean().optional().describe("Email when the winner payout is sent."),
+  poolClaimable: z.boolean().optional().describe("Email when a pool share is ready to claim."),
+};
+
+export const notificationPatchSchema = z
+  .object({
+    email: z.object(emailPreferenceFlags).strict(),
+  })
+  .strict()
+  .openapi("NotificationPreferencesPatch");
+
+export const updateProfileToolSchema = z
+  .object({
+    displayName: z.string().describe("1–80 characters. No control characters or angle brackets."),
+  })
+  .passthrough();
+
+export const updateNotificationToolSchema = z
+  .object({
+    email: z.object(emailPreferenceFlags).passthrough(),
+  })
+  .passthrough();
+
 export const claimBodySchema = z
   .object({
     kind: z.enum(["winner", "pool"]).describe("winner pays the merged-PR author share. pool pays the caller's own frozen share."),
@@ -464,6 +497,130 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       403: { description: "Money disabled, missing money scope, or not the poster.", ...errorContent },
       409: { description: "Not refundable, or idempotency conflict.", ...errorContent },
       429: { description: "Per-key money limit (10/hour).", ...errorContent },
+    },
+  });
+
+  const profileSchema = z
+    .object({
+      id: z.string().uuid(),
+      displayName: z.string(),
+      displayNameCustom: z.boolean().describe("True after the user saves a name. Google sign-in does not overwrite it."),
+      email: z.string().describe("Full Google signup email, the same value Settings shows. Read-only."),
+    })
+    .openapi("Profile");
+
+  const notificationSchema = z
+    .object({
+      email: z.object({
+        bountyFunded: z.boolean(),
+        prMerged: z.boolean(),
+        bountySettled: z.boolean(),
+        poolClaimable: z.boolean(),
+      }).describe("Welcome is always on and is not a field. A missing stored row is all true."),
+    })
+    .openapi("NotificationPreferences");
+
+  const linkedAccountsSchema = z
+    .object({
+      google: z.object({ email: z.string().describe("Full Google signup email, as Settings shows it.") }),
+      github: z
+        .object({
+          login: z.string(),
+          id: z.string().describe("GitHub account id as a decimal string."),
+          linkedAt: z.string().datetime(),
+        })
+        .nullable(),
+      wallet: z.object({
+        address: z.string().nullable().describe("Saved payout address. Read-only. Change it on the Settings page."),
+      }),
+    })
+    .openapi("LinkedAccounts");
+
+  const profileErrors = {
+    400: {
+      description: "validation_failed, or wallet_change_human_only when the body contains a wallet or payout-address field.",
+      ...errorContent,
+    },
+    401: { description: "Missing, invalid, or revoked key.", ...errorContent },
+    403: { description: "Missing write scope.", ...errorContent },
+    429: { description: "Per-key write limit (20/min).", ...errorContent },
+  };
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/me/profile",
+    operationId: "getProfile",
+    summary: "Display name and email",
+    description:
+      "Scope read. The key owner's display name and full Google email. Does not include google_sub or a wallet. displayNameCustom is true after a saved name, which Google sign-in will not overwrite.",
+    security: bearer,
+    responses: {
+      200: { description: "Profile.", content: json(profileSchema) },
+      401: { description: "Missing, invalid, or revoked key.", ...errorContent },
+      403: { description: "Missing read scope.", ...errorContent },
+      429: { description: "Per-key read limit (120/min).", ...errorContent },
+    },
+  });
+
+  registry.registerPath({
+    method: "patch",
+    path: "/api/v1/me/profile",
+    operationId: "updateProfile",
+    summary: "Set the display name",
+    description:
+      "Scope write. Sets display name and displayNameCustom. Idempotency-Key is not required. A wallet or payout-address field returns 400 wallet_change_human_only. Any other unknown field returns 400 validation_failed. Email cannot be changed here.",
+    security: bearer,
+    request: { body: { content: json(profilePatchSchema) } },
+    responses: {
+      200: { description: "Updated profile.", content: json(profileSchema) },
+      ...profileErrors,
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/me/notification-preferences",
+    operationId: "getNotificationPreferences",
+    summary: "Email notification preferences",
+    description:
+      "Scope read. Four bounty emails. A missing row is all true. Welcome is always on and is not listed. Delivery is DEV-only.",
+    security: bearer,
+    responses: {
+      200: { description: "Effective preferences.", content: json(notificationSchema) },
+      401: { description: "Missing, invalid, or revoked key.", ...errorContent },
+      403: { description: "Missing read scope.", ...errorContent },
+      429: { description: "Per-key read limit (120/min).", ...errorContent },
+    },
+  });
+
+  registry.registerPath({
+    method: "patch",
+    path: "/api/v1/me/notification-preferences",
+    operationId: "updateNotificationPreferences",
+    summary: "Update email notification preferences",
+    description:
+      "Scope write. Partial update: omitted flags stay as they are. At least one boolean is required. Idempotency-Key is not required. Wallet or payout-address fields return 400 wallet_change_human_only. Unknown fields return 400 validation_failed. Welcome cannot be turned off.",
+    security: bearer,
+    request: { body: { content: json(notificationPatchSchema) } },
+    responses: {
+      200: { description: "Effective preferences after the update.", content: json(notificationSchema) },
+      ...profileErrors,
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/me/linked-accounts",
+    operationId: "listLinkedAccounts",
+    summary: "Linked Google, GitHub, and saved wallet",
+    description:
+      "Scope read. GitHub login, id, and linkedAt when a github_links row exists. Google email is the full signup address Settings shows. The saved wallet address is read-only. There is no link, unlink, or wallet change on this API.",
+    security: bearer,
+    responses: {
+      200: { description: "Linked accounts.", content: json(linkedAccountsSchema) },
+      401: { description: "Missing, invalid, or revoked key.", ...errorContent },
+      403: { description: "Missing read scope.", ...errorContent },
+      429: { description: "Per-key read limit (120/min).", ...errorContent },
     },
   });
 }

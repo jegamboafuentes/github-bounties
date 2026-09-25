@@ -1,4 +1,5 @@
 import type { ApiKeyEnv, ApiKeyScope, ApiSpendKind, ApiSpendStatus } from "../../db/schema";
+import type { AccountProfile, EmailNotificationPrefs, LinkedAccounts } from "../../profile/settings";
 import type { MoneyAction } from "../../escrow/actor-log";
 import type { FacilitatorSettlementCheck } from "../../escrow/fund-hash";
 import type { X402SellerResult } from "../../escrow/x402-seller";
@@ -169,6 +170,14 @@ export type AccessDeps = {
   saveIdempotency: (row: IdempotencyRow) => Promise<void>;
   moneyGate: (userId: string) => Promise<MoneyGate>;
   loadMe: (userId: string) => Promise<MeProfile | null>;
+  loadAccountProfile: (userId: string) => Promise<AccountProfile | null>;
+  saveDisplayName: (userId: string, displayName: string) => Promise<AccountProfile | null>;
+  loadEmailNotificationPreferences: (userId: string) => Promise<EmailNotificationPrefs>;
+  saveEmailNotificationPreferences: (
+    userId: string,
+    patch: Partial<EmailNotificationPrefs>,
+  ) => Promise<EmailNotificationPrefs | null>;
+  loadLinkedAccounts: (userId: string) => Promise<LinkedAccounts | null>;
   listMyBounties: (userId: string) => Promise<{ posted: MyBountyRow[]; funded: MyFundingRow[] }>;
   loadMoneyBounty: (bountyId: string) => Promise<MoneyBounty | null>;
   assertTopUpOpen: (bountyId: string) => Promise<void>;

@@ -127,4 +127,24 @@ describe("public API error shape", () => {
     }
     assert.equal(route.OPTIONS().status, 204);
   });
+
+  it("profile routes allow PATCH and linked accounts stay read-only", async () => {
+    const profile = await import("../../app/api/v1/me/profile/route.ts");
+    const prefs = await import("../../app/api/v1/me/notification-preferences/route.ts");
+    const linked = await import("../../app/api/v1/me/linked-accounts/route.ts");
+    for (const route of [profile, prefs]) {
+      for (const method of ["POST", "PUT", "DELETE"] as const) {
+        const response = route[method]();
+        assert.equal(response.status, 405, method);
+        assert.equal(response.headers.get("allow"), "GET, PATCH, OPTIONS");
+        const body = await response.json();
+        assert.equal(body.error.code, "method_not_allowed");
+      }
+    }
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"] as const) {
+      const response = linked[method]();
+      assert.equal(response.status, 405, method);
+      assert.equal(response.headers.get("allow"), "GET, OPTIONS");
+    }
+  });
 });

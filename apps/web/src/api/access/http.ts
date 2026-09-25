@@ -15,10 +15,15 @@ import {
   handleClaim,
   handleCreateBounty,
   handleFund,
+  handleGetNotificationPreferences,
+  handleGetProfile,
+  handleLinkedAccounts,
   handleMe,
   handleMyClaims,
   handleMyBounties,
   handleRefund,
+  handleUpdateNotificationPreferences,
+  handleUpdateProfile,
   handleUsage,
   handleTopUp,
   handleWorkSignal,
@@ -48,7 +53,12 @@ export type V1Action =
   | { kind: "claim"; bountyId: string }
   | { kind: "refund"; bountyId: string }
   | { kind: "bounty-claims"; bountyId: string }
-  | { kind: "my-claims" };
+  | { kind: "my-claims" }
+  | { kind: "profile" }
+  | { kind: "profile-patch" }
+  | { kind: "notification-preferences" }
+  | { kind: "notification-preferences-patch" }
+  | { kind: "linked-accounts" };
 
 function actionClass(action: V1Action): ApiClass {
   if (action.kind === "fund" || action.kind === "top-up" || action.kind === "claim" || action.kind === "refund") {
@@ -59,7 +69,10 @@ function actionClass(action: V1Action): ApiClass {
     action.kind === "usage" ||
     action.kind === "my-bounties" ||
     action.kind === "my-claims" ||
-    action.kind === "bounty-claims"
+    action.kind === "bounty-claims" ||
+    action.kind === "profile" ||
+    action.kind === "notification-preferences" ||
+    action.kind === "linked-accounts"
   ) {
     return "read";
   }
@@ -94,6 +107,16 @@ function actionRoute(action: V1Action): string {
       return `GET /api/v1/bounties/${action.bountyId}/claims`;
     case "my-claims":
       return "GET /api/v1/me/claims";
+    case "profile":
+      return "GET /api/v1/me/profile";
+    case "profile-patch":
+      return "PATCH /api/v1/me/profile";
+    case "notification-preferences":
+      return "GET /api/v1/me/notification-preferences";
+    case "notification-preferences-patch":
+      return "PATCH /api/v1/me/notification-preferences";
+    case "linked-accounts":
+      return "GET /api/v1/me/linked-accounts";
   }
 }
 
@@ -235,6 +258,16 @@ async function perform(
       return handleBountyClaims(principal, action.bountyId, deps);
     case "my-claims":
       return handleMyClaims(principal, deps);
+    case "profile":
+      return handleGetProfile(principal, deps);
+    case "profile-patch":
+      return handleUpdateProfile(principal, await readJsonBody(request), deps);
+    case "notification-preferences":
+      return handleGetNotificationPreferences(principal, deps);
+    case "notification-preferences-patch":
+      return handleUpdateNotificationPreferences(principal, await readJsonBody(request), deps);
+    case "linked-accounts":
+      return handleLinkedAccounts(principal, deps);
   }
 }
 

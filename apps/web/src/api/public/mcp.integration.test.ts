@@ -121,7 +121,7 @@ describe("MCP read tools", () => {
     const listed = await client.listTools();
     const toolNames = listed.tools.map((tool) => tool.name);
     assert.equal(new Set(toolNames).size, toolNames.length);
-    assert.equal(toolNames.length, 19);
+    assert.equal(toolNames.length, 24);
     assert.deepEqual(
       [...toolNames].sort(),
       [
@@ -136,14 +136,19 @@ describe("MCP read tools", () => {
         "get_bounty_intelligence",
         "get_me",
         "get_my_usage",
+        "get_notification_preferences",
+        "get_profile",
         "get_stats",
         "list_bounties",
         "list_funders",
+        "list_linked_accounts",
         "list_my_bounties",
         "list_my_claims",
         "refund_bounty",
         "signal_working",
         "top_up_bounty",
+        "update_notification_preferences",
+        "update_profile",
       ],
     );
     for (const name of ["claim_winner", "claim_pool", "refund_bounty", "fund_bounty", "top_up_bounty"]) {
@@ -171,7 +176,12 @@ describe("MCP read tools", () => {
       list_my_bounties: /^Requires API key \(read scope\)/,
       get_bounty_claims: /^Requires API key \(read scope\)/,
       list_my_claims: /^Requires API key \(read scope\)/,
+      get_profile: /^Requires API key \(read scope\)/,
+      get_notification_preferences: /^Requires API key \(read scope\)/,
+      list_linked_accounts: /^Requires API key \(read scope\)/,
       create_bounty: /^Requires API key \(write scope\)/,
+      update_profile: /^Requires API key \(write scope\)/,
+      update_notification_preferences: /^Requires API key \(write scope\)/,
       signal_working: /^Requires API key \(write scope\)/,
       clear_work_signal: /^Requires API key \(write scope\)/,
       cancel_bounty: /^Requires API key \(write scope\)/,
@@ -200,6 +210,8 @@ describe("MCP read tools", () => {
       assert.equal(body.error.details.scope, scope);
     }
     await assertMissingKey("get_me", {}, "read");
+    await assertMissingKey("get_profile", {}, "read");
+    await assertMissingKey("update_profile", { displayName: "Ada" }, "write");
     await assertMissingKey(
       "create_bounty",
       { issueUrl: "https://github.com/octo/hello/issues/42", amountUsdc: "5" },

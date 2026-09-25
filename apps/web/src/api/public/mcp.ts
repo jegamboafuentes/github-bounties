@@ -14,6 +14,7 @@ const INSTRUCTIONS = [
   "get_bounty_intelligence reads the Gemini cache only and must not be treated as a refresh.",
   "get_stats returns platform totals.",
   "get_me, get_my_usage, list_my_bounties, get_bounty_claims, and list_my_claims read the key owner. get_my_usage needs only the read scope. create_bounty, signal_working, clear_work_signal, and cancel_bounty need the write scope. cancel_bounty is unfunded only and returns already_cancelled when the bounty is already cancelled.",
+  "get_profile and get_notification_preferences read the key owner. update_profile and update_notification_preferences need the write scope. list_linked_accounts is read-only. Wallet changes, GitHub link, and GitHub unlink are not tools.",
   "fund_bounty, top_up_bounty, claim_winner, claim_pool, and refund_bounty need the money scope and stay off on mainnet until API_MONEY_ENABLED is turned on. Fund and top-up are headless x402: call once for payment requirements, then retry with the same idempotencyKey and paymentSignature. Claims pay the saved wallet. Refunds pay the recorded payer. The exclusive claim-lock is retired. Wallet changes are not tools.",
 ].join(" ");
 

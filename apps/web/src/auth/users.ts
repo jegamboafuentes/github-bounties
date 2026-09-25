@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { getRuntimeDb } from "../db/runtime";
 import { users } from "../db/schema";
@@ -40,9 +40,11 @@ export function normalizeAvatarUrl(value: string | null | undefined): string | n
 
 /**
  * Create or update the product User keyed by google_sub.
- * Repeat login updates email, display name, https avatar (when present),
- * and last_seen_at. created_at and the primary key stay put. The unique
- * google_sub index is what prevents a second row.
+ * Repeat login updates email, https avatar (when present), and last_seen_at.
+ * display_name updates only while display_name_custom is false. A name saved
+ * from Settings or PATCH /api/v1/me/profile sets that flag and is kept.
+ * created_at and the primary key stay put. The unique google_sub index is
+ * what prevents a second row.
  */
 export async function upsertUserByGoogleSub(
   identity: GoogleIdentity,
@@ -83,7 +85,7 @@ export async function upsertUserByGoogleSub(
       .update(users)
       .set({
         email,
-        displayName,
+        displayName: sql<string>`case when ${users.displayNameCustom} then ${users.displayName} else ${displayName} end`,
         ...(avatarUrl ? { avatarUrl } : {}),
         lastSeenAt: now,
         updatedAt: now,

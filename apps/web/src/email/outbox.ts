@@ -19,6 +19,7 @@ import {
   type EmailOutboxPayload,
   type EmailTemplateName,
 } from "../db/schema";
+import { isEmailTemplateEnabled } from "../profile/settings";
 import { createResendAdapter, type TransactionalEmailAdapter } from "./adapter";
 import { hasResendApiKey, readEmailOrigin } from "./env";
 import { normalizeSignupEmail } from "./recipients";
@@ -31,7 +32,10 @@ type EmailOutboxRow = typeof emailOutbox.$inferSelect;
 
 export type EnqueueEmailResult =
   | { ok: true; id: string; created: boolean; idempotencyKey: string }
-  | { ok: false; reason: "missing_user" | "missing_email" | "rejected_recipient" | "invalid_template" };
+  | {
+      ok: false;
+      reason: "missing_user" | "missing_email" | "rejected_recipient" | "invalid_template" | "preference_disabled";
+    };
 
 export type DeliverOutboxResult = {
   configured: boolean;
@@ -99,6 +103,10 @@ export async function enqueueEmailForUser(
     .where(eq(users.id, input.userId))
     .limit(1);
   if (!user) return { ok: false, reason: "missing_user" };
+
+  if (!(await isEmailTemplateEnabled(db, user.id, input.template))) {
+    return { ok: false, reason: "preference_disabled" };
+  }
 
   const toEmail = normalizeSignupEmail(user.email);
   if (!toEmail) {
@@ -342,6 +350,12 @@ export async function deliverOutbox(args: {
 
       if (!isTemplate(row.template)) {
         await markEmailTerminal(db, row.id, workerId, "invalid_template");
+        summary.failed += 1;
+        continue;
+      }
+
+      if (user && !(await isEmailTemplateEnabled(db, row.userId, row.template))) {
+        await markEmailTerminal(db, row.id, workerId, "notification_preference_disabled");
         summary.failed += 1;
         continue;
       }

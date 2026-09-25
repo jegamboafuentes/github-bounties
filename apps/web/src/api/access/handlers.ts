@@ -12,10 +12,27 @@ import {
   encodePaymentRequiredHeader,
   x402ResourceUrl,
 } from "../../escrow/x402";
+import { ZodError } from "zod";
 import { PublicApiError, publicApiErrorBody, zodErrorDetails } from "../public/errors";
+import {
+  DisplayNameError,
+  parseDisplayName,
+  walletPatchFieldNames,
+  type AccountProfile,
+  type EmailNotificationPrefs,
+  type LinkedAccounts,
+} from "../../profile/settings";
 import { acceptBountyId } from "../public/query";
 import { authorizeClaimCaller } from "./claim-auth";
-import { createBountyBodySchema, claimBodySchema, fundBodySchema, refundBodySchema, topUpBodySchema } from "./openapi";
+import {
+  claimBodySchema,
+  createBountyBodySchema,
+  fundBodySchema,
+  notificationPatchSchema,
+  profilePatchSchema,
+  refundBodySchema,
+  topUpBodySchema,
+} from "./openapi";
 import type { AccessDeps, ApiKeyRecord, ClaimKind, PerformedClaim, PublicApiKey } from "./deps";
 
 export type { PublicApiKey };
@@ -1126,6 +1143,121 @@ export async function handleMyClaims(principal: ApiPrincipal, deps: AccessDeps):
   requireScope(principal.scopes, "read");
   const claims = await deps.listClaims(principal.userId, null);
   return { status: 200, body: { claims } };
+}
+
+const WALLET_CHANGE_MESSAGE =
+  "Wallet and payout address changes are only available on the signed-in Settings page.";
+
+function rejectWalletPatch(body: unknown): void {
+  const fields = walletPatchFieldNames(body);
+  if (fields.length === 0) return;
+  throw new PublicApiError("wallet_change_human_only", WALLET_CHANGE_MESSAGE, { fields });
+}
+
+function validationFromZod(error: ZodError, fallback: string): PublicApiError {
+  const unknown = error.issues.some((issue) => issue.code === "unrecognized_keys");
+  return new PublicApiError(
+    "validation_failed",
+    unknown ? "Unrecognized field." : fallback,
+    zodErrorDetails(error),
+  );
+}
+
+function profileBody(profile: AccountProfile) {
+  return {
+    id: profile.id,
+    displayName: profile.displayName,
+    displayNameCustom: profile.displayNameCustom,
+    email: profile.email,
+  };
+}
+
+function notificationBody(prefs: EmailNotificationPrefs) {
+  return { email: prefs };
+}
+
+export async function handleGetProfile(principal: ApiPrincipal, deps: AccessDeps): Promise<ApiResult> {
+  requireScope(principal.scopes, "read");
+  const profile = await deps.loadAccountProfile(principal.userId);
+  if (!profile) throw new PublicApiError("not_found", "User not found.");
+  return { status: 200, body: profileBody(profile) };
+}
+
+export async function handleUpdateProfile(
+  principal: ApiPrincipal,
+  body: unknown,
+  deps: AccessDeps,
+): Promise<ApiResult> {
+  requireScope(principal.scopes, "write");
+  rejectWalletPatch(body);
+  const parsed = profilePatchSchema.safeParse(body);
+  if (!parsed.success) {
+    throw validationFromZod(parsed.error, "displayName is required.");
+  }
+  let displayName: string;
+  try {
+    displayName = parseDisplayName(parsed.data.displayName);
+  } catch (err) {
+    if (err instanceof DisplayNameError) {
+      throw new PublicApiError("validation_failed", err.message, [{ path: "displayName", message: err.message }]);
+    }
+    throw err;
+  }
+  const saved = await deps.saveDisplayName(principal.userId, displayName);
+  if (!saved) throw new PublicApiError("not_found", "User not found.");
+  return { status: 200, body: profileBody(saved) };
+}
+
+export async function handleGetNotificationPreferences(
+  principal: ApiPrincipal,
+  deps: AccessDeps,
+): Promise<ApiResult> {
+  requireScope(principal.scopes, "read");
+  const profile = await deps.loadAccountProfile(principal.userId);
+  if (!profile) throw new PublicApiError("not_found", "User not found.");
+  const prefs = await deps.loadEmailNotificationPreferences(principal.userId);
+  return { status: 200, body: notificationBody(prefs) };
+}
+
+export async function handleUpdateNotificationPreferences(
+  principal: ApiPrincipal,
+  body: unknown,
+  deps: AccessDeps,
+): Promise<ApiResult> {
+  requireScope(principal.scopes, "write");
+  rejectWalletPatch(body);
+  const parsed = notificationPatchSchema.safeParse(body);
+  if (!parsed.success) {
+    const unknown = parsed.error.issues.some((issue) => issue.code === "unrecognized_keys");
+    const invalidType = parsed.error.issues.some((issue) => issue.code === "invalid_type");
+    const message = unknown
+      ? "Unrecognized field."
+      : invalidType
+        ? "Email preferences must be JSON booleans."
+        : "At least one email preference is required.";
+    throw new PublicApiError("validation_failed", message, zodErrorDetails(parsed.error));
+  }
+  const flags = parsed.data.email;
+  if (
+    flags.bountyFunded === undefined &&
+    flags.prMerged === undefined &&
+    flags.bountySettled === undefined &&
+    flags.poolClaimable === undefined
+  ) {
+    throw new PublicApiError("validation_failed", "At least one email preference is required.", [
+      { path: "email", message: "At least one email preference is required." },
+    ]);
+  }
+  const saved = await deps.saveEmailNotificationPreferences(principal.userId, flags);
+  if (!saved) throw new PublicApiError("not_found", "User not found.");
+  return { status: 200, body: notificationBody(saved) };
+}
+
+export async function handleLinkedAccounts(principal: ApiPrincipal, deps: AccessDeps): Promise<ApiResult> {
+  requireScope(principal.scopes, "read");
+  const linked = await deps.loadLinkedAccounts(principal.userId);
+  if (!linked) throw new PublicApiError("not_found", "User not found.");
+  return { status: 200, body: linked satisfies LinkedAccounts };
 }
 
 export function requirePrincipal(principal: ApiPrincipal | null | undefined): ApiPrincipal {

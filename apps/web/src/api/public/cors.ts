@@ -8,7 +8,7 @@ export const API_CORS_EXPOSE_HEADERS =
 
 export const PUBLIC_API_CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers":
     "Accept, Authorization, Content-Type, Idempotency-Key, Mcp-Session-Id, PAYMENT-SIGNATURE, X-PAYMENT",
   "Access-Control-Expose-Headers": API_CORS_EXPOSE_HEADERS,
