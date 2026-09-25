@@ -1,14 +1,17 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { mcpAccessFromRequest } from "../access/http";
+import type { AccessDeps } from "../access/deps";
+import { captureKeyedRateHeaders } from "../access/handlers";
+import { keyedRateLimitHeaders, mcpAccessFromRequest } from "../access/http";
 import { PUBLIC_API_CORS_HEADERS, publicCorsPreflight } from "./cors";
 import { handlePublicRead } from "./http";
 import { createBountiesMcpServer } from "./mcp";
 import { publicReadApi } from "./service";
 
-function withMcpCors(response: Response): Response {
+function withMcpCors(response: Response, rateHeaders?: Record<string, string>): Response {
   const headers = new Headers(response.headers);
   headers.set("cache-control", "no-store");
   for (const [key, value] of Object.entries(PUBLIC_API_CORS_HEADERS)) headers.set(key, value);
+  for (const [key, value] of Object.entries(rateHeaders ?? {})) headers.set(key, value);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -32,7 +35,7 @@ async function serveMcp(request: Request, access: Awaited<ReturnType<typeof mcpA
  * Run does not need sticky sessions. Bearer authenticates the key. No cookies.
  * Anonymous reads stay on the per-IP limiter.
  */
-export function handleMcpHttp(request: Request): Promise<Response> {
+export function handleMcpHttp(request: Request, deps?: AccessDeps): Promise<Response> {
   if (request.method === "OPTIONS") return Promise.resolve(publicCorsPreflight());
   if (!request.headers.get("authorization")?.trim()) {
     return handlePublicRead(request, async () => {
@@ -46,7 +49,9 @@ export function handleMcpHttp(request: Request): Promise<Response> {
     }, { cors: true });
   }
   return (async () => {
-    const access = await mcpAccessFromRequest(request);
-    return withMcpCors(await serveMcp(request, access));
+    const access = await mcpAccessFromRequest(request, deps);
+    const { value, headers } = await captureKeyedRateHeaders(() => serveMcp(request, access));
+    const rateHeaders = Object.keys(headers).length > 0 ? headers : keyedRateLimitHeaders("read");
+    return withMcpCors(value, rateHeaders);
   })();
 }

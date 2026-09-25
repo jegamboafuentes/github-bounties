@@ -23,6 +23,7 @@ import {
   type ApiPrincipal,
 } from "./handlers";
 import { apiResultResponse, handleV1Action } from "./http";
+import { handleMcpHttp } from "../public/mcp-http";
 import {
   apiMoneyEnabled,
   generateApiKey,
@@ -551,6 +552,14 @@ describe("spend caps, idempotency, and headless x402", () => {
     assert.equal(json.includes("google_sub"), false);
     assert.equal(json.includes("googleSub"), false);
     assert.match(json, /ada@example.com/);
+    const readKey = me.body as { apiKey: { perTxCapUsdc: string | null; dailyCapUsdc: string | null } };
+    assert.equal(readKey.apiKey.perTxCapUsdc, null);
+    assert.equal(readKey.apiKey.dailyCapUsdc, null);
+    const { principal: moneyKey } = await principal(bag.deps, ["read", "money"]);
+    const moneyMe = await handleMe(moneyKey, bag.deps);
+    const moneyBody = moneyMe.body as { apiKey: { perTxCapUsdc: string | null; dailyCapUsdc: string | null } };
+    assert.match(moneyBody.apiKey.perTxCapUsdc ?? "", /^\d+\.\d{6}$/);
+    assert.match(moneyBody.apiKey.dailyCapUsdc ?? "", /^\d+\.\d{6}$/);
   });
 
   it("returns already_cancelled and does not cancel again", async () => {
@@ -576,9 +585,41 @@ describe("spend caps, idempotency, and headless x402", () => {
     assert.equal(bag.calls.cancel, 0);
   });
 
+  it("replays a stored 409 with the original JSON bytes", async () => {
+    const bag = memory({ status: "cancelled" });
+    let stored: unknown;
+    const save = bag.deps.saveIdempotency.bind(bag.deps);
+    bag.deps.saveIdempotency = async (row) => {
+      stored = row.responseBody;
+      await save(row);
+    };
+    const { token } = await principal(bag.deps, ["write"]);
+    const first = await handleV1Action(
+      new Request(`https://dev.githubbounties.xyz/api/v1/bounties/${BOUNTY}/cancel`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "idempotency-key": "cancel-bytes" },
+      }),
+      { kind: "cancel", bountyId: BOUNTY },
+      bag.deps,
+    );
+    const firstText = await first.text();
+    const raw = stored as { __raw?: string };
+    assert.equal(raw.__raw, firstText);
+    const replay = await handleV1Action(
+      new Request(`https://dev.githubbounties.xyz/api/v1/bounties/${BOUNTY}/cancel`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "idempotency-key": "cancel-bytes" },
+      }),
+      { kind: "cancel", bountyId: BOUNTY },
+      bag.deps,
+    );
+    assert.equal(await replay.text(), firstText);
+    assert.equal(bag.calls.cancel, 0);
+  });
+
   it("returns this key's usage and hides other keys", async () => {
     const bag = memory();
-    const { principal: mine } = await principal(bag.deps, ["read"], { perTx: "10", daily: "40" });
+    const { principal: mine } = await principal(bag.deps, ["read", "money"], { perTx: "10", daily: "40" });
     const { principal: other } = await principal(bag.deps, ["read"]);
     const now = new Date("2026-09-24T12:00:00.000Z");
     await bag.deps.insertSpend({
@@ -626,6 +667,18 @@ describe("spend caps, idempotency, and headless x402", () => {
     assert.equal(body.entries[0]?.bountyId, BOUNTY);
     assert.equal(body.entries[0]?.txHash, TX);
     assert.equal(JSON.stringify(body).includes("9.000000"), false);
+    const { principal: reader } = await principal(bag.deps, ["read"]);
+    const hidden = await handleUsage(reader, bag.deps);
+    const hiddenBody = hidden.body as {
+      perTxCapUsdc: string | null;
+      dailyCapUsdc: string | null;
+      spentTodayUsdc: string | null;
+      remainingTodayUsdc: string | null;
+    };
+    assert.equal(hiddenBody.perTxCapUsdc, null);
+    assert.equal(hiddenBody.dailyCapUsdc, null);
+    assert.equal(hiddenBody.spentTodayUsdc, null);
+    assert.equal(hiddenBody.remainingTodayUsdc, null);
     const { principal: writer } = await principal(bag.deps, ["write"]);
     await assert.rejects(
       () => handleUsage(writer, bag.deps),
@@ -645,9 +698,23 @@ describe("spend caps, idempotency, and headless x402", () => {
     );
     assert.equal(denied.status, 403);
     assert.equal(denied.headers.get("ratelimit-limit"), "120");
+    assert.equal(denied.headers.get("ratelimit-remaining"), "119");
     assert.equal(denied.headers.get("ratelimit-reset"), "60");
     assert.equal(denied.headers.get("www-authenticate"), null);
     assert.equal(denied.headers.get("set-cookie"), null);
+
+    const { token: readToken } = await principal(bag.deps, ["read"]);
+    const allowed = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me", {
+        headers: { authorization: `Bearer ${readToken}` },
+      }),
+      { kind: "me" },
+      bag.deps,
+    );
+    assert.equal(allowed.status, 200);
+    assert.equal(allowed.headers.get("ratelimit-limit"), "120");
+    assert.equal(allowed.headers.get("ratelimit-remaining"), "119");
+    assert.equal(allowed.headers.get("ratelimit-reset"), "60");
 
     const anon = await handleV1Action(
       new Request("https://dev.githubbounties.xyz/api/v1/me", {
@@ -659,11 +726,52 @@ describe("spend caps, idempotency, and headless x402", () => {
     assert.equal(anon.status, 401);
     assert.equal(anon.headers.get("www-authenticate"), "Bearer");
     assert.equal(anon.headers.get("ratelimit-limit"), "120");
+    assert.equal(anon.headers.get("ratelimit-remaining"), "120");
     const anonBody = (await anon.json()) as { error: { code: string } };
     assert.equal(anonBody.error.code, "unauthorized");
 
     const shaped = apiResultResponse({ status: 401, body: { error: { code: "unauthorized", message: "no", details: null } } });
     assert.equal(shaped.headers.get("www-authenticate"), "Bearer");
+
+    const mcp = await handleMcpHttp(
+      new Request("https://dev.githubbounties.xyz/mcp", {
+        method: "POST",
+        headers: { authorization: "Bearer not-a-key", "content-type": "application/json" },
+        body: "{}",
+      }),
+      bag.deps,
+    );
+    assert.equal(mcp.status, 401);
+    assert.equal(mcp.headers.get("ratelimit-limit"), "120");
+    assert.equal(mcp.headers.get("ratelimit-remaining"), "120");
+    assert.equal(mcp.headers.get("ratelimit-reset"), "60");
+
+    const { token: mcpToken } = await principal(bag.deps, ["read"]);
+    const called = await handleMcpHttp(
+      new Request("https://dev.githubbounties.xyz/mcp", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${mcpToken}`,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name: "get_me", arguments: {} },
+        }),
+      }),
+      bag.deps,
+    );
+    assert.equal(called.status, 200);
+    assert.equal(called.headers.get("ratelimit-limit"), "120");
+    assert.equal(called.headers.get("ratelimit-remaining"), "119");
+    assert.equal(called.headers.get("ratelimit-reset"), "60");
+    const mcpBody = await called.json();
+    const text = JSON.stringify(mcpBody);
+    assert.match(text, /ada@example.com/);
+    assert.equal(text.includes("50.000000"), false);
   });
 });
 
@@ -687,7 +795,12 @@ describe("production money wiring", () => {
     assert.doesNotMatch(card, /useActionState/);
     assert.doesNotMatch(card, /localStorage|sessionStorage/);
     assert.match(card, /pagehide/);
-    assert.match(card, /<p ref=\{nodeRef\}/);
+    assert.match(card, /pageshow/);
+    assert.match(card, /onSubmit/);
+    assert.doesNotMatch(card, /action=\{onCreate\}/);
+    assert.match(card, /autoComplete="off"/);
+    assert.match(card, /Dismiss/);
+    assert.match(card, /refresh\(\)/);
     assert.match(card, /Confirm revoke/);
     assert.match(card, /Created \{key\.createdAt\}/);
     assert.match(card, /Last used/);
