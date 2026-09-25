@@ -12,6 +12,7 @@ describe("protected paths", () => {
     assert.equal(isProtectedPagePath("/board"), false);
     assert.equal(isProtectedPagePath("/about"), false);
     assert.equal(isProtectedPagePath("/roadmap"), false);
+    assert.equal(isProtectedPagePath("/developers"), false);
     assert.equal(isProtectedPagePath("/signin"), false);
     assert.equal(isProtectedPagePath("/"), false);
     assert.equal(isProtectedPagePath("/webhooks/github"), false);

@@ -166,6 +166,9 @@ export default function AboutPage() {
           <Link href="/roadmap" className="underline-offset-4 hover:underline">
             Roadmap
           </Link>
+          <Link href="/developers" className="underline-offset-4 hover:underline">
+            Developers
+          </Link>
           <Link href="/board" className="underline-offset-4 hover:underline">
             Board
           </Link>

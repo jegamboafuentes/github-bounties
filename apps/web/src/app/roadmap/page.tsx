@@ -36,6 +36,9 @@ export default function RoadmapPage() {
           <Link href="/about" className="underline-offset-4 hover:underline">
             About
           </Link>
+          <Link href="/developers" className="underline-offset-4 hover:underline">
+            Developers
+          </Link>
           <Link href="/board" className="underline-offset-4 hover:underline">
             Board
           </Link>

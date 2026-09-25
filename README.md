@@ -19,7 +19,7 @@ This is **not** Lightning Bounties, LB1, or “Lightning Bounties 2”. Older pr
 
 ## Status now
 
-As of **2026-09-24**. No invented ship dates. `/roadmap`, About, and [docs/roadmap.md](docs/roadmap.md) use this list. Chain differs by environment; the versions do not.
+As of **2026-09-25**. No invented ship dates. `/roadmap`, About, and [docs/roadmap.md](docs/roadmap.md) use this list. Chain differs by environment; the versions do not.
 
 | Environment | URL | Chain |
 | --- | --- | --- |
@@ -29,24 +29,20 @@ As of **2026-09-24**. No invented ship dates. `/roadmap`, About, and [docs/roadm
 ### Shipped
 
 - **V1** — USDC escrow + merge is truth. Google sign-in, GitHub App, board, 2% fee, winner = merged PR author that closes funded #N.
-- **V2** — Parallel hunt + participation pool. V2-0…V2-5: 15% of post-fee to up to 10 hunters, signals, roster, claim-lock sunset. Live DEV dogfood done.
-- **V2.6** — Pool member self-claim. Manual pool Claim (#47) on PROD. Winner Claim pays winner + fee only. Each frozen pool hunter Claims their own share when they have a wallet.
-- **FE** — Homepage stats, roadmap, differentiators. Live platform stats, public roadmap, and vs-Lightning differentiators on the homepage. Same aggregates as GET /api/stats.
-- **FE-2** — Bounty detail split charts. Pie / split visuals on bounty payout breakdown. Shipped on bounty pages.
-- **V3-0** — Issue body + bounty intelligence. Shipped on PROD. Full GitHub issue + Gemini about/stack/complexity (AI estimates, cached). Related polish: board badges/filters, Settings/Post connected-only, homepage motion/roadmap refresh.
-- **Funding wave** — LIVE on PROD 2026-09-24. Crowdfunding: USDC top-ups on already-funded bounties. Fund any open public GitHub issue without installing the GitHub App, with Claim running through the public merge poller. Funder avatars on the board cards and on the bounty page Funders list.
+- **V2** — Parallel hunt + participation pool. LIVE on PROD 2026-09-19 (githubbounties.xyz, Base mainnet USDC). V2-0…V2-5: 15% of post-fee to up to 10 hunters, signals, roster, claim-lock sunset.
+- **Pool member self-claim** — LIVE on PROD 2026-09-20. Manual pool Claim (#47). Winner Claim pays winner + fee only. Each frozen pool hunter Claims their own share when they have a wallet.
+- **FE epic** — LIVE on PROD 2026-09-20. Homepage stats, public roadmap, and vs-Lightning differentiators. Same aggregates as GET /api/stats. Bounty pages include the payout split charts.
+- **V3 wave** — LIVE on PROD 2026-09-21. Full GitHub issue + Gemini about/stack/complexity (AI estimates, cached). Related polish: board badges/filters, Settings/Post connected-only, homepage motion/roadmap refresh.
+- **Funding wave** — LIVE on PROD 2026-09-24. Crowdfunding (#61): USDC top-ups on already-funded bounties. Fund any public issue (#64) without installing the GitHub App, with Claim running through the public merge poller. Funder avatars (#65 to #67) on the board cards and on the bounty page Funders list.
+- **V4 — API + MCP.** DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version 4.4.0, 23 operations, 24 tools (#76 #79 #80 #81 #78). API money is OFF on PROD. [Developers](https://githubbounties.xyz/developers).
 
 ### Next
 
-- **V4 — API + MCP.** In planning. AI can use the whole platform the way a human does. Public API documented with OpenAPI/Swagger, and an MCP server for Cursor, Claude, and ChatGPT.
+- **V5 — GitHub-native /bounty.** GitHub-native bounty creation via a `/bounty` comment on a GitHub issue. Roadmap only. Nothing is built. No ship date.
 
 ### Then
 
-- **V5 — GitHub-native /bounty.** Comment `/bounty <amount>` on an issue. USDC only. GitHub App required.
-
-### Later
-
-- **V6+ — Agent economy.** AI agents hunt and fund bounties over x402.
+- **V6+ — Agent economy.** The agent economy on x402. No ship date.
 
 ### Parked
 
@@ -86,7 +82,7 @@ Decisions, sequences, and failure modes:
 | Issue body + Gemini intelligence | [docs/bounty-intelligence.md](docs/bounty-intelligence.md) |
 | Sign-in identity + DEV transactional email (welcome and domain events, not remounted) | [docs/email.md](docs/email.md) |
 | Public stats (`GET /api/stats`) | [docs/stats.md](docs/stats.md) |
-| Read-only public API + MCP (V4-1) | [docs/api.md](docs/api.md) |
+| Public API + MCP (V4, live on PROD) | [docs/api.md](docs/api.md), [Developers](https://githubbounties.xyz/developers) |
 | Google sign-in | [docs/google-signin.md](docs/google-signin.md) |
 | GitHub App + webhooks | [docs/github-app.md](docs/github-app.md), [docs/webhooks.md](docs/webhooks.md) |
 | Schema | [docs/v1-schema.md](docs/v1-schema.md) |

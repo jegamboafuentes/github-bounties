@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getOptionalSession } from "@/auth";
 import { AppHeader } from "@/components/header";
+import { HomeAgent } from "@/components/home-agent";
 import { HomeCompare } from "@/components/home-compare";
 import { HomeHero } from "@/components/home-hero";
 import { HomeStory } from "@/components/home-story";
@@ -25,10 +26,15 @@ export default async function Home() {
           <HomeStats source={stats} />
           <HomeCompare />
           <HomeStory chainName={fund.chainName} />
+          <HomeAgent />
           <p className="home-footer-note home-reveal-item text-sm text-zinc-500">
           {NOT_LIGHTNING_BOUNTIES} Sign in with Google.{" "}
           <Link href="/about" className="underline underline-offset-4">
             About
+          </Link>
+          {" · "}
+          <Link href="/developers" className="underline underline-offset-4">
+            Developers
           </Link>
           {" · "}
           <Link href="/roadmap" className="underline underline-offset-4">

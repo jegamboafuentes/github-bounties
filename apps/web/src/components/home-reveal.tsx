@@ -179,6 +179,15 @@ export function HomeReveal({
             );
           }
 
+          const agent = select(host, ".home-section-agent")[0];
+          if (agent) {
+            playOnEnter(
+              agent,
+              [...select(agent, ".home-section-heading"), ...select(agent, ".home-agent-card")],
+              90,
+            );
+          }
+
           const story = select(host, ".home-section-story")[0];
           if (story) {
             const steps = select(story, ".home-story-step");

@@ -115,8 +115,7 @@ export default async function SettingsPage({
             Email notifications
           </h2>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Delivery is DEV-only today. Saving a preference does not send mail and does not move USDC.
-            The welcome email stays on.
+            Saving a preference does not send mail and does not move USDC. The welcome email stays on.
           </p>
           <form action={updateNotificationPreferencesAction} className="flex flex-col gap-2 text-sm">
             <label className="flex items-center gap-2">
