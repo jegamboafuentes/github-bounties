@@ -31,7 +31,7 @@ import {
   type BoardFunder,
   type BoardFunderSummary,
 } from "./funders";
-import { listWorkSignalsForBounties, type WorkSignalView } from "./signals";
+import { listWorkSignalsForBounties, publicWorkSignals, type WorkSignalView } from "./signals";
 
 export type BoardFilters = {
   repo?: string;
@@ -425,7 +425,7 @@ function toBoardBounty(
     fundedAt: row.fundedAt,
     createdAt: row.createdAt,
     activeLock: null,
-    workSignals,
+    workSignals: publicWorkSignals(row.status, workSignals),
     payout,
     pendingHunterLink,
     escrowFail: toEscrowFail(row.escrowFailCode, row.escrowFailReason),

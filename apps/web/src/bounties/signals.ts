@@ -20,6 +20,15 @@ const SIGNALABLE_STATUSES = new Set([
 ]);
 
 /**
+ * Public reads hide work signals once a bounty is cancelled.
+ * Rows stay in `work_signals`; this does not clear or delete them.
+ */
+export function publicWorkSignals<T>(status: string, signals: readonly T[]): T[] {
+  if (status === "cancelled") return [];
+  return [...signals];
+}
+
+/**
  * Optional non-blocking “Working on this”. Many hunters per bounty.
  * Not exclusive. Does not change pool eligibility `E` or money.
  */
