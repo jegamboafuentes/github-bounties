@@ -348,6 +348,7 @@ const errorResponses = {
 publicApiRegistry.registerPath({
   method: "get",
   path: "/api/v1/bounties",
+  operationId: "listBounties",
   summary: "List and filter the bounty board",
   description:
     "Public board rows with keyset pagination. Intelligence filters use the cache only and do not call Gemini. amountUsdc is the face. totalFundedUsdc is the verified escrow fund plus confirmed contributions, each fund hash once (0.000000 when there is no verified inflow). The list payout uses the same roster split as the detail, including funded bounties with no pool members yet. funders.avatars are newest contribution first.",
@@ -367,6 +368,7 @@ publicApiRegistry.registerPath({
 publicApiRegistry.registerPath({
   method: "get",
   path: "/api/v1/bounties/{id}",
+  operationId: "getBounty",
   summary: "Read one bounty",
   description:
     "Issue body snapshot, status, payout breakdown, pool roster, and read-only lock state. Wallet addresses are omitted. The issue body is the stored snapshot and is not refetched. amountUsdc and payout.faceUsdc are the face. totalFundedUsdc is the verified escrow fund plus confirmed contributions, each fund hash once. status cancelled, expired, refunding, or refunded means that sum is not still locked.",
@@ -387,6 +389,7 @@ publicApiRegistry.registerPath({
 publicApiRegistry.registerPath({
   method: "get",
   path: "/api/v1/bounties/{id}/funders",
+  operationId: "listBountyFunders",
   summary: "List contributions",
   description:
     "One row per contribution, newest first (created time descending, then id descending). Same recency order as bounty.funders.avatars and the board avatar stack. Public fields only: display name, GitHub login, avatar, amount, and time. Wallet addresses are omitted.",
@@ -407,6 +410,7 @@ publicApiRegistry.registerPath({
 publicApiRegistry.registerPath({
   method: "get",
   path: "/api/v1/bounties/{id}/intelligence",
+  operationId: "getBountyIntelligence",
   summary: "Read cached intelligence",
   description:
     "Returns the stored Gemini cache row. Never calls Gemini and never refreshes the cache. not_cached means no row is stored.",
@@ -427,6 +431,7 @@ publicApiRegistry.registerPath({
 publicApiRegistry.registerPath({
   method: "get",
   path: "/api/v1/stats",
+  operationId: "getPlatformStats",
   summary: "Platform stats",
   description: "Same aggregate payload as the public website stats.",
   responses: {

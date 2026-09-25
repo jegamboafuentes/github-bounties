@@ -66,6 +66,36 @@ describe("OpenAPI document", () => {
     assert.match(json, /payment_required/);
     assert.match(json, /spend_cap_exceeded/);
     assert.match(json, /idempotency_conflict/);
+    const operationIds = new Set<string>();
+    for (const item of Object.values(document.paths ?? {})) {
+      if (!item) continue;
+      for (const method of ["get", "post", "put", "patch", "delete"] as const) {
+        const operation = item[method];
+        if (!operation) continue;
+        assert.equal(typeof operation.operationId, "string", operation.operationId);
+        assert.equal(operationIds.has(operation.operationId ?? ""), false, operation.operationId);
+        operationIds.add(operation.operationId ?? "");
+      }
+    }
+    const fund = document.paths?.["/api/v1/bounties/{id}/fund"]?.post?.responses;
+    assert.ok(fund?.["400"]);
+    assert.ok(fund?.["401"]);
+    assert.ok(fund?.["429"]);
+    const topUp = document.paths?.["/api/v1/bounties/{id}/top-up"]?.post?.responses;
+    assert.ok(topUp?.["400"]);
+    assert.ok(topUp?.["401"]);
+    assert.ok(topUp?.["429"]);
+    assert.match(JSON.stringify(document.paths?.["/api/v1/bounties/{id}/cancel"]?.post?.responses?.["409"]), /already_cancelled/);
+    const usage = document.components?.schemas?.KeyUsage as {
+      properties?: {
+        perTxCapUsdc?: { pattern?: string };
+        dayStart?: { format?: string };
+        entries?: { items?: { properties?: { amountUsdc?: { pattern?: string } } } };
+      };
+    };
+    assert.equal(usage.properties?.perTxCapUsdc?.pattern, String.raw`^\d+\.\d{6}$`);
+    assert.equal(usage.properties?.entries?.items?.properties?.amountUsdc?.pattern, String.raw`^\d+\.\d{6}$`);
+    assert.equal(usage.properties?.dayStart?.format, "date-time");
   });
 
   it("lists the request host first for PROD and for DEV", () => {

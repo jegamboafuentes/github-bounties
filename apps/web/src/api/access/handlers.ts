@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { isBountyError } from "../../bounties/errors";
 import type { ApiKeyScope } from "../../db/schema";
@@ -28,6 +29,7 @@ import {
   hashApiKey,
   hmacSecret,
   idempotencyExpiresAt,
+  keyedRateLimitHeaders,
   KEY_RATE_LIMITS,
   normalizeCapUsdc,
   parseScopes,
@@ -37,6 +39,7 @@ import {
   requireScope,
   spendCeilings,
   statusForDomainCode,
+  storedResponseBody,
   utcDayStart,
   type ApiClass,
   type IdempotencyRow,
@@ -45,6 +48,27 @@ import {
 } from "./policy";
 
 export type ApiResult = StoredApiResponse;
+
+const rateHeaderFrame = new AsyncLocalStorage<Record<string, string>>();
+const rateHeadersOnError = new WeakMap<PublicApiError, Record<string, string>>();
+
+function publishKeyedRateHeaders(headers: Record<string, string>): void {
+  const frame = rateHeaderFrame.getStore();
+  if (!frame) return;
+  for (const key of Object.keys(frame)) delete frame[key];
+  Object.assign(frame, headers);
+}
+
+export function rateHeadersFromError(err: unknown): Record<string, string> | undefined {
+  return err instanceof PublicApiError ? rateHeadersOnError.get(err) : undefined;
+}
+
+/** Copies the RateLimit headers `runAuthed` published while `run` was in flight. */
+export async function captureKeyedRateHeaders<T>(run: () => Promise<T>): Promise<{ value: T; headers: Record<string, string> }> {
+  const headers: Record<string, string> = {};
+  const value = await rateHeaderFrame.run(headers, run);
+  return { value, headers };
+}
 
 export type ApiPrincipal = {
   keyId: string;
@@ -198,23 +222,30 @@ export async function runAuthed(
     `${input.klass} `,
     new Date(now.getTime() - window.windowMs),
   );
+  const rateHeaders = keyedRateLimitHeaders(input.klass, count);
   if (count > window.limit) {
     await deps.updateRequestStatus(logId, 429);
     const retryAfterSeconds = Math.max(1, Math.ceil(window.windowMs / 1000));
-    throw new PublicApiError(
+    const error = new PublicApiError(
       "rate_limited",
       `Too many ${input.klass} requests for this API key.`,
       { limit: window.limit, windowSeconds: retryAfterSeconds, scope: "per_key", class: input.klass },
       429,
     );
+    publishKeyedRateHeaders(rateHeaders);
+    rateHeadersOnError.set(error, rateHeaders);
+    throw error;
   }
   try {
     const result = await run();
     await deps.updateRequestStatus(logId, result.status);
-    return result;
+    publishKeyedRateHeaders(rateHeaders);
+    return { ...result, headers: { ...rateHeaders, ...result.headers } };
   } catch (err) {
     const mapped = asApiError(err);
     await deps.updateRequestStatus(logId, mapped.status);
+    publishKeyedRateHeaders(rateHeaders);
+    rateHeadersOnError.set(mapped, rateHeaders);
     throw mapped;
   }
 }
@@ -290,16 +321,17 @@ async function withIdempotency(
     await deps.saveIdempotency({
       ...placeholder,
       responseStatus: result.status,
-      responseBody: result.body,
+      responseBody: storedResponseBody(result.body),
       responseHeaders: result.headers ?? null,
     });
     return result;
   } catch (err) {
     const mapped = asApiError(err);
+    const body = publicApiErrorBody(mapped.code, mapped.message, mapped.details);
     await deps.saveIdempotency({
       ...placeholder,
       responseStatus: mapped.status,
-      responseBody: publicApiErrorBody(mapped.code, mapped.message, mapped.details),
+      responseBody: storedResponseBody(body),
       responseHeaders: null,
     });
     throw mapped;
@@ -377,6 +409,7 @@ export async function handleMe(principal: ApiPrincipal, deps: AccessDeps): Promi
   requireScope(principal.scopes, "read");
   const me = await deps.loadMe(principal.userId);
   if (!me) throw new PublicApiError("not_found", "User not found.");
+  const money = principal.scopes.has("money");
   return {
     status: 200,
     body: {
@@ -391,8 +424,8 @@ export async function handleMe(principal: ApiPrincipal, deps: AccessDeps): Promi
         prefix: principal.prefix,
         env: principal.env,
         scopes: [...principal.scopes],
-        perTxCapUsdc: principal.perTxCapUsdc,
-        dailyCapUsdc: principal.dailyCapUsdc,
+        perTxCapUsdc: money ? principal.perTxCapUsdc : null,
+        dailyCapUsdc: money ? principal.dailyCapUsdc : null,
       },
     },
   };
@@ -406,13 +439,14 @@ export async function handleUsage(principal: ApiPrincipal, deps: AccessDeps): Pr
     deps.listRecentSpend(principal.keyId, 50),
   ]);
   const remainingAtomic = usdcToAtomic(principal.dailyCapUsdc) - usdcToAtomic(spentTodayUsdc);
+  const money = principal.scopes.has("money");
   return {
     status: 200,
     body: {
-      perTxCapUsdc: principal.perTxCapUsdc,
-      dailyCapUsdc: principal.dailyCapUsdc,
-      spentTodayUsdc,
-      remainingTodayUsdc: atomicToUsdc(remainingAtomic > 0n ? remainingAtomic : 0n),
+      perTxCapUsdc: money ? principal.perTxCapUsdc : null,
+      dailyCapUsdc: money ? principal.dailyCapUsdc : null,
+      spentTodayUsdc: money ? spentTodayUsdc : null,
+      remainingTodayUsdc: money ? atomicToUsdc(remainingAtomic > 0n ? remainingAtomic : 0n) : null,
       dayStart: since.toISOString(),
       entries: entries.slice(0, 50).map((row) => ({
         amountUsdc: row.amountUsdc,

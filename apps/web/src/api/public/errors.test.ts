@@ -114,4 +114,17 @@ describe("public API error shape", () => {
     assert.match(writes, /handleV1Action/);
     assert.match(writes, /methodNotAllowed\(WRITE_ALLOW\)/);
   });
+
+  it("POST /api/docs is 405 with Allow and the JSON error body", async () => {
+    const route = await import("../../app/api/docs/route.ts");
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"] as const) {
+      const response = route[method]();
+      assert.equal(response.status, 405, method);
+      assert.equal(response.headers.get("allow"), "GET, OPTIONS");
+      const body = await response.json();
+      assert.equal(body.error.code, "method_not_allowed");
+      assert.equal(response.headers.get("content-type")?.includes("application/json"), true);
+    }
+    assert.equal(route.OPTIONS().status, 204);
+  });
 });

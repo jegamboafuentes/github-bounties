@@ -16,6 +16,7 @@ export type ApiKeyActionState = {
   message?: string;
   token?: string;
   prefix?: string;
+  keyId?: string;
 };
 
 function fail(err: unknown): ApiKeyActionState {
@@ -29,10 +30,7 @@ function fail(err: unknown): ApiKeyActionState {
   };
 }
 
-export async function createApiKeyAction(
-  _prev: ApiKeyActionState | undefined,
-  formData: FormData,
-): Promise<ApiKeyActionState> {
+export async function createApiKeyAction(formData: FormData): Promise<ApiKeyActionState> {
   const user = await getCurrentPublicUser();
   if (!user) redirect(`/signin?callbackUrl=${encodeURIComponent("/settings")}`);
   const scopes = [
@@ -51,11 +49,11 @@ export async function createApiKeyAction(
       },
       runtimeAccessDeps(),
     );
-    revalidatePath("/settings");
     return {
       ok: true,
       token: created.token,
       prefix: created.key.prefix,
+      keyId: created.key.id,
       message: "Copy this key now. It is shown once.",
     };
   } catch (err) {

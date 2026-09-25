@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { flushSync } from "react-dom";
+import { useRouter } from "next/navigation";
 import { createApiKeyAction, revokeApiKeyAction, type ApiKeyActionState } from "@/app/actions/api-keys";
 
 export type ApiKeyListItem = {
@@ -17,56 +19,31 @@ export type ApiKeyListItem = {
   revokedAt: string | null;
 };
 
+type ShownSecret = { keyId: string; token: string; epoch: number };
+
 /**
- * Plaintext lives only in this component's state. It is a text node, not a form
- * field, so a reload cannot restore it from the browser's form data. pagehide
- * blanks the node before the back-forward cache snapshots the page.
+ * Form actions run inside a React transition. A `setSecret(null)` at the start
+ * of the action is flushed together with the later `setSecret(next)`, so a
+ * child that did `useState(token)` never unmounted and kept painting the first
+ * secret while `revalidatePath` refreshed the list. That fiber is what the
+ * back-forward cache snapshots, which is why F5 still showed s1 and a client
+ * navigation to /board (a new mount) did not. The plaintext stays in this
+ * state only, keyed by the created key id.
  */
-function ShownOnceSecret({ token }: { token: string }) {
-  const [value, setValue] = useState(token);
-  const nodeRef = useRef<HTMLParagraphElement>(null);
+let issuedEpoch = 0;
+let discardedThrough = 0;
 
-  useEffect(() => {
-    function blank() {
-      setValue("");
-      if (nodeRef.current) nodeRef.current.textContent = "";
-    }
-    function onPageShow(event: PageTransitionEvent) {
-      if (event.persisted) blank();
-    }
-    window.addEventListener("pagehide", blank);
-    window.addEventListener("pageshow", onPageShow);
-    return () => {
-      window.removeEventListener("pagehide", blank);
-      window.removeEventListener("pageshow", onPageShow);
-      blank();
-    };
-  }, []);
+function takeEpoch(): number {
+  issuedEpoch += 1;
+  return issuedEpoch;
+}
 
-  async function copy() {
-    if (!value) return;
-    try {
-      await navigator.clipboard.writeText(value);
-    } catch {
-      /* The text stays visible so the user can copy it by hand. */
-    }
-  }
+function discardShownSecrets(): void {
+  discardedThrough = issuedEpoch;
+}
 
-  if (!value) return null;
-  return (
-    <div className="flex flex-col gap-2 rounded-lg bg-zinc-950 p-3">
-      <p ref={nodeRef} className="break-all font-mono text-xs text-emerald-200">
-        {value}
-      </p>
-      <button
-        type="button"
-        onClick={() => void copy()}
-        className="w-fit rounded-md border border-emerald-700 px-2 py-1 text-xs text-emerald-200"
-      >
-        Copy
-      </button>
-    </div>
-  );
+function secretIsLive(epoch: number): boolean {
+  return epoch > discardedThrough;
 }
 
 function RevokeKeyButton({ keyId }: { keyId: string }) {
@@ -99,36 +76,88 @@ function RevokeKeyButton({ keyId }: { keyId: string }) {
   );
 }
 
-export function ApiKeysCard({
-  keys,
-  ceilings,
-  keyEnv,
-  moneyEligible,
-  walletSet,
-  githubLinked,
-}: {
+export type ApiKeysCardProps = {
   keys: ApiKeyListItem[];
   ceilings: { perTxUsdc: string; dailyUsdc: string };
   keyEnv: "test" | "live";
   moneyEligible: boolean;
   walletSet: boolean;
   githubLinked: boolean;
+};
+
+export function ApiKeysCard(props: ApiKeysCardProps) {
+  const router = useRouter();
+  return (
+    <ApiKeysPanel
+      {...props}
+      createKey={createApiKeyAction}
+      refresh={() => router.refresh()}
+    />
+  );
+}
+
+export function ApiKeysPanel({
+  keys,
+  ceilings,
+  keyEnv,
+  moneyEligible,
+  walletSet,
+  githubLinked,
+  createKey,
+  refresh,
+}: ApiKeysCardProps & {
+  createKey: (formData: FormData) => Promise<ApiKeyActionState>;
+  refresh: () => void;
 }) {
   const prefix = keyEnv === "live" ? "gb_live_" : "gb_test_";
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [ok, setOk] = useState(true);
-  const [secret, setSecret] = useState<string | null>(null);
+  const [shown, setShown] = useState<ShownSecret | null>(null);
+  const secretNode = useRef<HTMLParagraphElement>(null);
+  const live = shown && secretIsLive(shown.epoch) ? shown : null;
 
-  async function onCreate(formData: FormData) {
+  useEffect(() => {
+    function blankDom() {
+      if (secretNode.current) secretNode.current.textContent = "";
+    }
+    function discard() {
+      discardShownSecrets();
+      blankDom();
+      try {
+        flushSync(() => setShown(null));
+      } catch {
+        setShown(null);
+      }
+    }
+    function onPageShow(event: PageTransitionEvent) {
+      if (event.persisted) discard();
+    }
+    window.addEventListener("pagehide", discard);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      window.removeEventListener("pagehide", discard);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, []);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
     setPending(true);
-    setSecret(null);
+    setShown(null);
     setMessage(null);
     try {
-      const result: ApiKeyActionState = await createApiKeyAction(undefined, formData);
+      const result = await createKey(formData);
       setOk(result.ok);
       setMessage(result.message ?? null);
-      if (result.token) setSecret(result.token);
+      if (result.ok && result.token && result.keyId) {
+        const keyId = result.keyId;
+        const token = result.token;
+        const epoch = takeEpoch();
+        setShown(() => (secretIsLive(epoch) ? { keyId, token, epoch } : null));
+      }
+      if (result.ok) refresh();
     } finally {
       setPending(false);
     }
@@ -146,7 +175,7 @@ export function ApiKeysCard({
         </p>
       </div>
 
-      <form action={onCreate} autoComplete="off" className="flex flex-col gap-3">
+      <form onSubmit={(event) => void onSubmit(event)} autoComplete="off" className="flex flex-col gap-3">
         <label className="flex flex-col gap-1 text-sm">
           Name
           <input
@@ -161,15 +190,15 @@ export function ApiKeysCard({
         <fieldset className="flex flex-wrap gap-4 text-sm">
           <legend className="mb-1 text-xs uppercase tracking-wide text-zinc-500">Scopes</legend>
           <label className="inline-flex items-center gap-2">
-            <input type="checkbox" name="scopeRead" value="1" defaultChecked />
+            <input type="checkbox" name="scopeRead" value="1" defaultChecked autoComplete="off" />
             read
           </label>
           <label className="inline-flex items-center gap-2">
-            <input type="checkbox" name="scopeWrite" value="1" />
+            <input type="checkbox" name="scopeWrite" value="1" autoComplete="off" />
             write
           </label>
           <label className="inline-flex items-center gap-2">
-            <input type="checkbox" name="scopeMoney" value="1" disabled={!moneyEligible} />
+            <input type="checkbox" name="scopeMoney" value="1" disabled={!moneyEligible} autoComplete="off" />
             money
           </label>
         </fieldset>
@@ -214,7 +243,34 @@ export function ApiKeysCard({
         </button>
       </form>
 
-      {secret ? <ShownOnceSecret token={secret} /> : null}
+      {live ? (
+        <div key={live.keyId} className="flex flex-col gap-2 rounded-lg bg-zinc-950 p-3">
+          <p ref={secretNode} className="break-all font-mono text-xs text-emerald-200">
+            {live.token}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const token = live.token;
+                void navigator.clipboard.writeText(token).catch(() => {
+                  /* The text stays visible so the user can copy it by hand. */
+                });
+              }}
+              className="w-fit rounded-md border border-emerald-700 px-2 py-1 text-xs text-emerald-200"
+            >
+              Copy
+            </button>
+            <button
+              type="button"
+              onClick={() => setShown(null)}
+              className="w-fit rounded-md border border-zinc-600 px-2 py-1 text-xs text-zinc-200"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <ul className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
         {keys.length === 0 ? <li className="py-2 text-sm text-zinc-500">No keys yet.</li> : null}
