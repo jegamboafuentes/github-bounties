@@ -8,12 +8,12 @@ import type { PublicReadApi } from "./service";
 import { listBountiesInputSchema, bountyIdParamsSchema } from "./schemas";
 
 const INSTRUCTIONS = [
-  "GitHub Bounties tools. Anonymous calls can read the public board. Write and money tools need Authorization: Bearer with an API key (gb_test_ on DEV, gb_live_ on mainnet). No cookies.",
+  "GitHub Bounties tools. Anonymous calls can read the public board and can list every tool. Tools that need a key say so at the start of the description. Calling one without Authorization: Bearer returns unauthorized and does not run the handler. No cookies.",
   "list_bounties filters the public board. get_bounty reads one bounty, including the stored issue body, payout breakdown, and pool roster.",
   "list_funders returns public contribution rows (name, GitHub login, avatar, amount, time), newest first.",
   "get_bounty_intelligence reads the Gemini cache only and must not be treated as a refresh.",
   "get_stats returns platform totals.",
-  "get_me and list_my_bounties read the key owner. create_bounty, signal_working, clear_work_signal, and cancel_bounty need the write scope. cancel_bounty is unfunded only.",
+  "get_me, get_my_usage, and list_my_bounties read the key owner. get_my_usage needs only the read scope. create_bounty, signal_working, clear_work_signal, and cancel_bounty need the write scope. cancel_bounty is unfunded only and returns already_cancelled when the bounty is already cancelled.",
   "fund_bounty and top_up_bounty need the money scope. They are headless x402: call once for payment requirements, then retry with the same idempotencyKey and paymentSignature. The exclusive claim-lock is retired. Settle, claims, and wallet changes are not tools.",
 ].join(" ");
 

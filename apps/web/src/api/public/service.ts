@@ -4,7 +4,8 @@ import { getRuntimeDb } from "../../db/runtime";
 import { getEscrowSnapshot, listBountyContributions } from "../../escrow";
 import { isUndefinedTableError } from "../../intelligence/errors";
 import { readCachedBountyIntelligence } from "../../intelligence/load";
-import { getPoolRoster } from "../../bounties/roster";
+import { getPoolRoster, listPoolRosters } from "../../bounties/roster";
+import { isFundMainnetEnabled } from "../../wallet/env";
 import { getPlatformStats } from "../../stats";
 import { PublicApiError } from "./errors";
 import { confirmedTotalFor, loadConfirmedFundedTotals } from "./funded";
@@ -47,12 +48,17 @@ export function createPublicReadApi(db?: Database) {
           hasIntel: input.has_intel,
         },
       );
+      const database = resolve();
       const totals = await loadConfirmedFundedTotals(
-        resolve(),
+        database,
         page.bounties.map((bounty) => bounty.id),
       );
+      const rosters = await listPoolRosters(
+        database,
+        page.bounties.map((bounty) => ({ id: bounty.id, amountUsdc: bounty.amountUsdc })),
+      );
       const data = page.bounties.map((bounty) =>
-        presentPublicBounty(bounty, confirmedTotalFor(totals, bounty.id)),
+        presentPublicBounty(bounty, confirmedTotalFor(totals, bounty.id), rosters.get(bounty.id)),
       );
       const last = data[data.length - 1];
       return {
@@ -68,11 +74,15 @@ export function createPublicReadApi(db?: Database) {
     async getBounty(id: string) {
       const database = resolve();
       const bounty = await requireBounty(id, database);
-      const [escrow, roster, issue, totals] = await Promise.all([
+      const [escrow, roster, issue, totals, contributions] = await Promise.all([
         getEscrowSnapshot(id, database),
         getPoolRoster(id, database),
         readStoredIssueBody(id, database),
         loadConfirmedFundedTotals(database, [id]),
+        listBountyContributions(id, database).catch((err) => {
+          if (!isUndefinedTableError(err)) throw err;
+          return [];
+        }),
       ]);
       if (!roster) {
         throw new PublicApiError("not_found", "Bounty not found.", null);
@@ -83,6 +93,8 @@ export function createPublicReadApi(db?: Database) {
         issueBody: issue?.markdown ?? null,
         roster,
         escrow,
+        contributions,
+        mainnet: isFundMainnetEnabled(),
       });
     },
 

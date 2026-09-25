@@ -1,6 +1,5 @@
 import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
-import { isPublicApiSurface, isPublicV1Path, PUBLIC_API_CORS_HEADERS } from "@/api/public/cors";
 import { authConfig } from "@/auth/config";
 import { hasSessionSecret } from "@/auth/env";
 import { isProtectedApiPath, isProtectedPagePath } from "@/auth/paths";
@@ -12,20 +11,13 @@ const { auth } = NextAuth(authConfig);
  * Unauthenticated callers cannot hit /settings, /bounties/new, GitHub install
  * return pages, /api/me, or /api/github/connect. Webhooks are not matched (HMAC).
  *
- * `/api/v1`, `/api/docs`, and `/mcp` are not session-gated. Callers authenticate
- * with Authorization: Bearer on those paths. Cookies are ignored there. The
- * matcher still includes them so a CORS preflight can answer.
+ * `/api/v1`, `/api/docs`, and `/mcp` are not in the matcher, so this wrapper
+ * never runs for them. A fake session cookie is not decoded (no JWTSessionError
+ * flood) and responses, including 405, do not set Auth.js csrf-token or
+ * callback-url cookies. CORS preflight is the route OPTIONS handler.
  */
 export default auth((req) => {
   const pathname = req.nextUrl.pathname;
-
-  if (isPublicApiSurface(pathname)) {
-    if (isPublicV1Path(pathname) && req.method === "OPTIONS") {
-      return new NextResponse(null, { status: 204, headers: PUBLIC_API_CORS_HEADERS });
-    }
-    return NextResponse.next();
-  }
-
   const signedIn = hasSessionSecret() && Boolean(req.auth);
 
   if (isProtectedApiPath(pathname) && !signedIn) {
@@ -50,9 +42,5 @@ export const config = {
     "/github/setup",
     "/github/callback",
     "/bounties/new",
-    "/api/v1/:path*",
-    "/api/docs",
-    "/api/docs/:path*",
-    "/mcp",
   ],
 };

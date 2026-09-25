@@ -1,3 +1,4 @@
+import { PUBLIC_API_CORS_HEADERS } from "./cors";
 import { apiErrorResponse } from "./errors";
 
 /** RFC 9110 Allow value for the read-only `/api/v1` routes. */
@@ -13,6 +14,6 @@ export function methodNotAllowed(allow: string = PUBLIC_READ_ALLOW): Response {
     "method_not_allowed",
     readOnly ? "Only GET and OPTIONS are allowed." : `Only ${allow} are allowed.`,
     null,
-    { Allow: allow },
+    { Allow: allow, ...PUBLIC_API_CORS_HEADERS },
   );
 }

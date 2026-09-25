@@ -118,6 +118,7 @@ export default async function SettingsPage({
             scopes: key.scopes,
             perTxCapUsdc: key.perTxCapUsdc,
             dailyCapUsdc: key.dailyCapUsdc,
+            createdAt: key.createdAt.toISOString(),
             lastUsedAt: key.lastUsedAt?.toISOString() ?? null,
             lastUsedIp: key.lastUsedIp,
             revokedAt: key.revokedAt?.toISOString() ?? null,

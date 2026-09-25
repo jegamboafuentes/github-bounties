@@ -40,6 +40,46 @@ describe("money action log", () => {
     assert.equal("email" in parsed, false);
     assert.equal("token" in parsed, false);
     assert.equal("signature" in parsed, false);
+    assert.equal("payer" in parsed, false);
+  });
+
+  it("logs inbound lock and top_up as payer and keeps destination for outbound", () => {
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      logMoneyAction({
+        action: "lock",
+        actorUserId: "user-1",
+        bountyId: "bounty-1",
+        payer: "0x2222222222222222222222222222222222222222",
+        destination: "0x1111111111111111111111111111111111111111",
+        amountUsdc: "10.000000",
+        txHash: "0xabc",
+        result: "ok",
+        requestId: "req-lock",
+      });
+      logMoneyAction({
+        action: "top_up",
+        actorUserId: "user-1",
+        bountyId: "bounty-1",
+        payer: "0x2222222222222222222222222222222222222222",
+        amountUsdc: "4.000000",
+        txHash: "0xdef",
+        result: "ok",
+        requestId: "req-top",
+      });
+    } finally {
+      console.log = original;
+    }
+    const lock = JSON.parse(lines[0] ?? "{}") as Record<string, unknown>;
+    const topUp = JSON.parse(lines[1] ?? "{}") as Record<string, unknown>;
+    assert.equal(lock.payer, "0x2222222222222222222222222222222222222222");
+    assert.equal("destination" in lock, false);
+    assert.equal(topUp.payer, "0x2222222222222222222222222222222222222222");
+    assert.equal("destination" in topUp, false);
   });
 
   it("mints a request id when the header is empty or unsafe", () => {

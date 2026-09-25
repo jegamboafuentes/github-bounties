@@ -350,6 +350,7 @@ const DOMAIN_STATUS: Record<string, number> = {
   bounty_exists: 409,
   not_fundable: 409,
   not_refundable: 409,
+  already_cancelled: 409,
   not_claimable: 409,
   conflict: 409,
   invalid_issue_url: 400,

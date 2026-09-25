@@ -30,10 +30,12 @@ import { WorkSignalsPanel } from "@/components/work-signals-panel";
 import { getRuntimeDb } from "@/db/runtime";
 import { githubLinks } from "@/db/schema";
 import { getEscrowSnapshot, listBountyContributions, probeCdpEnv } from "@/escrow";
+import { presentFundingTransactions } from "@/api/public/present";
 import { loadBountyIntelligence } from "@/intelligence/load";
 import { classifyIntelligenceFailure } from "@/intelligence/errors";
 import { INTELLIGENCE_ESTIMATE_LABEL } from "@/intelligence/prompt";
-import { walletConnectConfigured } from "@/wallet/env";
+import { baseTxExplorerUrl } from "@/lib/explorer";
+import { isFundMainnetEnabled, walletConnectConfigured } from "@/wallet/env";
 import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +83,14 @@ export default async function BountyDetailPage({
     );
   }
 
+  const mainnetExplorer = isFundMainnetEnabled();
+  const funding = presentFundingTransactions({
+    contributions,
+    escrowFundTxHash: escrow?.fundTxHash ?? null,
+    escrowAmountUsdc: escrow?.amountUsdc ?? null,
+    mainnet: mainnetExplorer,
+  });
+  const topUps = funding.filter((row) => row.kind === "top_up");
   const issue = await loadBountyIssueBody(bounty.id, db).catch(() => null);
   const intelligence = await loadBountyIntelligence({
     bountyId: bounty.id,
@@ -253,7 +263,9 @@ export default async function BountyDetailPage({
             {escrow.fundTxHash ? (
               <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
                 <dt className="text-xs uppercase tracking-wide text-zinc-500">Fund tx</dt>
-                <dd className="break-all sm:col-span-2">{escrow.fundTxHash}</dd>
+                <dd className="break-all sm:col-span-2">
+                  <ExplorerTx hash={escrow.fundTxHash} mainnet={mainnetExplorer} />
+                </dd>
               </div>
             ) : null}
             {escrow.payoutTxHash ? (
@@ -275,6 +287,23 @@ export default async function BountyDetailPage({
               </div>
             ) : null}
           </dl>
+        ) : null}
+
+        {topUps.length > 0 ? (
+          <section className="rounded-xl border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Top-ups</h2>
+            <ul className="mt-3 divide-y divide-zinc-200 dark:divide-zinc-800">
+              {topUps.map((tx) => (
+                <li key={tx.txHash} className="flex flex-col gap-1 py-2">
+                  <span className="font-medium">
+                    {formatUsdc(tx.amountUsdc)} {bounty.currency}
+                  </span>
+                  <ExplorerTx hash={tx.txHash} mainnet={mainnetExplorer} />
+                  {tx.createdAt ? <span className="text-xs text-zinc-500">{tx.createdAt}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </section>
         ) : null}
 
         <FunderContributionList contributions={contributions} currency={bounty.currency} />
@@ -361,5 +390,15 @@ export default async function BountyDetailPage({
         </p>
       </main>
     </div>
+  );
+}
+
+function ExplorerTx({ hash, mainnet }: { hash: string; mainnet: boolean }) {
+  const href = baseTxExplorerUrl(hash, mainnet);
+  if (!href) return <span className="break-all">{hash}</span>;
+  return (
+    <a href={href} className="break-all underline underline-offset-4" target="_blank" rel="noreferrer">
+      {hash}
+    </a>
   );
 }

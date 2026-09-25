@@ -1,9 +1,11 @@
-import { LOCK_NOT_MONEY_COPY, poolPayoutBreakdown } from "../../bounties/display";
+import { LOCK_NOT_MONEY_COPY } from "../../bounties/display";
 import type { BoardBounty } from "../../bounties/list";
-import type { PoolRosterView, RosterMemberView } from "../../bounties/roster";
+import { toPoolRosterView, type PoolRosterView, type RosterMemberView } from "../../bounties/roster";
+import { normalizeFundTxHash } from "../../escrow/fund-hash";
 import type { BountyContributionView } from "../../escrow/top-up";
 import type { EscrowSnapshot } from "../../escrow/read";
 import { FEE_BPS, POOL_BPS_OF_POST_FEE } from "../../lib/constants";
+import { baseTxExplorerUrl } from "../../lib/explorer";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
 import type { CachedIntelligenceResult } from "../../intelligence/load";
 
@@ -12,20 +14,26 @@ function iso(value: Date | null | undefined): string | null {
   return value.toISOString();
 }
 
-export function emptyPoolPayout(faceUsdc: string) {
-  const split = poolPayoutBreakdown(faceUsdc, 0);
+/** Shared list/detail fields. Detail is this object plus paid counts and tx hashes. */
+export function payoutScheduleFromRoster(roster: PoolRosterView) {
+  const full = rosterPayout(roster);
   return {
-    faceUsdc: split.faceUsdc,
-    feeUsdc: split.feeUsdc,
-    feeBps: split.feeBps,
-    poolBpsOfPostFee: POOL_BPS_OF_POST_FEE,
-    winnerUsdc: split.winnerUsdc,
-    poolTotalUsdc: split.poolTotalUsdc,
-    eachUsdc: split.eachUsdc,
-    eligibleCount: split.eligibleCount,
-    emptyPool: split.emptyPool,
-    schedule: "empty_pool" as const,
+    faceUsdc: full.faceUsdc,
+    feeUsdc: full.feeUsdc,
+    feeBps: full.feeBps,
+    poolBpsOfPostFee: full.poolBpsOfPostFee,
+    winnerUsdc: full.winnerUsdc,
+    poolTotalUsdc: full.poolTotalUsdc,
+    eachUsdc: full.eachUsdc,
+    eligibleCount: full.eligibleCount,
+    emptyPool: full.emptyPool,
+    schedule: full.schedule,
   };
+}
+
+/** No pool members yet. Same roster function the detail uses, so schedule is `roster`. */
+export function emptyPoolPayout(faceUsdc: string) {
+  return payoutScheduleFromRoster(toPoolRosterView({ faceUsdc, participants: [] }));
 }
 
 export function rosterPayout(roster: PoolRosterView) {
@@ -67,7 +75,12 @@ export function orderContributionsNewestFirst<T extends { createdAt: Date; id: s
   );
 }
 
-export function presentPublicBounty(bounty: BoardBounty, totalFundedUsdc: string) {
+export function presentPublicBounty(
+  bounty: BoardBounty,
+  totalFundedUsdc: string,
+  roster?: PoolRosterView,
+) {
+  const payout = roster ? payoutScheduleFromRoster(roster) : emptyPoolPayout(bounty.amountUsdc);
   return {
     id: bounty.id,
     issue: {
@@ -82,7 +95,7 @@ export function presentPublicBounty(bounty: BoardBounty, totalFundedUsdc: string
     totalFundedUsdc: usdcWire(totalFundedUsdc),
     createdAt: bounty.createdAt.toISOString(),
     fundedAt: iso(bounty.fundedAt),
-    payout: emptyPoolPayout(bounty.amountUsdc),
+    payout,
     intelligence: bounty.intelligence,
     funders: {
       count: bounty.funderCount,
@@ -117,8 +130,10 @@ export function presentBountyDetail(args: {
   issueBody: string | null;
   roster: PoolRosterView;
   escrow: EscrowSnapshot | null;
+  contributions?: readonly FundingContributionInput[];
+  mainnet?: boolean;
 }) {
-  const base = presentPublicBounty(args.bounty, args.totalFundedUsdc);
+  const base = presentPublicBounty(args.bounty, args.totalFundedUsdc, args.roster);
   return {
     bounty: {
       ...base,
@@ -162,7 +177,78 @@ export function presentBountyDetail(args: {
           prNumber: args.bounty.pendingHunterLink.prNumber,
         }
       : null,
+    funding: presentFundingTransactions({
+      contributions: args.contributions ?? [],
+      escrowFundTxHash: args.escrow?.fundTxHash ?? null,
+      escrowAmountUsdc: args.escrow?.amountUsdc ?? null,
+      mainnet: args.mainnet ?? false,
+    }),
   };
+}
+
+export type FundingContributionInput = {
+  amountUsdc: string;
+  fundTxHash: string | null;
+  createdAt: Date;
+};
+
+export type PublicFundingTx = {
+  kind: "fund" | "top_up";
+  amountUsdc: string;
+  txHash: string;
+  createdAt: string | null;
+  explorerUrl: string | null;
+};
+
+/**
+ * Confirmed fund and top-up hashes, oldest first.
+ * The hash that matches the escrow fund is `fund`. Every other contribution is `top_up`.
+ * A legacy escrow fund with no contribution row is still included. Wallet addresses are omitted.
+ */
+export function presentFundingTransactions(input: {
+  contributions: readonly FundingContributionInput[];
+  escrowFundTxHash?: string | null;
+  escrowAmountUsdc?: string | null;
+  mainnet: boolean;
+}): PublicFundingTx[] {
+  const escrowHash = normalizeFundTxHash(input.escrowFundTxHash);
+  const rows = input.contributions
+    .map((row) => ({
+      amountUsdc: row.amountUsdc,
+      hash: normalizeFundTxHash(row.fundTxHash),
+      createdAt: row.createdAt,
+    }))
+    .filter((row) => row.hash.length > 0)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.hash.localeCompare(b.hash));
+
+  const seen = new Set<string>();
+  const out: PublicFundingTx[] = [];
+  function push(kind: PublicFundingTx["kind"], amountUsdc: string, hash: string, createdAt: Date | null) {
+    if (seen.has(hash)) return;
+    seen.add(hash);
+    out.push({
+      kind,
+      amountUsdc: usdcWire(amountUsdc),
+      txHash: hash,
+      createdAt: createdAt ? createdAt.toISOString() : null,
+      explorerUrl: baseTxExplorerUrl(hash, input.mainnet),
+    });
+  }
+
+  const lock = escrowHash ? rows.find((row) => row.hash === escrowHash) : undefined;
+  if (lock) {
+    push("fund", lock.amountUsdc, lock.hash, lock.createdAt);
+  } else if (escrowHash) {
+    push("fund", input.escrowAmountUsdc || "0", escrowHash, null);
+  }
+
+  rows.forEach((row, index) => {
+    if (row.hash === escrowHash) return;
+    const kind = !escrowHash && index === 0 && !lock ? "fund" : "top_up";
+    push(kind, row.amountUsdc, row.hash, row.createdAt);
+  });
+
+  return out;
 }
 
 export function presentFunderContribution(row: BountyContributionView) {

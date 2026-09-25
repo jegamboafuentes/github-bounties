@@ -18,6 +18,7 @@ const WRITE = [
   "/api/v1/bounties/{id}/top-up",
   "/api/v1/me",
   "/api/v1/me/bounties",
+  "/api/v1/me/usage",
 ];
 
 describe("OpenAPI document", () => {

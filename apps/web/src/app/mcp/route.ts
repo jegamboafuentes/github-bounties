@@ -14,3 +14,7 @@ export function POST(request: Request) {
 export function DELETE(request: Request) {
   return handleMcpHttp(request);
 }
+
+export function OPTIONS(request: Request) {
+  return handleMcpHttp(request);
+}

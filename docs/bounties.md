@@ -34,7 +34,7 @@ Residual `claim_locked` rows drain to `funded` on read. Money: `funded` → elig
 | `/bounties/new` | Google session | Create from any public issue URL (App install optional). GitHub **Connected** vs **Not connected** only (no connected-repo dump). Face chips `$1 / $5 / $10 / $50 / $100` + custom |
 | `/bounties/[id]` | public read; Google for actions | Full GitHub issue body (sanitized markdown), Gemini intelligence card (AI estimates; degrades without `GEMINI_API_KEY`), escrow lock (WalletConnect / Pay face + Advanced paste-hash), Working on this, pool roster, payout breakdown, winner Claim (BYO Base), cancel/refund |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` | Drains residual exclusive locks **and** `expires_at` bounty refunds |
-| `GET\|POST /api/jobs/poll-public-merges` | optional `CRON_SECRET` | DEV and PROD. Finds merged PRs that close funded issues on `public_reference` repos and writes the same Claim path as webhooks |
+| `GET\|POST /api/jobs/poll-public-merges` | optional `CRON_SECRET` | Finds merged PRs that close funded issues on `public_reference` repos and writes the same Claim path as webhooks. This repo does not create the schedule. Ops runs a Cloud Scheduler job on PROD every 10 minutes that calls this route with the cron secret (same on DEV if Ops created that job) |
 
 CLI (same functions):
 
@@ -43,7 +43,7 @@ cd apps/web && npm run expire-locks
 cd apps/web && npm run poll-public-merges
 ```
 
-DEV and PROD both schedule `poll-public-merges` the same way as expire-locks (Cloud Scheduler GET or POST, `Authorization: Bearer $CRON_SECRET` when that env is set). PROD runs every 10 minutes as Cloud Scheduler job `gb-prod-poll-public-merges`. Optional `GITHUB_PUBLIC_READ_TOKEN` raises the public REST rate limit; unauthenticated reads work without it.
+**PROD (and DEV if Ops created the same job):** This repo does not create the schedule. `cloudbuild.web.yaml`, `infra/terraform`, and `infra/gcloud` do not define a Cloud Scheduler job. Ops runs a Cloud Scheduler job on PROD every 10 minutes that calls `GET` or `POST /api/jobs/poll-public-merges` with the cron secret (`Authorization: Bearer <CRON_SECRET>`). The same Ops job applies on DEV when Ops has created it there. The route ships with the web image. With `CRON_SECRET` unset the route is open, the same as expire-locks. An operator can also run `cd apps/web && npm run poll-public-merges` against that environment's database. Optional `GITHUB_PUBLIC_READ_TOKEN` raises the public REST rate limit; unauthenticated reads work without it.
 
 A public post stores `repos.connection_kind = public_reference` and a null `installation_id` (`connected_by_user_id` is the poster). A later App install on that `github_repo_id` upgrades the row to `app_install` so webhooks take over. Lock comments and labels are skipped when there is no installation. Money is unchanged: WalletConnect + x402, 2% fee, 15% of the post-fee pool, crowdfund top-ups, manual Claim.
 
