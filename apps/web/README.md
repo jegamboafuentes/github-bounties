@@ -115,7 +115,7 @@ Do not point `cloudbuild.yaml` at this app. Closed-beta checklist: [docs/staging
 | `npm run db:migrate` | apply `drizzle/` SQL to `DATABASE_URL` (`0006_user_identity_email_outbox.sql` + snapshots) |
 | `npm run db:seed` | sample user / repo / pending_fund + funded + open funded bounty + V2 pool fixtures (no exclusive lock) |
 | `npm run expire-locks` | drain residual exclusive claim-locks + `expires_at` refunds (same function as the cron route) |
-| `npm run poll-public-merges` | scan funded `public_reference` bounties for a merged PR that closes `#N` (same function as the cron route). Not scheduled by Cloud Build |
+| `npm run poll-public-merges` | scan funded `public_reference` bounties for a merged PR that closes `#N` (same function as the cron route). This repo does not create the schedule; Ops Cloud Scheduler calls the route every 10 minutes |
 | `npm run test:unit` | fee 2% + Base address + escrow state machine + CDP env/mainnet guard + claim-lock sunset copy + auth + V0-B eligibility fixtures + HMAC + webhook replay + board helpers + V2 pool invariants + V2-2 freeze rows + V2-4 roster + public stats definitions + homepage stats/roadmap/differentiator copy + issue markdown sanitize + Gemini intelligence cache/prompt (no live GitHub, no database) |
 | `npm run test:db` | unique indexes + `users.google_sub` upsert (repeat-login dedupe) + welcome-once outbox + domain email enqueue + eligible Claim + claim-lock sunset drain + work signals + escrow fund/settle/refund + hunter-only payout mocks + GitHub unlink + V2-1 pool schema + V2-2 pool freeze + public `/api/stats` aggregates (needs `DATABASE_URL`) |
 | `npm run build` | Next.js standalone |
@@ -174,7 +174,7 @@ If Google env is missing, `/signin` lists the unset variable names. Home and `/a
 | `/bounties/new` | Google session; any **public** issue URL. App install is optional. Closed issues are rejected |
 | `/bounties/[id]` | escrow lock (poster: WalletConnect / Pay face / Advanced paste-hash), Working on this, pool roster, payout breakdown, winner payout claim, cancel/refund |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` bearer; drains residual exclusive locks; `expires_at` refunds unchanged |
-| `GET\|POST /api/jobs/poll-public-merges` | optional `CRON_SECRET` bearer; Claim on public repos with no App install. Not a Cloud Scheduler job in this repo |
+| `GET\|POST /api/jobs/poll-public-merges` | optional `CRON_SECRET` bearer; Claim on public repos with no App install. Ops Cloud Scheduler on PROD every 10 minutes; this repo does not create the job |
 
 Exclusive 72h claim-lock is **retired**. Optional Working on this is not exclusive and **does not move money.** Merge is still truth (V1-3 eligible Claim). See [docs/bounties.md](../../docs/bounties.md).
 
