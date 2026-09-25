@@ -16,9 +16,9 @@ export const PUBLIC_API_CORS_HEADERS: Record<string, string> = {
 };
 
 /**
- * `/api/v1`, `/api/docs`, and `/mcp` skip the Auth.js middleware.
- * OPTIONS is a CORS preflight. Every other method is passed through with no
- * session decode, so a bad cookie cannot flood the logs or set csrf cookies.
+ * `/api/v1`, `/api/docs`, and `/mcp` are omitted from the Auth.js proxy matcher.
+ * OPTIONS on those routes is a CORS preflight. Nothing else on them decodes a
+ * session cookie, so a bad cookie cannot flood the logs or set csrf cookies.
  */
 export function publicSurfaceDispatch(pathname: string, method: string): "preflight" | "bypass" | "session" {
   if (!isPublicApiSurface(pathname)) return "session";

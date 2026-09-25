@@ -12,7 +12,6 @@ export function createBrowserFundWagmiConfig(projectId: string, fund: FundWallet
   if (typeof window === "undefined") {
     throw new Error("WalletConnect config is created in the browser only.");
   }
-  const chain = fund.chainId === 8453 ? base : baseSepolia;
   const metadata = walletConnectAppMetadata(process.env, fund.metadataUrl);
   const connectors: CreateConnectorFn[] = [injected({ shimDisconnect: true })];
   if (projectId) {
@@ -24,13 +23,21 @@ export function createBrowserFundWagmiConfig(projectId: string, fund: FundWallet
       }) as CreateConnectorFn,
     );
   }
-  return createConfig({
-    chains: [chain],
+  const shared = {
     connectors,
-    transports: {
-      [chain.id]: http(),
-    },
-    ssr: false,
+    ssr: false as const,
     multiInjectedProviderDiscovery: true,
+  };
+  if (fund.chainId === 8453) {
+    return createConfig({
+      ...shared,
+      chains: [base],
+      transports: { [base.id]: http() },
+    });
+  }
+  return createConfig({
+    ...shared,
+    chains: [baseSepolia],
+    transports: { [baseSepolia.id]: http() },
   });
 }

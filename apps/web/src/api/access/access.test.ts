@@ -626,8 +626,9 @@ describe("spend caps, idempotency, and headless x402", () => {
     assert.equal(body.entries[0]?.bountyId, BOUNTY);
     assert.equal(body.entries[0]?.txHash, TX);
     assert.equal(JSON.stringify(body).includes("9.000000"), false);
+    const { principal: writer } = await principal(bag.deps, ["write"]);
     await assert.rejects(
-      () => handleUsage({ ...mine, scopes: ["write"] }, bag.deps),
+      () => handleUsage(writer, bag.deps),
       (err: unknown) => err instanceof Error && "code" in err && err.code === "forbidden_scope",
     );
   });

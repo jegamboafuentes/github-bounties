@@ -87,9 +87,11 @@ describe("public API error shape", () => {
     assert.match(preflight.headers.get("access-control-allow-methods") ?? "", /OPTIONS/);
     assert.equal(preflight.headers.get("access-control-expose-headers"), API_CORS_EXPOSE_HEADERS);
     const proxy = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../proxy.ts"), "utf8");
-    assert.match(proxy, /publicSurfaceDispatch/);
-    assert.match(proxy, /dispatch === "bypass"/);
-    assert.match(proxy, /dispatch === "preflight"/);
+    const matcher = proxy.slice(proxy.indexOf("matcher:"));
+    assert.match(matcher, /\/settings/);
+    assert.doesNotMatch(matcher, /\/api\/v1/);
+    assert.doesNotMatch(matcher, /\/api\/docs/);
+    assert.doesNotMatch(matcher, /\/mcp/);
   });
 
   it("read-only /api/v1 routes still answer writes with methodNotAllowed", () => {

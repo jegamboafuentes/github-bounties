@@ -1,6 +1,5 @@
 import NextAuth from "next-auth";
-import { NextResponse, type NextRequest } from "next/server";
-import { PUBLIC_API_CORS_HEADERS, publicSurfaceDispatch } from "@/api/public/cors";
+import { NextResponse } from "next/server";
 import { authConfig } from "@/auth/config";
 import { hasSessionSecret } from "@/auth/env";
 import { isProtectedApiPath, isProtectedPagePath } from "@/auth/paths";
@@ -8,12 +7,16 @@ import { isProtectedApiPath, isProtectedPagePath } from "@/auth/paths";
 const { auth } = NextAuth(authConfig);
 
 /**
- * Session gate for pages and cookie APIs. Not used for `/api/v1`, `/api/docs`,
- * or `/mcp` — those paths must not decode the Auth.js cookie (a fake session
- * JWT logs JWTSessionError on every request) and must not set csrf-token or
- * callback-url cookies, including on 405.
+ * Next.js 16 proxy (replaces middleware.ts).
+ * Unauthenticated callers cannot hit /settings, /bounties/new, GitHub install
+ * return pages, /api/me, or /api/github/connect. Webhooks are not matched (HMAC).
+ *
+ * `/api/v1`, `/api/docs`, and `/mcp` are not in the matcher, so this wrapper
+ * never runs for them. A fake session cookie is not decoded (no JWTSessionError
+ * flood) and responses, including 405, do not set Auth.js csrf-token or
+ * callback-url cookies. CORS preflight is the route OPTIONS handler.
  */
-const sessionProxy = auth((req) => {
+export default auth((req) => {
   const pathname = req.nextUrl.pathname;
   const signedIn = hasSessionSecret() && Boolean(req.auth);
 
@@ -31,23 +34,6 @@ const sessionProxy = auth((req) => {
   return NextResponse.next();
 });
 
-/**
- * Next.js 16 proxy (replaces middleware.ts).
- * Unauthenticated callers cannot hit /settings, /bounties/new, GitHub install
- * return pages, /api/me, or /api/github/connect. Webhooks are not matched (HMAC).
- *
- * `/api/v1`, `/api/docs`, and `/mcp` skip Auth.js entirely. Bearer is the only
- * credential. OPTIONS on `/api/v1` and `/mcp` is the CORS preflight.
- */
-export default function proxy(req: NextRequest) {
-  const dispatch = publicSurfaceDispatch(req.nextUrl.pathname, req.method);
-  if (dispatch === "preflight") {
-    return new NextResponse(null, { status: 204, headers: PUBLIC_API_CORS_HEADERS });
-  }
-  if (dispatch === "bypass") return NextResponse.next();
-  return sessionProxy(req);
-}
-
 export const config = {
   matcher: [
     "/settings",
@@ -56,9 +42,5 @@ export const config = {
     "/github/setup",
     "/github/callback",
     "/bounties/new",
-    "/api/v1/:path*",
-    "/api/docs",
-    "/api/docs/:path*",
-    "/mcp",
   ],
 };
