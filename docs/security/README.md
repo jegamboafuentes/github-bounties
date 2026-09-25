@@ -92,7 +92,10 @@ Stdout is one JSON object per at-risk leg (`legacy_fund_at_risk` with
 `bountyId`, `hash`, `reason`, `chainFrom`, `recordable`). Stderr is one line:
 `scanned` N, `flagged` M, and `filter=open` or `filter=all`. `--apply` appends
 `x402-topup:` lines only for legs whose receipt matched. It does not invent
-hashes.
+hashes. Each newly cached hash also writes one `legacy_fund_verified` line
+(`bountyId`, `hash`, `amountUsdc`, `outcome=cached`). The same line is written
+when a live payout verifies and caches a legacy hash. Arguments and receipts
+are not logged.
 
 `--apply` on mainnet (`CDP_NETWORK=base` or equivalent) exits without writing
 unless both `--allow-prod` and `LEGACY_FUND_RECONCILE_ALLOW_PROD=1` are set.

@@ -117,8 +117,11 @@ describe("payout leg coverage", () => {
   });
 
   it("coverageDecision is the same refusal the runner throws", () => {
+    const lines: string[] = [];
     const original = console.error;
-    console.error = () => {};
+    console.error = (line?: unknown) => {
+      lines.push(String(line));
+    };
     try {
       const decision = coverageDecision({
         bountyId: "bounty",
@@ -133,5 +136,8 @@ describe("payout leg coverage", () => {
     } finally {
       console.error = original;
     }
+    const parsed = JSON.parse(lines[0] ?? "{}") as { severity?: string; event?: string };
+    assert.equal(parsed.severity, "ERROR");
+    assert.equal(parsed.event, "insufficient_bounty_funds");
   });
 });

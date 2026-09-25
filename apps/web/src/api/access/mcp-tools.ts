@@ -334,7 +334,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Refund a funded bounty",
       description:
-        "Requires API key with money scope; DEV only. Poster only. The refund goes to the recorded on-chain payer, never a caller-supplied address. idempotencyKey is required. A bounty already refunding resumes: legs that already have a refund tx are skipped and only the remaining recorded payers are paid. The result includes a legs array for every destination. Unfunded drafts use cancel_bounty.",
+        "Requires API key with money scope; DEV only. Poster only. The refund goes to the recorded on-chain payer, never a caller-supplied address. idempotencyKey is required. A bounty already refunding resumes: legs that already have a refund tx are skipped and only the remaining recorded payers are paid. The result includes a legs array for every destination. A single payer also sets destination and refundTxHash to that leg. More than one payer sets both to null; read legs. Unfunded drafts use cancel_bounty.",
       inputSchema: looseClaim,
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },

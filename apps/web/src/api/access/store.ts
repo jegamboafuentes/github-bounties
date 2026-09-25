@@ -26,6 +26,7 @@ import { processLiveX402Exact } from "../../escrow/x402-seller";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
 import { PublicApiError } from "../public/errors";
 import { claimLegDestination } from "./claim-leg";
+import { refundApiSummary } from "./refund-summary";
 import type { AccessDeps, ApiKeyRecord, ClaimLegView, PoolLegAuth, SpendRow, WinnerLegAuth } from "./deps";
 import type { IdempotencyRow } from "./policy";
 
@@ -519,12 +520,17 @@ export function createAccessDeps(
         .from(bounties)
         .where(eq(bounties.id, input.bountyId))
         .limit(1);
+      const summary = refundApiSummary({
+        legs: result.legs,
+        destination: escrow?.funderAddress?.trim() || result.legs[0]?.destination || null,
+        refundTxHash: result.refundTxHash,
+      });
       return {
         bountyId: input.bountyId,
         status: result.bountyStatus,
-        refundTxHash: result.refundTxHash,
+        refundTxHash: summary.refundTxHash,
         amountUsdc: bounty?.amountUsdc ?? "0.000000",
-        destination: escrow?.funderAddress?.trim() || result.legs[0]?.destination || "",
+        destination: summary.destination,
         legs: result.legs,
       };
     },

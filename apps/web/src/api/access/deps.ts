@@ -151,7 +151,8 @@ export type PerformedRefund = {
   status: string;
   refundTxHash: string | null;
   amountUsdc: string;
-  destination: string;
+  /** Single-payer refund only. Null when `legs` has more than one entry. */
+  destination: string | null;
   legs: PayoutLegView[];
 };
 

@@ -87,6 +87,7 @@ function contribution(
     githubLogin: "ada",
     funderAddress: "0xabcsecretwallet",
     fundTxHash: "0xfund",
+    refundTxHash: null,
     avatarUrl: null,
     ...partial,
   };

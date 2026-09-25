@@ -133,10 +133,20 @@ const refundResultSchema = z
   .object({
     id: z.string().uuid(),
     status: z.string(),
-    refundTxHash: z.string().nullable().describe("Last confirmed refund leg. Kept for older clients."),
+    refundTxHash: z
+      .string()
+      .nullable()
+      .describe(
+        "Single-payer refund only: that leg's transaction hash. Null when legs has more than one entry; read legs.",
+      ),
     amountUsdc: z.string(),
-    destination: z.string().describe("Recorded payer of the first or only leg. Kept for older clients."),
-    legs: z.array(payoutLegSchema).describe("Every refund leg: paid (with tx hash), failed, or pending."),
+    destination: z
+      .string()
+      .nullable()
+      .describe(
+        "Single-payer refund only: that leg's payer. Null when legs has more than one entry, so it cannot pair with another leg's hash. Read legs.",
+      ),
+    legs: z.array(payoutLegSchema).describe("Every refund leg: paid (with tx hash), failed, or pending. Source of truth for a multi-payer refund."),
   })
   .openapi("RefundResult");
 
@@ -530,7 +540,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     responses: {
       200: {
         description:
-          "Refunded. destination and refundTxHash stay for older clients. legs lists every payer leg with status and tx hash. A replay of the same Idempotency-Key returns this stored body.",
+          "Refunded. A single payer keeps destination and refundTxHash for that one leg. A multi-payer refund sets both to null; legs lists every payer leg with status and tx hash. A replay of the same Idempotency-Key returns this stored body.",
         content: json(refundResultSchema),
       },
       400: { description: "Address or Idempotency-Key rejected.", ...errorContent },

@@ -293,9 +293,34 @@ export async function reconcileLegacyFunding(
       .set({ x402PaymentId: next, updatedAt: new Date() })
       .where(eq(escrows.id, escrow.id));
     paymentId = next;
-    recorded.push(leg.hash.trim().toLowerCase());
+    const hash = leg.hash.trim().toLowerCase();
+    recorded.push(hash);
+    logLegacyFundVerified({
+      bountyId,
+      hash,
+      amountUsdc: leg.amountUsdc,
+      outcome: "cached",
+    });
   }
   return recorded;
+}
+
+/** Audit line after a legacy funding hash is verified on-chain and cached. */
+export function logLegacyFundVerified(input: {
+  bountyId: string;
+  hash: string;
+  amountUsdc: string;
+  outcome: "cached";
+}): void {
+  console.log(
+    JSON.stringify({
+      event: "legacy_fund_verified",
+      bountyId: input.bountyId,
+      hash: input.hash.trim().toLowerCase(),
+      amountUsdc: input.amountUsdc,
+      outcome: input.outcome,
+    }),
+  );
 }
 
 /**

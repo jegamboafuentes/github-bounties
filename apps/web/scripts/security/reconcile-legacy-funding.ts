@@ -37,6 +37,7 @@ import {
   isReconcileMainnet,
   legacyRpcUrl,
   parseReconcileCliArgs,
+  logLegacyFundVerified,
   reconcileFundingScan,
   reconcileSummaryLine,
   type FundingLegAssessment,
@@ -312,11 +313,11 @@ async function main(): Promise<void> {
         if (next === (writable.get(current.escrowId) ?? current.paymentId ?? "")) continue;
         writable.set(current.escrowId, next);
         recorded += 1;
-        line({
-          event: "legacy_fund_recorded",
+        logLegacyFundVerified({
           bountyId: leg.bountyId,
-          hash: leg.hash.trim().toLowerCase(),
-          apply: true,
+          hash: leg.hash,
+          amountUsdc: leg.amountUsdc,
+          outcome: "cached",
         });
       }
       for (const [escrowId, paymentId] of writable) {
