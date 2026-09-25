@@ -129,6 +129,7 @@ describe("MCP read tools", () => {
         "get_bounty",
         "get_bounty_intelligence",
         "get_me",
+        "get_my_usage",
         "get_stats",
         "list_bounties",
         "list_funders",

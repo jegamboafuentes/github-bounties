@@ -4,6 +4,7 @@ import { ZodError, z } from "zod";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { API_CORS_EXPOSE_HEADERS, publicCorsPreflight, publicSurfaceDispatch } from "./cors";
 import { apiErrorResponse, publicApiErrorBody, zodErrorDetails, PUBLIC_API_ERROR_CODES } from "./errors";
 import { handlePublicRead } from "./http";
 import { methodNotAllowed, PUBLIC_READ_ALLOW } from "./methods";
@@ -68,6 +69,27 @@ describe("public API error shape", () => {
     const body = await response.json();
     assert.deepEqual(body, publicApiErrorBody("method_not_allowed", "Only GET and OPTIONS are allowed.", null));
     assert.equal(response.headers.get("content-type")?.includes("application/json"), true);
+    assert.equal(response.headers.get("access-control-expose-headers"), API_CORS_EXPOSE_HEADERS);
+    assert.match(response.headers.get("access-control-allow-headers") ?? "", /Authorization/);
+    assert.match(response.headers.get("access-control-allow-headers") ?? "", /Mcp-Session-Id/);
+    assert.match(response.headers.get("access-control-allow-headers") ?? "", /PAYMENT-SIGNATURE/);
+  });
+
+  it("answers public API OPTIONS as CORS preflight and skips the session gate", () => {
+    assert.equal(publicSurfaceDispatch("/mcp", "OPTIONS"), "preflight");
+    assert.equal(publicSurfaceDispatch("/api/v1/me/usage", "OPTIONS"), "preflight");
+    assert.equal(publicSurfaceDispatch("/api/v1/bounties", "GET"), "bypass");
+    assert.equal(publicSurfaceDispatch("/api/docs", "GET"), "bypass");
+    assert.equal(publicSurfaceDispatch("/settings", "GET"), "session");
+    const preflight = publicCorsPreflight();
+    assert.equal(preflight.status, 204);
+    assert.equal(preflight.headers.get("access-control-allow-origin"), "*");
+    assert.match(preflight.headers.get("access-control-allow-methods") ?? "", /OPTIONS/);
+    assert.equal(preflight.headers.get("access-control-expose-headers"), API_CORS_EXPOSE_HEADERS);
+    const proxy = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../proxy.ts"), "utf8");
+    assert.match(proxy, /publicSurfaceDispatch/);
+    assert.match(proxy, /dispatch === "bypass"/);
+    assert.match(proxy, /dispatch === "preflight"/);
   });
 
   it("read-only /api/v1 routes still answer writes with methodNotAllowed", () => {

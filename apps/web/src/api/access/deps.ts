@@ -96,6 +96,8 @@ export type AccessDeps = {
   updateRequestStatus: (id: string, status: number) => Promise<void>;
   countRequests: (keyId: string, routePrefix: string, since: Date) => Promise<number>;
   sumOpenSpend: (keyId: string, since: Date) => Promise<string>;
+  /** Newest reserved or recorded rows for this key only. Capped at 50. */
+  listRecentSpend: (keyId: string, limit: number) => Promise<SpendRow[]>;
   insertSpend: (row: Omit<SpendRow, "id"> & { id?: string }) => Promise<string>;
   updateSpend: (id: string, patch: { status: ApiSpendStatus; txHash?: string | null }) => Promise<void>;
   findIdempotency: (keyId: string, idempotencyKey: string) => Promise<IdempotencyRow | null>;

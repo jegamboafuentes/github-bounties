@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createApiKeyAction, revokeApiKeyAction, type ApiKeyActionState } from "@/app/actions/api-keys";
 
 export type ApiKeyListItem = {
@@ -11,12 +11,93 @@ export type ApiKeyListItem = {
   scopes: Array<"read" | "write" | "money">;
   perTxCapUsdc: string;
   dailyCapUsdc: string;
+  createdAt: string;
   lastUsedAt: string | null;
   lastUsedIp: string | null;
   revokedAt: string | null;
 };
 
-const initial: ApiKeyActionState = { ok: true };
+/**
+ * Plaintext lives only in this component's state. It is a text node, not a form
+ * field, so a reload cannot restore it from the browser's form data. pagehide
+ * blanks the node before the back-forward cache snapshots the page.
+ */
+function ShownOnceSecret({ token }: { token: string }) {
+  const [value, setValue] = useState(token);
+  const nodeRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    function blank() {
+      setValue("");
+      if (nodeRef.current) nodeRef.current.textContent = "";
+    }
+    function onPageShow(event: PageTransitionEvent) {
+      if (event.persisted) blank();
+    }
+    window.addEventListener("pagehide", blank);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      window.removeEventListener("pagehide", blank);
+      window.removeEventListener("pageshow", onPageShow);
+      blank();
+    };
+  }, []);
+
+  async function copy() {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      /* The text stays visible so the user can copy it by hand. */
+    }
+  }
+
+  if (!value) return null;
+  return (
+    <div className="flex flex-col gap-2 rounded-lg bg-zinc-950 p-3">
+      <p ref={nodeRef} className="break-all font-mono text-xs text-emerald-200">
+        {value}
+      </p>
+      <button
+        type="button"
+        onClick={() => void copy()}
+        className="w-fit rounded-md border border-emerald-700 px-2 py-1 text-xs text-emerald-200"
+      >
+        Copy
+      </button>
+    </div>
+  );
+}
+
+function RevokeKeyButton({ keyId }: { keyId: string }) {
+  const [confirming, setConfirming] = useState(false);
+  if (!confirming) {
+    return (
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className="text-xs text-red-700 underline-offset-4 hover:underline dark:text-red-400"
+      >
+        Revoke
+      </button>
+    );
+  }
+  return (
+    <form action={revokeApiKeyAction} className="flex flex-wrap items-center gap-3">
+      <input type="hidden" name="keyId" value={keyId} />
+      <button type="submit" className="text-xs font-medium text-red-700 underline-offset-4 hover:underline dark:text-red-400">
+        Confirm revoke
+      </button>
+      <button
+        type="button"
+        onClick={() => setConfirming(false)}
+        className="text-xs text-zinc-500 underline-offset-4 hover:underline"
+      >
+        Keep key
+      </button>
+    </form>
+  );
+}
 
 export function ApiKeysCard({
   keys,
@@ -33,8 +114,25 @@ export function ApiKeysCard({
   walletSet: boolean;
   githubLinked: boolean;
 }) {
-  const [state, action, pending] = useActionState(createApiKeyAction, initial);
   const prefix = keyEnv === "live" ? "gb_live_" : "gb_test_";
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [ok, setOk] = useState(true);
+  const [secret, setSecret] = useState<string | null>(null);
+
+  async function onCreate(formData: FormData) {
+    setPending(true);
+    setSecret(null);
+    setMessage(null);
+    try {
+      const result: ApiKeyActionState = await createApiKeyAction(undefined, formData);
+      setOk(result.ok);
+      setMessage(result.message ?? null);
+      if (result.token) setSecret(result.token);
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -48,13 +146,14 @@ export function ApiKeysCard({
         </p>
       </div>
 
-      <form action={action} className="flex flex-col gap-3">
+      <form action={onCreate} autoComplete="off" className="flex flex-col gap-3">
         <label className="flex flex-col gap-1 text-sm">
           Name
           <input
             name="name"
             required
             maxLength={80}
+            autoComplete="off"
             placeholder="Cursor agent"
             className="rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
           />
@@ -85,6 +184,7 @@ export function ApiKeysCard({
             <input
               name="perTxCapUsdc"
               inputMode="decimal"
+              autoComplete="off"
               defaultValue={ceilings.perTxUsdc}
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
             />
@@ -94,18 +194,16 @@ export function ApiKeysCard({
             <input
               name="dailyCapUsdc"
               inputMode="decimal"
+              autoComplete="off"
               defaultValue={ceilings.dailyUsdc}
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 dark:border-zinc-700 dark:bg-zinc-950"
             />
           </label>
         </div>
-        {state.message ? (
-          <p className={state.ok ? "text-sm text-emerald-700 dark:text-emerald-400" : "text-sm text-red-700 dark:text-red-400"}>
-            {state.message}
+        {message ? (
+          <p className={ok ? "text-sm text-emerald-700 dark:text-emerald-400" : "text-sm text-red-700 dark:text-red-400"}>
+            {message}
           </p>
-        ) : null}
-        {state.token ? (
-          <pre className="overflow-x-auto rounded-lg bg-zinc-950 p-3 text-xs text-emerald-200">{state.token}</pre>
         ) : null}
         <button
           type="submit"
@@ -115,6 +213,8 @@ export function ApiKeysCard({
           {pending ? "Creating…" : "Create API key"}
         </button>
       </form>
+
+      {secret ? <ShownOnceSecret token={secret} /> : null}
 
       <ul className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
         {keys.length === 0 ? <li className="py-2 text-sm text-zinc-500">No keys yet.</li> : null}
@@ -128,18 +228,13 @@ export function ApiKeysCard({
               {key.env} · {key.scopes.join(", ") || "no scopes"} · cap {key.perTxCapUsdc} / {key.dailyCapUsdc} USDC
             </p>
             <p className="text-xs text-zinc-500">
+              Created {key.createdAt}
+              {" · "}
               Last used {key.lastUsedAt ?? "never"}
               {key.lastUsedIp ? ` from ${key.lastUsedIp}` : ""}
               {key.revokedAt ? ` · revoked ${key.revokedAt}` : ""}
             </p>
-            {key.revokedAt ? null : (
-              <form action={revokeApiKeyAction}>
-                <input type="hidden" name="keyId" value={key.id} />
-                <button type="submit" className="text-xs text-red-700 underline-offset-4 hover:underline dark:text-red-400">
-                  Revoke
-                </button>
-              </form>
-            )}
+            {key.revokedAt ? null : <RevokeKeyButton keyId={key.id} />}
           </li>
         ))}
       </ul>

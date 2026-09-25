@@ -133,6 +133,44 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     },
   });
 
+  const usageSchema = z
+    .object({
+      perTxCapUsdc: z.string().describe("This key's effective per-transaction cap."),
+      dailyCapUsdc: z.string().describe("This key's effective UTC-day cap."),
+      spentTodayUsdc: z
+        .string()
+        .describe("Reserved plus recorded api_spend_ledger rows for this key since 00:00 UTC."),
+      remainingTodayUsdc: z.string().describe("dailyCapUsdc minus spentTodayUsdc, never below zero."),
+      dayStart: z.string().describe("UTC day start used for spentTodayUsdc."),
+      entries: z
+        .array(
+          z.object({
+            amountUsdc: z.string(),
+            kind: z.enum(["fund", "top_up"]),
+            bountyId: z.string().uuid(),
+            txHash: z.string().nullable(),
+            createdAt: z.string(),
+          }),
+        )
+        .describe("Newest reserved or recorded ledger rows for this key. At most 50. No other user's rows."),
+    })
+    .openapi("KeyUsage");
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/me/usage",
+    summary: "This key's spend caps and recent ledger",
+    description:
+      "Scope read is enough. Returns the key's effective per-transaction cap, daily cap, USDC spent today (UTC, reserved and recorded rows in api_spend_ledger), remaining today, and up to 50 recent ledger entries for this key only. Each entry has amount, kind (fund or top_up), bounty id, tx hash, and time. Never another user's data.",
+    security: bearer,
+    responses: {
+      200: { description: "Caps and ledger for the bearer key.", content: json(usageSchema) },
+      401: { description: "Missing, invalid, or revoked key.", ...errorContent },
+      403: { description: "Missing read scope.", ...errorContent },
+      429: { description: "Per-key read limit (120/min).", ...errorContent },
+    },
+  });
+
   registry.registerPath({
     method: "get",
     path: "/api/v1/me/bounties",
@@ -231,7 +269,10 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       400: { description: "Idempotency-Key missing.", ...errorContent },
       401: { description: "Unauthorized.", ...errorContent },
       403: { description: "Missing write scope, or not the poster.", ...errorContent },
-      409: { description: "Funded bounty, or idempotency conflict.", ...errorContent },
+      409: {
+        description: "Already cancelled (already_cancelled), funded bounty (not_refundable), or idempotency conflict.",
+        ...errorContent,
+      },
     },
   });
 

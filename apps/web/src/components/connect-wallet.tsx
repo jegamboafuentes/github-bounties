@@ -2,9 +2,25 @@
 
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { isWalletConnectConnector, shortenAddress } from "@/wallet/config";
-import { useFundWallet } from "@/wallet/providers";
+import { useFundWallet, useWagmiReady } from "@/wallet/providers";
 
 export function ConnectWalletButtons({
+  walletConnectConfigured,
+  purpose = "fund",
+}: {
+  walletConnectConfigured: boolean;
+  purpose?: "fund" | "payout";
+}) {
+  const ready = useWagmiReady();
+  if (!ready) {
+    return <p className="text-sm text-zinc-500">Wallet connection loads in this browser.</p>;
+  }
+  return (
+    <ConnectWalletSession walletConnectConfigured={walletConnectConfigured} purpose={purpose} />
+  );
+}
+
+function ConnectWalletSession({
   walletConnectConfigured,
   purpose = "fund",
 }: {

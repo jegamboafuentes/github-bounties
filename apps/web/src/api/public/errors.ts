@@ -24,6 +24,7 @@ export const API_V2_ERROR_CODES = [
   "idempotency_conflict",
   "wallet_not_set",
   "github_not_linked",
+  "already_cancelled",
 ] as const;
 
 export const API_ERROR_CODES = [...PUBLIC_API_ERROR_CODES, ...API_V2_ERROR_CODES] as const;
@@ -55,6 +56,7 @@ const STATUS_FOR_CODE: Record<ApiErrorCode, number> = {
   idempotency_conflict: 409,
   wallet_not_set: 403,
   github_not_linked: 403,
+  already_cancelled: 409,
 };
 
 export class PublicApiError extends Error {

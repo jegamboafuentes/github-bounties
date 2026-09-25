@@ -8,6 +8,7 @@ import {
   handleFund,
   handleMe,
   handleMyBounties,
+  handleUsage,
   handleTopUp,
   handleWorkSignal,
   requirePrincipal,
@@ -68,6 +69,21 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async () => guarded(access, "read", "tool:get_me", null, () => handleMe(requirePrincipal(access?.principal), access!.deps)),
+  );
+
+  server.registerTool(
+    "get_my_usage",
+    {
+      title: "This key's spend usage",
+      description:
+        "Scope read is enough. Effective per-transaction cap, daily cap, USDC spent today (UTC, from api_spend_ledger), remaining today, and up to 50 recent fund or top_up ledger entries for this key only. Each entry has amount, kind, bounty id, tx hash, and time. Does not include other users.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async () =>
+      guarded(access, "read", "tool:get_my_usage", null, () =>
+        handleUsage(requirePrincipal(access?.principal), access!.deps),
+      ),
   );
 
   server.registerTool(

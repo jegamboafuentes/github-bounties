@@ -34,7 +34,9 @@ Headers: `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Res
 
 Other `/api/v1` and MCP tool failures use the same envelope with `validation_failed`, `not_found`, `method_not_allowed`, `rate_limited`, or `internal`. Older `/api/*` routes keep `{ "ok": false, ... }`.
 
-`GET /api/v1` sends `Access-Control-Allow-Origin: *` for GET and OPTIONS.
+Bearer calls on `/api/v1` send the same `RateLimit-Limit` and `RateLimit-Reset` headers on 2xx and on 4xx (read 120/minute, write 20/minute, money 10/hour). A 401 also sends `WWW-Authenticate: Bearer`. Cookies are ignored. `/api/v1`, `/api/docs`, and `/mcp` skip the Auth.js middleware, so a bad session cookie is not decoded and responses do not set the Auth.js csrf-token or callback-url cookies.
+
+`/api/v1` and `/mcp` send `Access-Control-Allow-Origin: *`. OPTIONS is a preflight (`Allow-Methods: GET, POST, DELETE, OPTIONS`, `Allow-Headers` includes `Authorization`, `Content-Type`, `Mcp-Session-Id`, `Idempotency-Key`, `PAYMENT-SIGNATURE`, and `X-PAYMENT`). Responses expose `PAYMENT-REQUIRED`, `PAYMENT-RESPONSE`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, and `Retry-After`.
 
 `POST`, `PUT`, `PATCH`, and `DELETE` on `/api/v1/*` return **405** with `Allow: GET, OPTIONS` (RFC 9110) and the same JSON error envelope (`method_not_allowed`).
 
@@ -53,7 +55,7 @@ Other `/api/v1` and MCP tool failures use the same envelope with `validation_fai
 | `limit` | Default 20, maximum 100 |
 | `cursor` | Opaque `nextCursor` from the previous page. Must use the same `sort` |
 
-List rows include the issue, status, the face, the confirmed funded sum, the empty-pool fee/pool schedule, cached badges, and the board funder stack (distinct count and up to five avatar URLs, newest contribution first). The live roster split is on the detail route.
+List rows include the issue, status, the face, the confirmed funded sum, the roster fee/pool schedule, cached badges, and the board funder stack (distinct count and up to five avatar URLs, newest contribution first). The list and the detail use one roster function. A funded bounty with no pool members has `payout.schedule` `roster`, `emptyPool` true, and the winner receives 100% of post-fee on both routes.
 
 `amountUsdc` and `payout.faceUsdc` are the **face**: the posted amount, including top-ups after lock. The fee schedule uses the face. A bounty has a face as soon as it is created, before anyone sends USDC.
 
@@ -90,6 +92,8 @@ Open `https://dev.githubbounties.xyz/api/docs` for Swagger UI.
 `GET /api/v1/bounties/{id}/funders` returns display name, GitHub login, avatar, amount, and time, newest contribution first. It does not return email, Google subject, or wallet address.
 
 The detail route shows lock state as read-only. The exclusive claim-lock is retired. The issue body is the stored snapshot. The route does not refetch GitHub.
+
+Detail `funding` lists confirmed fund and top-up transactions, oldest first, not only the original escrow fund hash. Each row has `kind` (`fund` or `top_up`), `amountUsdc`, `txHash`, `createdAt`, and `explorerUrl` (Base or Base Sepolia when the hash is a real `0x` transaction). Wallet addresses are omitted. The bounty page shows the same top-ups with explorer links.
 
 ## MCP
 
@@ -136,18 +140,22 @@ Spend ceilings (a user can lower these, not raise them):
 
 `API_MONEY_ENABLED` defaults **on** for `base-sepolia` and **off** for `CDP_NETWORK=base`. Set it to `0` to disable money on DEV. Do not set it on PROD until a later sign-off.
 
-Authenticated limits, counted in `api_request_log` (shared across Cloud Run instances): read 120/minute, write 20/minute, money 10/hour. Anonymous reads stay at the V4-1 per-IP limit. `GET /api/v1/me` and `GET /api/v1/me/bounties` need the `read` scope. Post, work-signal, and unfunded cancel need `write`. Fund and top-up need `money`.
+Authenticated limits, counted in `api_request_log` (shared across Cloud Run instances): read 120/minute, write 20/minute, money 10/hour. Anonymous reads stay at the V4-1 per-IP limit. `GET /api/v1/me`, `GET /api/v1/me/usage`, and `GET /api/v1/me/bounties` need the `read` scope. Post, work-signal, and unfunded cancel need `write`. Fund and top-up need `money`.
+
+`GET /api/v1/me/usage` returns this key's effective per-transaction cap, daily cap, USDC spent today (UTC day, reserved and recorded rows in `api_spend_ledger`), remaining today, and up to 50 recent ledger entries. Each entry has `amountUsdc`, `kind` (`fund` or `top_up`), `bountyId`, `txHash`, and `createdAt`. It never includes another user's rows. The MCP tool is `get_my_usage`.
 
 `Idempotency-Key` is required on fund, top-up, and cancel. The same key and body replay the stored response. A different body returns `idempotency_conflict`. Fund and top-up: the first call returns **402** `payment_required` (amount is the face or the top-up amount, `payTo` is escrow, `approval_url` is the bounty page, `PAYMENT-REQUIRED` header). Retry with `PAYMENT-SIGNATURE` or `X-PAYMENT` and the same idempotency key. The server settles through the CDP facilitator and then calls `lockEscrowFunds` or `topUpFundedBounty`. The body cannot include an address or a pasted transaction hash. Caps are checked before the 402 and again before the spend is recorded.
 
-Cancel is unfunded (`pending_fund`) only. Funded cancel is not on this API. Settle, the retired claim-lock, claims, wallet changes, and GitHub disconnect are not exposed.
+Cancel is unfunded (`pending_fund`) only. Funded cancel is not on this API. Cancelling a bounty that is already `cancelled` returns **409** `already_cancelled` ("This bounty is already cancelled.") and does not move USDC. The same `Idempotency-Key` still replays the stored response. Settle, the retired claim-lock, claims, wallet changes, and GitHub disconnect are not exposed.
 
-Error codes: `unauthorized`, `key_revoked`, `forbidden_scope`, `rate_limited`, `validation_failed`, `not_found`, `conflict`, `payment_required`, `spend_cap_exceeded`, `idempotency_key_required`, `idempotency_conflict`, `wallet_not_set`, `github_not_linked`, plus bounty and escrow domain codes unchanged (`bounty_exists`, `not_poster`, `not_fundable`, …).
+Error codes: `unauthorized`, `key_revoked`, `forbidden_scope`, `rate_limited`, `validation_failed`, `not_found`, `conflict`, `payment_required`, `spend_cap_exceeded`, `idempotency_key_required`, `idempotency_conflict`, `wallet_not_set`, `github_not_linked`, `already_cancelled`, plus bounty and escrow domain codes unchanged (`bounty_exists`, `not_poster`, `not_fundable`, `not_refundable`, …).
 
 ```bash
 curl -sS https://dev.githubbounties.xyz/api/v1/me \
   -H "Authorization: Bearer $GB_API_KEY"
 curl -sS https://dev.githubbounties.xyz/api/v1/me/bounties \
+  -H "Authorization: Bearer $GB_API_KEY"
+curl -sS https://dev.githubbounties.xyz/api/v1/me/usage \
   -H "Authorization: Bearer $GB_API_KEY"
 curl -sS -X POST https://dev.githubbounties.xyz/api/v1/bounties \
   -H "Authorization: Bearer $GB_API_KEY" \

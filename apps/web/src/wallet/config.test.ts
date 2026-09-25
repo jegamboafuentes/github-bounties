@@ -9,6 +9,8 @@ import {
   shortenAddress,
   walletConnectAppMetadata,
 } from "./config";
+import { getBrowserFundWagmiConfig } from "./browser-config";
+import { resolveFundWalletRuntime } from "./env";
 
 describe("wallet connect helpers", () => {
   it("shortens addresses and detects WalletConnect connectors", () => {
@@ -43,5 +45,12 @@ describe("wallet connect helpers", () => {
     assert.equal(prod.icons[0], "https://githubbounties.xyz/icon.png");
     assert.match(prod.description, /\bBase\b/);
     assert.doesNotMatch(prod.description, /Sepolia/);
+  });
+
+  it("creates WalletConnect config in the browser only", async () => {
+    await assert.rejects(
+      () => getBrowserFundWagmiConfig("project", resolveFundWalletRuntime({})),
+      /browser only/,
+    );
   });
 });
