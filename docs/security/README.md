@@ -65,14 +65,18 @@ escrow wallet on the command line.
 
 Claim, refund, and expiry refuse a payout when verified inflow does not cover
 the remaining legs. On the live rail a hash counts when x402 settle recorded
-it, or when `escrows.x402_payment_id` contains `x402-topup:<hash>`. A
-contribution or escrow fund hash from before that guard counts only after it
-is checked on-chain: configured USDC, `Transfer` to the escrow address, `from`
-the recorded payer, amount at least the recorded amount, and the hash not used
-by any other bounty. Placeholder hashes (`lock:`, `legacy-fund:`, or any
-string that is not a 32-byte transaction hash) never count. A transfer from a
-different wallet (the DEV `7bf910cc` top-up sent from `0xacc0…`) stays
-unverified.
+it, or when `escrows.x402_payment_id` contains `x402-topup:<hash>`. A hash
+that already has that marker keeps counting. The facilitator settled it, and
+the recorded payer is whoever x402 reported. There is no extra on-chain payer
+check for those hashes. DEV `7bf910cc`'s cross-account top-up from `0xacc0…`
+already has the marker, so it is covered and the dry-run does not list it.
+
+The on-chain payer check applies only to an unmarked legacy hash being newly
+verified: configured USDC, `Transfer` to the escrow address, `from` the
+recorded payer, amount at least the recorded amount, and the hash not used by
+any other bounty. Placeholder hashes (`lock:`, `legacy-fund:`, or any string
+that is not a 32-byte transaction hash) never count. Among open DEV bounties,
+`b99a9163`'s `0xfd0a…641f` leg is the unmarked contribution.
 
 `apps/web/scripts/security/reconcile-legacy-funding.ts` lists every bounty on
 the target database whose legs would fail that check. It does not change
@@ -97,10 +101,12 @@ npm run security:reconcile-legacy-funding
 npm run security:reconcile-legacy-funding -- --apply
 ```
 
-Read the dry-run before `--apply`. A `payer_mismatch` row, including
-`7bf910cc` and its `0xacc0` top-up, is listed and is not recorded. After a
-recordable hash is cached, a new refund call (new idempotency key) skips legs
-that already have a refund tx and pays only the remaining recorded payers.
+Read the dry-run before `--apply`. On DEV the expected output is `b99a9163`
+only. `7bf910cc` is not flagged. A `payer_mismatch` row is an unmarked hash
+whose on-chain sender is not the recorded payer; it is listed and is not
+recorded. After a recordable hash is cached, a new refund call (new
+idempotency key) skips legs that already have a refund tx and pays only the
+remaining recorded payers.
 
 PROD dry-run:
 

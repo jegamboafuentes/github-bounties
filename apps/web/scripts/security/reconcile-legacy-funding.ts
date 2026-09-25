@@ -1,7 +1,9 @@
 /**
  * Dry-run by default. Lists every bounty whose funding legs would fail the
  * live payout guard (cdp): a hash that is not an x402 payment id or an
- * `x402-topup:` line.
+ * `x402-topup:` line. A hash that already has an `x402-topup:` marker is not
+ * at-risk and is not listed. The on-chain payer check runs only for unmarked
+ * hashes.
  *
  * A leg is recordable only when the hash is a real transaction, it is not a
  * placeholder (`lock:`, `legacy-fund:`, pasted text), it is not used by

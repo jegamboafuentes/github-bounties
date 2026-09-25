@@ -3,6 +3,8 @@ import { describe, it } from "node:test";
 import { encodeAbiParameters, getAddress, pad, type Hex } from "viem";
 import { TRANSFER_TOPIC, type TxLog } from "../../scripts/security/match-usdc-transfer";
 import { applyGuardDecision, assessFundingLeg, bountyIsAtRisk, type FundingLegRecord } from "./legacy-funding";
+import { coverageDecision } from "./payout-legs";
+import { verifiedInflowAtomic, withVerifiedTopUpHash } from "./payout-guard";
 
 const USDC = getAddress("0x036CbD53842c5426634e7929541eC2318f3dCF7e");
 const ESCROW = getAddress(`0x4a26${"0".repeat(32)}11b8`);
@@ -36,9 +38,9 @@ function leg(overrides: Partial<FundingLegRecord> = {}): FundingLegRecord {
 }
 
 describe("legacy funding assessment", () => {
-  it("flags a cross-account top-up like DEV 7bf910cc from 0xacc0 and does not record it", () => {
+  it("refuses an unmarked cross-account hash until a matching payer is on the receipt", () => {
     const assessed = assessFundingLeg({
-      leg: leg({ bountyId: "7bf910cc-0000-4000-8000-000000000001", payer: PAYER }),
+      leg: leg({ bountyId: "00000000-0000-4000-8000-0000000000ac", payer: PAYER, x402PaymentId: null }),
       railMode: "cdp",
       usedByOtherBounty: false,
       usdcContract: USDC,
@@ -49,6 +51,71 @@ describe("legacy funding assessment", () => {
     assert.equal(assessed.reason, "payer_mismatch");
     assert.equal(assessed.chainFrom?.toLowerCase(), CROSS.toLowerCase());
     assert.equal(bountyIsAtRisk([assessed]), true);
+  });
+
+  it("keeps a marked cross-account x402 top-up counted so it still covers a settle", () => {
+    const hash = `0x${"ac".repeat(32)}`;
+    const paymentId = withVerifiedTopUpHash("x402:facilitator-payment", hash);
+    const marked = leg({
+      bountyId: "7bf910cc-0000-4000-8000-000000000001",
+      hash,
+      amountUsdc: "10.000000",
+      payer: PAYER,
+      x402PaymentId: paymentId,
+    });
+    const assessed = assessFundingLeg({
+      leg: marked,
+      railMode: "cdp",
+      usedByOtherBounty: false,
+      usdcContract: USDC,
+      receipt: { ok: true, status: "success", logs: [transferLog(CROSS, 10_000_000n)] },
+    });
+    assert.equal(assessed.countsNow, true);
+    assert.equal(assessed.reason, "counted");
+    assert.equal(assessed.recordable, false);
+    assert.equal(assessed.chainFrom, null);
+    assert.equal(bountyIsAtRisk([assessed]), false);
+
+    const verified = verifiedInflowAtomic({
+      railMode: "cdp",
+      escrow: {
+        amountUsdc: "10.000000",
+        fundTxHash: OTHER,
+        x402PaymentId: paymentId,
+      },
+      contributions: [{ amountUsdc: "10.000000", fundTxHash: hash }],
+    });
+    assert.equal(verified, 10_000_000n);
+    const decision = coverageDecision({
+      bountyId: marked.bountyId,
+      verifiedAtomic: verified,
+      paidAtomic: 0n,
+      railMode: "cdp",
+      legs: [
+        {
+          destination: "0xwinner",
+          amount: "8.330000",
+          amountAtomic: 8_330_000n,
+          kind: "WINNER_PAYOUT",
+          txHash: null,
+        },
+        {
+          destination: "0xfee",
+          amount: "0.200000",
+          amountAtomic: 200_000n,
+          kind: "FEE_OUT",
+          txHash: null,
+        },
+        {
+          destination: "0xpool",
+          amount: "1.470000",
+          amountAtomic: 1_470_000n,
+          kind: "POOL_PAYOUT",
+          txHash: null,
+        },
+      ],
+    });
+    assert.equal(decision.ok, true);
   });
 
   it("records a legacy hash when the Transfer is from the recorded payer", () => {

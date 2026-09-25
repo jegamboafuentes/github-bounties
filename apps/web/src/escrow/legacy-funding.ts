@@ -119,6 +119,8 @@ export function assessFundingLeg(input: {
     reason: "counted",
     chainFrom: null as string | null,
   };
+  // An existing `x402-topup:` line already counts. The facilitator settled it.
+  // Do not re-check the on-chain payer. That check is only for unmarked hashes.
   if (base.countsNow) return base;
   if (isPlaceholderFundHash(leg.hash)) {
     return { ...base, reason: "placeholder" };

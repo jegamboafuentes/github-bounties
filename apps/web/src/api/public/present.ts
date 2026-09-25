@@ -1,4 +1,5 @@
 import { LOCK_NOT_MONEY_COPY } from "../../bounties/display";
+import { publicWorkSignals } from "../../bounties/signals";
 import type { BoardBounty } from "../../bounties/list";
 import { toPoolRosterView, type PoolRosterView, type RosterMemberView } from "../../bounties/roster";
 import { normalizeFundTxHash } from "../../escrow/fund-hash";
@@ -145,7 +146,7 @@ export function presentBountyDetail(args: {
       activeLock: null,
       note: LOCK_NOT_MONEY_COPY,
     },
-    workSignals: args.bounty.workSignals.map((signal) => ({
+    workSignals: publicWorkSignals(args.bounty.status, args.bounty.workSignals).map((signal) => ({
       githubLogin: signal.githubLogin,
       hunterLabel: signal.hunterLabel,
       signaledAt: signal.signaledAt.toISOString(),
