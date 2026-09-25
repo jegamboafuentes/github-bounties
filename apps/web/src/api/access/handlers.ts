@@ -936,6 +936,7 @@ export function claimResponseBody(performed: PerformedClaim): Record<string, unk
     destination: performed.destination,
     claimId: performed.claimId,
     participantId: performed.participantId,
+    legs: performed.legs ?? [],
   };
 }
 
@@ -1110,6 +1111,7 @@ export async function handleRefund(
             refundTxHash: refunded.refundTxHash,
             amountUsdc: refunded.amountUsdc,
             destination: refunded.destination,
+            legs: refunded.legs ?? [],
           },
         };
       } catch (err) {

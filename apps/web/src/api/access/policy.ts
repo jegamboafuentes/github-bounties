@@ -427,6 +427,7 @@ const DOMAIN_STATUS: Record<string, number> = {
   issue_rate_limited: 429,
   github_unavailable: 503,
   fund_hash_reused: 409,
+  insufficient_bounty_funds: 409,
   x402_settle_failed: 402,
   x402_facilitator_unavailable: 503,
   mainnet_refused: 400,

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import SwaggerParser from "@apidevtools/swagger-parser";
 import { PUBLIC_API_DESCRIPTION, buildOpenApiDocument } from "./schemas";
+import { PUBLIC_API_VERSION } from "./version";
 
 const READ_ONLY = [
   "/api/v1/bounties/{id}",
@@ -34,6 +35,8 @@ describe("OpenAPI document", () => {
     await SwaggerParser.validate(document);
     assert.equal(document.openapi, "3.1.0");
     assert.equal(document.info.title, "GitHub Bounties API");
+    assert.equal(document.info.version, "4.4.0");
+    assert.equal(document.info.version, PUBLIC_API_VERSION);
     assert.match(document.info.description ?? "", /60 requests per minute/);
     assert.match(PUBLIC_API_DESCRIPTION, /Cloud Run instance/);
     assert.deepEqual(

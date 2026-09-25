@@ -35,6 +35,7 @@ describe("Lock fail code + reason", () => {
     assert.equal(httpStatusForEscrowCode("unauthorized"), 401);
     assert.equal(httpStatusForEscrowCode("not_pool_member"), 403);
     assert.equal(httpStatusForEscrowCode("bounty_not_found"), 404);
+    assert.equal(httpStatusForEscrowCode("insufficient_bounty_funds"), 409);
   });
 
   it("wraps settle hunter throws as rail_failed with the CDP message", () => {

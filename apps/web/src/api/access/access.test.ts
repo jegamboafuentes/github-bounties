@@ -65,6 +65,7 @@ function memory(options?: {
   status?: string;
   poster?: string;
   now?: Date;
+  rosterFrozen?: boolean;
 }) {
   const keys: ApiKeyRecord[] = [];
   const logs: { id: string; keyId: string; route: string; status: number; createdAt: Date }[] = [];
@@ -305,7 +306,7 @@ function memory(options?: {
     },
     async loadClaimAuthz(userId, bountyId, kind) {
       if (bountyId !== BOUNTY) {
-        return { bounty: null, walletAddress: null, githubLogin: null, winner: null, pool: null };
+        return { bounty: null, walletAddress: null, githubLogin: null, winner: null, pool: null, rosterFrozen: false };
       }
       const login = userId === BOB ? "bob" : userId === MALLORY ? "mallory" : options?.github === false ? null : "octocat";
       const wallet = options?.wallet === false ? null : PAYER;
@@ -339,6 +340,7 @@ function memory(options?: {
                 paidAt: null,
               }
             : null,
+        rosterFrozen: options?.rosterFrozen !== false,
       };
     },
     async performClaim(input) {
@@ -357,6 +359,16 @@ function memory(options?: {
         destination: PAYER,
         claimId: input.kind === "winner" ? CLAIM_ID : null,
         participantId: input.kind === "pool" ? (input.actorUserId === BOB ? BOB_POOL_ID : POOL_ID) : null,
+        legs: [
+          {
+            destination: PAYER,
+            amount: input.kind === "pool" ? "7.350000" : "8.330000",
+            kind: input.kind === "pool" ? "POOL_PAYOUT" : "WINNER_PAYOUT",
+            status: "paid" as const,
+            txHash: TX,
+            reason: null,
+          },
+        ],
       };
     },
     async performRefund(input) {
@@ -369,6 +381,16 @@ function memory(options?: {
         refundTxHash: TX,
         amountUsdc: options?.face ?? "10.000000",
         destination: RECORDED_PAYER,
+        legs: [
+          {
+            destination: RECORDED_PAYER,
+            amount: options?.face ?? "10.000000",
+            kind: "REFUND_OUT",
+            status: "paid" as const,
+            txHash: TX,
+            reason: null,
+          },
+        ],
       };
     },
     async listClaims(userId, bountyId) {
@@ -1161,9 +1183,17 @@ describe("V4-3 claims, status, and funded refund", () => {
     const second = await handleRefund(key, BOUNTY, {}, "refund-1", bag.deps);
     assert.equal(bag.calls.refund, 1);
     assert.deepEqual(second.body, first.body);
-    const body = first.body as { destination?: string; refundTxHash?: string };
+    const body = first.body as {
+      destination?: string;
+      refundTxHash?: string;
+      legs?: { destination: string; amount: string; status: string; txHash: string }[];
+    };
     assert.equal(body.destination, RECORDED_PAYER);
     assert.equal(body.refundTxHash, TX);
+    assert.equal(body.legs?.length, 1);
+    assert.equal(body.legs?.[0]?.destination, RECORDED_PAYER);
+    assert.equal(body.legs?.[0]?.status, "paid");
+    assert.equal(body.legs?.[0]?.txHash, TX);
     assert.notEqual(body.destination, ATTACKER);
 
     const stranger = memory({ status: "funded", poster: MALLORY });

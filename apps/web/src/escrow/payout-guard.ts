@@ -7,6 +7,13 @@ import type { CdpRailMode } from "./env";
 import { EscrowError } from "./errors";
 import { isMockTxHash } from "./idempotency";
 
+const CHAIN_TX_RE = /^0x[0-9a-fA-F]{64}$/;
+
+/** 32-byte hex transaction hash. Placeholders and pasted labels are not. */
+export function isChainTxHash(value: string | null | undefined): value is string {
+  return Boolean(value && CHAIN_TX_RE.test(value.trim()));
+}
+
 const TOP_UP_PREFIX = "x402-topup:";
 
 /** Hashes appended to `escrows.x402_payment_id` when an x402 top-up settles. */
@@ -42,9 +49,39 @@ export function withVerifiedTopUpHash(
 }
 
 /**
+ * `lock:` / `legacy-fund:` backfill keys and any non-transaction string.
+ * These never count as live inflows. `mock:` and dry-run hashes are not
+ * placeholders; the mock rail still accepts them.
+ */
+export function isPlaceholderFundHash(hash: string | null | undefined): boolean {
+  const value = hash?.trim() ?? "";
+  if (!value) return true;
+  const lower = value.toLowerCase();
+  if (lower.startsWith("mock:") || lower.startsWith("sepolia-dry-run:")) return false;
+  if (lower.startsWith("lock:") || lower.startsWith("legacy-fund:")) return true;
+  return !isChainTxHash(value);
+}
+
+/** Original x402 payment id, without `x402-topup:` lines. */
+export function x402PaymentHead(x402PaymentId: string | null | undefined): string {
+  if (!x402PaymentId) return "";
+  return x402PaymentId
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith(TOP_UP_PREFIX))
+    .join("\n");
+}
+
+/**
  * A hash counts as verified inflow when the rail minted it (`mock:` / dry-run),
  * when the bounty is on the mock rail (paste is the local fund path), or on
- * the live rail when x402 settle recorded it (lock hash or top-up hash).
+ * the live rail when x402 settle recorded it.
+ *
+ * A live lock hash counts only when `x402_payment_id` still has a non-top-up
+ * head (the facilitator payment id) and the hash is the escrow fund hash.
+ * A top-up line by itself does not unlock a different lock hash.
+ * Placeholder hashes never count on the live rail.
+ * A legacy hash counts after it is recorded with `withVerifiedTopUpHash`.
  */
 export function fundHashIsVerified(input: {
   hash: string | null | undefined;
@@ -56,11 +93,15 @@ export function fundHashIsVerified(input: {
   if (!hash) return false;
   if (isMockTxHash(hash) || hash.startsWith("sepolia-dry-run:")) return true;
   if (input.railMode === "mock") return true;
+  if (isPlaceholderFundHash(hash)) return false;
   const paymentId = input.x402PaymentId?.trim() || "";
   if (!paymentId) return false;
+  if (verifiedTopUpHashes(paymentId).some((row) => row.toLowerCase() === hash.toLowerCase())) {
+    return true;
+  }
   const lockHash = input.escrowFundTxHash?.trim() || "";
-  if (lockHash && lockHash.toLowerCase() === hash.toLowerCase()) return true;
-  return verifiedTopUpHashes(paymentId).some((row) => row.toLowerCase() === hash.toLowerCase());
+  if (!x402PaymentHead(paymentId) || !lockHash) return false;
+  return lockHash.toLowerCase() === hash.toLowerCase();
 }
 
 export function verifiedInflowAtomic(input: {
@@ -103,17 +144,17 @@ export function alreadyPaidAtomic(input: {
   return paid;
 }
 
-/**
- * Refuse a settle, claim, pool claim, or refund leg that verified inflows
- * cannot cover after amounts already paid. Logs `insufficient_bounty_funds`.
- */
-export async function assertPayoutCovered(
+export type PayoutCoverage = {
+  verifiedAtomic: bigint;
+  paidAtomic: bigint;
+};
+
+/** Verified inflow and already-paid totals for one bounty. No chain calls. */
+export async function loadPayoutCoverage(
   db: Database,
   bountyId: string,
-  legAtomic: bigint,
   railMode: CdpRailMode,
-): Promise<void> {
-  if (legAtomic <= BigInt(0)) return;
+): Promise<PayoutCoverage> {
   const [escrow] = await db.select().from(escrows).where(eq(escrows.bountyId, bountyId)).limit(1);
   const contributions = await db
     .select({
@@ -132,7 +173,7 @@ export async function assertPayoutCovered(
     })
     .from(allocationLedger)
     .where(eq(allocationLedger.bountyId, bountyId));
-  const verified = verifiedInflowAtomic({
+  const verifiedAtomic = verifiedInflowAtomic({
     railMode,
     escrow: escrow
       ? {
@@ -143,21 +184,53 @@ export async function assertPayoutCovered(
       : null,
     contributions,
   });
-  const paid = alreadyPaidAtomic({ legs, refundedContributions: contributions });
-  if (verified - paid < legAtomic) {
-    console.error(
-      JSON.stringify({
-        event: "insufficient_bounty_funds",
-        bountyId,
-        legAtomic: legAtomic.toString(),
-        verifiedAtomic: verified.toString(),
-        paidAtomic: paid.toString(),
-        railMode,
-      }),
-    );
+  const paidAtomic = alreadyPaidAtomic({ legs, refundedContributions: contributions });
+  return { verifiedAtomic, paidAtomic };
+}
+
+/** Cloud Logging reads `severity` off a JSON stdout/stderr line. */
+export function logInsufficientBountyFunds(fields: Record<string, unknown>): void {
+  console.error(
+    JSON.stringify({
+      severity: "ERROR",
+      event: "insufficient_bounty_funds",
+      ...fields,
+    }),
+  );
+}
+
+/**
+ * Refuse a settle, claim, pool claim, or refund leg that verified inflows
+ * cannot cover after amounts already paid. Second defense behind the
+ * up-front sum check. Logs `insufficient_bounty_funds` at ERROR.
+ */
+export async function assertPayoutCovered(
+  db: Database,
+  bountyId: string,
+  legAtomic: bigint,
+  railMode: CdpRailMode,
+): Promise<void> {
+  if (legAtomic <= BigInt(0)) return;
+  const { verifiedAtomic, paidAtomic } = await loadPayoutCoverage(db, bountyId, railMode);
+  if (verifiedAtomic - paidAtomic < legAtomic) {
+    logInsufficientBountyFunds({
+      bountyId,
+      legAtomic: legAtomic.toString(),
+      verifiedAtomic: verifiedAtomic.toString(),
+      paidAtomic: paidAtomic.toString(),
+      requiredAtomic: legAtomic.toString(),
+      railMode,
+    });
     throw new EscrowError(
       "insufficient_bounty_funds",
       "Refusing payout: verified inflows for this bounty do not cover the leg after amounts already paid.",
+      {
+        details: {
+          verifiedAtomic: verifiedAtomic.toString(),
+          paidAtomic: paidAtomic.toString(),
+          requiredAtomic: legAtomic.toString(),
+        },
+      },
     );
   }
 }
