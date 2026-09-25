@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { createBountyFromIssueUrl } from "../../bounties/create";
 import { clearWorkSignal, signalWorkingOnThis } from "../../bounties/signals";
 import { claimPoolPayout, claimPayout } from "../../claims/payout";
@@ -431,6 +431,7 @@ export function createAccessDeps(
       const winner = bounty && kind === "winner" ? await loadWinnerLeg(db, bountyId) : null;
       const pool =
         bounty && kind === "pool" ? await loadOwnPoolLeg(db, bountyId, userId, link?.githubId ?? null) : null;
+      const rosterFrozen = bounty ? await bountyRosterFrozen(db, bountyId) : false;
       return {
         bounty: bounty
           ? {
@@ -445,6 +446,7 @@ export function createAccessDeps(
         githubLogin: link?.githubLogin ?? null,
         winner,
         pool,
+        rosterFrozen,
       };
     },
     async performClaim(input) {
@@ -458,7 +460,7 @@ export function createAccessDeps(
           input.bountyId,
           input.actorUserId,
           { payoutAddress: wallet, persistWallet: false },
-          { db, rail: railNow, requestId: input.requestId, now: now() },
+          { db, rail: railNow, requestId: input.requestId, apiKeyId: input.apiKeyId, now: now() },
         );
         return {
           bountyId: input.bountyId,
@@ -470,13 +472,14 @@ export function createAccessDeps(
           destination: wallet,
           claimId: settled.claimId,
           participantId: null,
+          legs: settled.legs,
         };
       }
       const settled = await claimPoolPayout(
         input.bountyId,
         input.actorUserId,
         { payoutAddress: wallet, persistWallet: false },
-        { db, rail: railNow, requestId: input.requestId, now: now() },
+        { db, rail: railNow, requestId: input.requestId, apiKeyId: input.apiKeyId, now: now() },
       );
       const [member] = await db
         .select({
@@ -496,13 +499,14 @@ export function createAccessDeps(
         destination: wallet,
         claimId: null,
         participantId: settled.participantId,
+        legs: settled.legs,
       };
     },
     async performRefund(input) {
       const result = await refundEscrow(
         input.bountyId,
         { actorUserId: input.actorUserId, reason: "cancel" },
-        { db, rail: payoutRail(), requestId: input.requestId, now: now() },
+        { db, rail: payoutRail(), requestId: input.requestId, apiKeyId: input.apiKeyId, now: now() },
       );
       const [escrow] = await db
         .select({ funderAddress: escrows.funderAddress })
@@ -519,7 +523,8 @@ export function createAccessDeps(
         status: result.bountyStatus,
         refundTxHash: result.refundTxHash,
         amountUsdc: bounty?.amountUsdc ?? "0.000000",
-        destination: escrow?.funderAddress?.trim() || "",
+        destination: escrow?.funderAddress?.trim() || result.legs[0]?.destination || "",
+        legs: result.legs,
       };
     },
     async listClaims(userId, bountyId) {
@@ -599,6 +604,15 @@ export function createAccessDeps(
       return legs.slice(0, 50).map(({ createdAt: _created, ...leg }) => leg);
     },
   };
+}
+
+async function bountyRosterFrozen(db: Database, bountyId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: poolParticipants.id })
+    .from(poolParticipants)
+    .where(and(eq(poolParticipants.bountyId, bountyId), isNotNull(poolParticipants.frozenAt)))
+    .limit(1);
+  return Boolean(row);
 }
 
 async function savedWallet(db: Database, userId: string): Promise<string | null> {

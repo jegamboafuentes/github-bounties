@@ -13,6 +13,7 @@ import {
   NOT_HUNTER_MESSAGE,
   NOT_POOL_MEMBER_MESSAGE,
   POOL_NOT_READY_MESSAGE,
+  POOL_ROSTER_NOT_FROZEN_MESSAGE,
 } from "./errors";
 import { getPendingHunterLinkForBounty, pendingHunterLinkGuidance } from "./pending-link";
 
@@ -49,6 +50,8 @@ export type ClaimPayoutOpts = {
   /** Optional. Production uses process.env. A missing Resend key does not fail Claim. */
   email?: DomainEmailDeps;
   requestId?: string | null;
+  /** API key that started the call. Website Claim leaves this unset. */
+  apiKeyId?: string | null;
 };
 
 /**
@@ -107,7 +110,7 @@ export async function claimPayout(
         claimId: claim.id,
         scope: "winner_and_fee",
       },
-      opts,
+      { ...opts, apiKeyId: opts.apiKeyId },
     );
   } catch (err) {
     if (isEscrowError(err) && err.code === "not_settler") {
@@ -156,6 +159,9 @@ export async function claimPoolPayout(
   }
 
   const freeze = await loadFrozenSettleSet(opts.db, bountyId);
+  if (!freeze.hasFreeze) {
+    throw new ClaimError("pool_not_ready", POOL_ROSTER_NOT_FROZEN_MESSAGE);
+  }
   const member = await resolvePoolMemberForActor(opts.db, freeze, actorUserId, input.participantId);
 
   let address: string;
@@ -192,7 +198,7 @@ export async function claimPoolPayout(
         participantId: member.id,
         scope: "pool_member",
       },
-      opts,
+      { ...opts, apiKeyId: opts.apiKeyId },
     );
   } catch (err) {
     if (isEscrowError(err)) {

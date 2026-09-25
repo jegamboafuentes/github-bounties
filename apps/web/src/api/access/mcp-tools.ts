@@ -1,5 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
 import { publicApiErrorBody, type PublicApiErrorBody } from "../public/errors";
 import type { McpAccess } from "./http";
 import {
@@ -20,6 +21,7 @@ import {
   runAuthed,
   type ApiResult,
 } from "./handlers";
+import { PublicApiError } from "../public/errors";
 import { assertNoAddress, assertNoUserOverride } from "./policy";
 import {
   bountyClaimsToolSchema,
@@ -27,10 +29,29 @@ import {
   claimToolSchema,
   createBountyToolSchema,
   fundToolSchema,
-  refundToolSchema,
   topUpToolSchema,
   workSignalToolSchema,
 } from "./openapi";
+
+const emptyToolSchema = z.object({}).passthrough();
+const looseCreate = createBountyToolSchema.passthrough();
+const looseWork = workSignalToolSchema.passthrough();
+const looseCancel = cancelToolSchema.passthrough();
+const looseFund = fundToolSchema.passthrough();
+const looseTopUp = topUpToolSchema.passthrough();
+const looseClaim = claimToolSchema.passthrough();
+const looseClaims = bountyClaimsToolSchema.passthrough();
+
+/** Unknown keys are a validation_failed for this tool's rate class, not a JSON-RPC -32602. */
+export function rejectUnknownToolArgs(args: object, allowed: readonly string[]): void {
+  const unknown = Object.keys(args).filter((key) => !allowed.includes(key));
+  if (unknown.length === 0) return;
+  throw new PublicApiError(
+    "validation_failed",
+    `Unknown argument: ${unknown.join(", ")}.`,
+    { unknown },
+  );
+}
 
 function toolJson(value: unknown, isError = false): CallToolResult {
   return { isError, content: [{ type: "text", text: JSON.stringify(value) }] };
@@ -85,10 +106,14 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       title: "Current key owner",
       description:
         "Requires API key (read scope). The human user that owns this API key. Does not include google_sub.",
-      inputSchema: {},
+      inputSchema: emptyToolSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
-    async () => guarded(access, "read", "tool:get_me", null, () => handleMe(requirePrincipal(access?.principal), access!.deps)),
+    async (args) =>
+      guarded(access, "read", "tool:get_me", null, () => {
+        rejectUnknownToolArgs(args, []);
+        return handleMe(requirePrincipal(access?.principal), access!.deps);
+      }),
   );
 
   server.registerTool(
@@ -97,13 +122,14 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       title: "This key's spend usage",
       description:
         "Requires API key (read scope). Effective per-transaction cap, daily cap, USDC spent today (UTC, from api_spend_ledger), remaining today, and up to 50 recent fund or top_up ledger entries for this key only. Each entry has amount, kind, bounty id, tx hash, and time. Does not include other users.",
-      inputSchema: {},
+      inputSchema: emptyToolSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
-    async () =>
-      guarded(access, "read", "tool:get_my_usage", null, () =>
-        handleUsage(requirePrincipal(access?.principal), access!.deps),
-      ),
+    async (args) =>
+      guarded(access, "read", "tool:get_my_usage", null, () => {
+        rejectUnknownToolArgs(args, []);
+        return handleUsage(requirePrincipal(access?.principal), access!.deps);
+      }),
   );
 
   server.registerTool(
@@ -112,13 +138,14 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       title: "List my bounties",
       description:
         "Requires API key (read scope). Bounties this key's user posted, and contributions they funded. No wallet addresses.",
-      inputSchema: {},
+      inputSchema: emptyToolSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
-    async () =>
-      guarded(access, "read", "tool:list_my_bounties", null, () =>
-        handleMyBounties(requirePrincipal(access?.principal), access!.deps),
-      ),
+    async (args) =>
+      guarded(access, "read", "tool:list_my_bounties", null, () => {
+        rejectUnknownToolArgs(args, []);
+        return handleMyBounties(requirePrincipal(access?.principal), access!.deps);
+      }),
   );
 
   server.registerTool(
@@ -127,13 +154,15 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       title: "Post a bounty",
       description:
         "Requires API key (write scope). Creates pending_fund only, using the same create path as the website. Body is issueUrl and amountUsdc. Do not send an address.",
-      inputSchema: createBountyToolSchema,
+      inputSchema: looseCreate,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) =>
-      guarded(access, "write", "tool:create_bounty", null, () =>
-        handleCreateBounty(requirePrincipal(access?.principal), args, access!.deps),
-      ),
+      guarded(access, "write", "tool:create_bounty", null, () => {
+        rejectUnknownToolArgs(args, ["issueUrl", "amountUsdc"]);
+        assertNoAddress(args);
+        return handleCreateBounty(requirePrincipal(access?.principal), args, access!.deps);
+      }),
   );
 
   server.registerTool(
@@ -142,13 +171,14 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       title: "Signal Working on this",
       description:
         "Requires API key (write scope). Optional non-exclusive signal. Does not move money or change pool eligibility.",
-      inputSchema: workSignalToolSchema,
+      inputSchema: looseWork,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) =>
-      guarded(access, "write", `tool:signal_working ${args.id}`, args.id, () =>
-        handleWorkSignal(requirePrincipal(access?.principal), args.id, "POST", access!.deps),
-      ),
+      guarded(access, "write", `tool:signal_working ${args.id}`, args.id, () => {
+        rejectUnknownToolArgs(args, ["id"]);
+        return handleWorkSignal(requirePrincipal(access?.principal), args.id, "POST", access!.deps);
+      }),
   );
 
   server.registerTool(
@@ -156,13 +186,14 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Clear Working on this",
       description: "Requires API key (write scope). Clears the caller's active signal. Idempotent.",
-      inputSchema: workSignalToolSchema,
+      inputSchema: looseWork,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
     async (args) =>
-      guarded(access, "write", `tool:clear_work_signal ${args.id}`, args.id, () =>
-        handleWorkSignal(requirePrincipal(access?.principal), args.id, "DELETE", access!.deps),
-      ),
+      guarded(access, "write", `tool:clear_work_signal ${args.id}`, args.id, () => {
+        rejectUnknownToolArgs(args, ["id"]);
+        return handleWorkSignal(requirePrincipal(access?.principal), args.id, "DELETE", access!.deps);
+      }),
   );
 
   server.registerTool(
@@ -171,13 +202,14 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       title: "Cancel an unfunded bounty",
       description:
         "Requires API key (write scope). Only pending_fund. Funded cancel is refund_bounty. A bounty that is already cancelled returns already_cancelled. idempotencyKey is required and matches the REST Idempotency-Key.",
-      inputSchema: cancelToolSchema,
+      inputSchema: looseCancel,
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     async (args) =>
-      guarded(access, "write", `tool:cancel_bounty ${args.id}`, args.id, () =>
-        handleCancel(requirePrincipal(access?.principal), args.id, args.idempotencyKey, access!.deps),
-      ),
+      guarded(access, "write", `tool:cancel_bounty ${args.id}`, args.id, () => {
+        rejectUnknownToolArgs(args, ["id", "idempotencyKey"]);
+        return handleCancel(requirePrincipal(access?.principal), args.id, args.idempotencyKey, access!.deps);
+      }),
   );
 
   server.registerTool(
@@ -186,12 +218,14 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       title: "Fund a bounty with x402",
       description:
         "Requires API key with money scope; DEV only. Omit paymentSignature to get payment requirements and approval_url. Retry with the same idempotencyKey and the x402 payment signature. Poster only. No address in the arguments. Settles then calls the same lock as the website. Stays off on mainnet until API_MONEY_ENABLED is turned on.",
-      inputSchema: fundToolSchema,
+      inputSchema: looseFund,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) =>
-      guarded(access, "money", `tool:fund_bounty ${args.id}`, args.id, () =>
-        handleFund(
+      guarded(access, "money", `tool:fund_bounty ${args.id}`, args.id, () => {
+        rejectUnknownToolArgs(args, ["id", "idempotencyKey", "paymentSignature"]);
+        assertNoAddress(args);
+        return handleFund(
           requirePrincipal(access?.principal),
           args.id,
           {},
@@ -199,8 +233,8 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
           args.paymentSignature ?? null,
           access?.origin ?? "https://dev.githubbounties.xyz",
           access!.deps,
-        ),
-      ),
+        );
+      }),
   );
 
   server.registerTool(
@@ -209,12 +243,14 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       title: "Top up a funded bounty with x402",
       description:
         "Requires API key with money scope; DEV only. amountUsdc is the added face. Same 402 then settle flow as fund. Uses the same top-up service as the website. No address in the arguments. Stays off on mainnet until API_MONEY_ENABLED is turned on.",
-      inputSchema: topUpToolSchema,
+      inputSchema: looseTopUp,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) =>
-      guarded(access, "money", `tool:top_up_bounty ${args.id}`, args.id, () =>
-        handleTopUp(
+      guarded(access, "money", `tool:top_up_bounty ${args.id}`, args.id, () => {
+        rejectUnknownToolArgs(args, ["id", "idempotencyKey", "paymentSignature", "amountUsdc"]);
+        assertNoAddress(args);
+        return handleTopUp(
           requirePrincipal(access?.principal),
           args.id,
           { amountUsdc: args.amountUsdc },
@@ -222,8 +258,8 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
           args.paymentSignature ?? null,
           access?.origin ?? "https://dev.githubbounties.xyz",
           access!.deps,
-        ),
-      ),
+        );
+      }),
   );
 
   server.registerTool(
@@ -231,17 +267,23 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Claim the winner share",
       description:
-        "Requires API key with money scope; DEV only. Pays the winner share to the wallet saved for this key's user. The linked GitHub login must match the merged pull request author. idempotencyKey is required. Do not send an address, destination, or user id.",
-      inputSchema: claimToolSchema,
+        "Requires API key with money scope; DEV only. Pays the winner share to the wallet saved for this key's user. The linked GitHub login must match the merged pull request author. idempotencyKey is required. Do not send an address, destination, or user id. The result lists every leg in scope (winner, fee, and pool when included) with status paid, failed, or pending.",
+      inputSchema: looseClaim,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
-    async (args) => {
-      assertNoAddress(args);
-      assertNoUserOverride(args);
-      return guarded(access, "money", `tool:claim_winner ${args.id}`, args.id, () =>
-        handleClaim(requirePrincipal(access?.principal), args.id, { kind: "winner" }, args.idempotencyKey, access!.deps),
-      );
-    },
+    async (args) =>
+      guarded(access, "money", `tool:claim_winner ${args.id}`, args.id, () => {
+        rejectUnknownToolArgs(args, ["id", "idempotencyKey"]);
+        assertNoAddress(args);
+        assertNoUserOverride(args);
+        return handleClaim(
+          requirePrincipal(access?.principal),
+          args.id,
+          { kind: "winner" },
+          args.idempotencyKey,
+          access!.deps,
+        );
+      }),
   );
 
   server.registerTool(
@@ -249,17 +291,23 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Claim the caller's pool share",
       description:
-        "Requires API key with money scope; DEV only. Pays this key owner's frozen pool share to their saved wallet. It does not pay any other member. idempotencyKey is required. Do not send an address, destination, or user id.",
-      inputSchema: claimToolSchema,
+        "Requires API key with money scope; DEV only. Pays this key owner's frozen pool share to their saved wallet. It does not pay any other member. idempotencyKey is required. Do not send an address, destination, or user id. The result lists that pool leg with status paid, failed, or pending.",
+      inputSchema: looseClaim,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
-    async (args) => {
-      assertNoAddress(args);
-      assertNoUserOverride(args);
-      return guarded(access, "money", `tool:claim_pool ${args.id}`, args.id, () =>
-        handleClaim(requirePrincipal(access?.principal), args.id, { kind: "pool" }, args.idempotencyKey, access!.deps),
-      );
-    },
+    async (args) =>
+      guarded(access, "money", `tool:claim_pool ${args.id}`, args.id, () => {
+        rejectUnknownToolArgs(args, ["id", "idempotencyKey"]);
+        assertNoAddress(args);
+        assertNoUserOverride(args);
+        return handleClaim(
+          requirePrincipal(access?.principal),
+          args.id,
+          { kind: "pool" },
+          args.idempotencyKey,
+          access!.deps,
+        );
+      }),
   );
 
   server.registerTool(
@@ -267,17 +315,17 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Refund a funded bounty",
       description:
-        "Requires API key with money scope; DEV only. Poster only. The refund goes to the recorded on-chain payer, never a caller-supplied address. idempotencyKey is required. Unfunded drafts use cancel_bounty.",
-      inputSchema: refundToolSchema,
+        "Requires API key with money scope; DEV only. Poster only. The refund goes to the recorded on-chain payer, never a caller-supplied address. idempotencyKey is required. A bounty already refunding resumes: legs that already have a refund tx are skipped and only the remaining recorded payers are paid. The result includes a legs array for every destination. Unfunded drafts use cancel_bounty.",
+      inputSchema: looseClaim,
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
-    async (args) => {
-      assertNoAddress(args);
-      assertNoUserOverride(args);
-      return guarded(access, "money", `tool:refund_bounty ${args.id}`, args.id, () =>
-        handleRefund(requirePrincipal(access?.principal), args.id, {}, args.idempotencyKey, access!.deps),
-      );
-    },
+    async (args) =>
+      guarded(access, "money", `tool:refund_bounty ${args.id}`, args.id, () => {
+        rejectUnknownToolArgs(args, ["id", "idempotencyKey"]);
+        assertNoAddress(args);
+        assertNoUserOverride(args);
+        return handleRefund(requirePrincipal(access?.principal), args.id, {}, args.idempotencyKey, access!.deps);
+      }),
   );
 
   server.registerTool(
@@ -286,13 +334,14 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       title: "Payout status for my legs",
       description:
         "Requires API key (read scope). This caller's winner and pool legs on one bounty: status, amount, and tx hash. Other hunters are omitted.",
-      inputSchema: bountyClaimsToolSchema,
+      inputSchema: looseClaims,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) =>
-      guarded(access, "read", `tool:get_bounty_claims ${args.id}`, args.id, () =>
-        handleBountyClaims(requirePrincipal(access?.principal), args.id, access!.deps),
-      ),
+      guarded(access, "read", `tool:get_bounty_claims ${args.id}`, args.id, () => {
+        rejectUnknownToolArgs(args, ["id"]);
+        return handleBountyClaims(requirePrincipal(access?.principal), args.id, access!.deps);
+      }),
   );
 
   server.registerTool(
@@ -301,12 +350,13 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       title: "My claims",
       description:
         "Requires API key (read scope). This caller's claims across bounties, with status and tx hashes.",
-      inputSchema: {},
+      inputSchema: emptyToolSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
-    async () =>
-      guarded(access, "read", "tool:list_my_claims", null, () =>
-        handleMyClaims(requirePrincipal(access?.principal), access!.deps),
-      ),
+    async (args) =>
+      guarded(access, "read", "tool:list_my_claims", null, () => {
+        rejectUnknownToolArgs(args, []);
+        return handleMyClaims(requirePrincipal(access?.principal), access!.deps);
+      }),
   );
 }

@@ -5,6 +5,7 @@ import {
 } from "@asteasolutions/zod-to-openapi";
 import { registerAccessOpenApi } from "../access/openapi";
 import { z } from "zod";
+import { PUBLIC_API_VERSION } from "./version";
 import { bountyStatusValues } from "../../db/schema";
 import { DEV_SITE_HOST, PROD_SITE_HOST, originFromSiteUrl } from "../../lib/site-env";
 
@@ -536,7 +537,7 @@ export function buildOpenApiDocument(input: OpenApiServerContext = {}) {
       openapi: "3.1.0",
       info: {
       title: "GitHub Bounties API",
-      version: "4.2.0",
+      version: PUBLIC_API_VERSION,
       description: PUBLIC_API_DESCRIPTION,
     },
       servers: [OPENAPI_DEV_SERVER, OPENAPI_PROD_SERVER],

@@ -185,3 +185,148 @@ export function matchEscrowUsdcTransfer(input: {
   }
   return { ok: true, evidence: match };
 }
+
+/**
+ * Configured-USDC credits into the escrow wallet of at least `amountAtomic`,
+ * any sender. Lookalike tokens are omitted. Reverted receipts return none.
+ */
+export function listEscrowUsdcCredits(input: {
+  logs: readonly TxLog[];
+  usdcContract: string;
+  escrowWallet: string;
+  amountAtomic: bigint;
+  receiptStatus?: "success" | "reverted";
+}): TransferEvidence[] {
+  if (input.receiptStatus === "reverted") return [];
+  const usdc = checksum(input.usdcContract);
+  const escrow = checksum(input.escrowWallet);
+  if (!usdc || !escrow || input.amountAtomic <= BigInt(0)) return [];
+  const matches: TransferEvidence[] = [];
+  for (const log of input.logs) {
+    const decoded = decodeTransfer(log);
+    if (!decoded) continue;
+    if (!sameAddress(decoded.to, escrow)) continue;
+    if (decoded.value < input.amountAtomic) continue;
+    const contract = checksum(log.address);
+    if (!contract || !sameAddress(contract, usdc)) continue;
+    matches.push({
+      logIndex: log.logIndex,
+      contract,
+      from: decoded.from,
+      to: decoded.to,
+      amountAtomic: decoded.value,
+    });
+  }
+  return matches;
+}
+
+/**
+ * One configured-USDC Transfer into the escrow wallet from the recorded
+ * payer for at least the recorded amount. Zero matches and two or more
+ * matches both refuse. A lookalike token is not a match.
+ */
+export function matchPayerFundingTransfer(input: {
+  logs: readonly TxLog[];
+  usdcContract: string;
+  escrowWallet: string;
+  payer: string;
+  amountAtomic: bigint;
+  receiptStatus?: "success" | "reverted";
+}): MatchResult {
+  if (input.receiptStatus === "reverted") {
+    return {
+      ok: false,
+      code: "reverted_tx",
+      detail: "Transaction receipt status is reverted.",
+    };
+  }
+  const usdc = checksum(input.usdcContract);
+  if (!usdc) {
+    throw new Error("Configured USDC contract is not an address.");
+  }
+  const escrow = checksum(input.escrowWallet);
+  if (!escrow) {
+    return {
+      ok: false,
+      code: "invalid_escrow_address",
+      detail: "escrow_address is not a Base address.",
+    };
+  }
+  const payer = checksum(input.payer);
+  if (!payer) {
+    return {
+      ok: false,
+      code: "no_matching_log",
+      detail: "Recorded payer is not a Base address.",
+    };
+  }
+  if (sameAddress(payer, escrow)) {
+    return {
+      ok: false,
+      code: "sender_is_escrow",
+      detail: "Recorded payer is the escrow wallet.",
+    };
+  }
+  if (input.amountAtomic <= BigInt(0)) {
+    return {
+      ok: false,
+      code: "no_matching_log",
+      detail: "Recorded amount must be positive.",
+    };
+  }
+
+  const matches: TransferEvidence[] = [];
+  const lookalikes: string[] = [];
+  for (const log of input.logs) {
+    const decoded = decodeTransfer(log);
+    if (!decoded) continue;
+    if (!sameAddress(decoded.to, escrow)) continue;
+    if (!sameAddress(decoded.from, payer)) continue;
+    if (decoded.value < input.amountAtomic) continue;
+    const contract = checksum(log.address);
+    if (!contract) continue;
+    if (!sameAddress(contract, usdc)) {
+      lookalikes.push(contract);
+      continue;
+    }
+    matches.push({
+      logIndex: log.logIndex,
+      contract,
+      from: decoded.from,
+      to: decoded.to,
+      amountAtomic: decoded.value,
+    });
+  }
+
+  if (matches.length === 0) {
+    if (lookalikes.length > 0) {
+      return {
+        ok: false,
+        code: "wrong_token",
+        detail: `Transfer from the recorded payer to the escrow wallet was emitted by ${lookalikes.join(", ")}, not the configured USDC ${usdc}.`,
+      };
+    }
+    return {
+      ok: false,
+      code: "no_matching_log",
+      detail: "No configured-USDC Transfer from the recorded payer to the escrow wallet for at least the recorded amount.",
+    };
+  }
+  if (matches.length > 1) {
+    const indexes = matches.map((row) => row.logIndex).join(", ");
+    return {
+      ok: false,
+      code: "multiple_matches",
+      detail: `Configured USDC transfers from the recorded payer appear at log indexes ${indexes}.`,
+    };
+  }
+  const match = matches[0];
+  if (!match) {
+    return {
+      ok: false,
+      code: "no_matching_log",
+      detail: "No configured-USDC Transfer from the recorded payer to the escrow wallet for at least the recorded amount.",
+    };
+  }
+  return { ok: true, evidence: match };
+}

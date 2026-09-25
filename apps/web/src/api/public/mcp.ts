@@ -6,6 +6,7 @@ import { PublicApiError, publicApiErrorBody, type PublicApiErrorBody } from "./e
 import { acceptBountyId, acceptListInput } from "./query";
 import type { PublicReadApi } from "./service";
 import { listBountiesInputSchema, bountyIdParamsSchema } from "./schemas";
+import { PUBLIC_API_VERSION } from "./version";
 
 const INSTRUCTIONS = [
   "GitHub Bounties tools. Anonymous calls can read the public board and can list every tool. Tools that need a key say so at the start of the description. Calling one without Authorization: Bearer returns unauthorized and does not run the handler. No cookies.",
@@ -14,7 +15,7 @@ const INSTRUCTIONS = [
   "get_bounty_intelligence reads the Gemini cache only and must not be treated as a refresh.",
   "get_stats returns platform totals.",
   "get_me, get_my_usage, list_my_bounties, get_bounty_claims, and list_my_claims read the key owner. get_my_usage needs only the read scope. create_bounty, signal_working, clear_work_signal, and cancel_bounty need the write scope. cancel_bounty is unfunded only and returns already_cancelled when the bounty is already cancelled.",
-  "fund_bounty, top_up_bounty, claim_winner, claim_pool, and refund_bounty need the money scope and stay off on mainnet until API_MONEY_ENABLED is turned on. Fund and top-up are headless x402: call once for payment requirements, then retry with the same idempotencyKey and paymentSignature. Claims pay the saved wallet. Refunds pay the recorded payer. The exclusive claim-lock is retired. Wallet changes are not tools.",
+  "fund_bounty, top_up_bounty, claim_winner, claim_pool, and refund_bounty need the money scope and stay off on mainnet until API_MONEY_ENABLED is turned on. Fund and top-up are headless x402: call once for payment requirements, then retry with the same idempotencyKey and paymentSignature. Claims pay the saved wallet. Refunds pay the recorded payer. claim_winner, claim_pool, and refund_bounty return a legs array. A refund of a bounty already in refunding skips legs that already have a refund tx. Unknown arguments are validation_failed. The exclusive claim-lock is retired. Wallet changes are not tools.",
 ].join(" ");
 
 function toolJson(value: unknown): CallToolResult {
@@ -40,7 +41,7 @@ function failureFrom(err: unknown): CallToolResult {
 
 export function createBountiesMcpServer(api: PublicReadApi, access?: McpAccess | null): McpServer {
   const server = new McpServer(
-    { name: "github-bounties", version: "4.3.0" },
+    { name: "github-bounties", version: PUBLIC_API_VERSION },
     { instructions: INSTRUCTIONS },
   );
 
