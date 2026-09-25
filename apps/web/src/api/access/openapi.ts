@@ -671,7 +671,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     operationId: "getNotificationPreferences",
     summary: "Email notification preferences",
     description:
-      "Scope read. Four bounty emails. A missing row is all true. Welcome is always on and is not listed. Delivery is DEV-only.",
+      "Scope read. Four bounty emails. A missing row is all true. Welcome is always on and is not listed.",
     security: bearer,
     responses: {
       200: { description: "Effective preferences.", content: json(notificationSchema) },
