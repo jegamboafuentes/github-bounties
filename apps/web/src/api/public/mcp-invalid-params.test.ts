@@ -57,6 +57,9 @@ describe("MCP invalid params", () => {
     assert.equal(toolClassForMcpTool("refund_bounty"), "money");
     assert.equal(toolClassForMcpTool("create_bounty"), "write");
     assert.equal(toolClassForMcpTool("get_me"), "read");
+    assert.equal(toolClassForMcpTool("get_profile"), "read");
+    assert.equal(toolClassForMcpTool("update_profile"), "write");
+    assert.equal(toolClassForMcpTool("update_notification_preferences"), "write");
     assert.equal(invalidParamsRateHeaders("refund_bounty")["RateLimit-Limit"], "10");
     assert.equal(invalidParamsRateHeaders("refund_bounty")["RateLimit-Remaining"], "10");
     assert.equal(invalidParamsRateHeaders("refund_bounty")["RateLimit-Reset"], "3600");
@@ -185,5 +188,76 @@ describe("MCP invalid params", () => {
     assert.equal(logged[1]?.rateClass, "read");
     assert.equal(typeof logged[1]?.latencyMs, "number");
     assert.deepEqual(requests, [{ route: "read tool:list_bounties", keyId: "key-1", userId: "user-1" }]);
+  });
+
+  it("logs mcp_tool_call and api_request_log for the profile tools", async () => {
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    const requests: { route: string; keyId: string; userId: string }[] = [];
+    const deps = {
+      env: {},
+      now: () => new Date("2026-09-25T00:00:00.000Z"),
+      insertRequest: async (row: { route: string; keyId: string; userId: string }) => {
+        requests.push({ route: row.route, keyId: row.keyId, userId: row.userId });
+        return "log-1";
+      },
+      countRequests: async () => 1,
+      updateRequestStatus: async () => {},
+      loadAccountProfile: async () => ({
+        id: "user-1",
+        displayName: "Ada",
+        displayNameCustom: false,
+        email: "ada@example.com",
+      }),
+    } as unknown as AccessDeps;
+    const server = new McpServer({ name: "github-bounties", version: "4.4.0" });
+    const access: McpAccess = {
+      principal: principal(),
+      deps,
+      ip: "127.0.0.1",
+      origin: "https://dev.githubbounties.xyz",
+    };
+    registerAuthedMcpTools(server, access);
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "profile-log", version: "0.0.0" });
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    const wallet = "0x1111111111111111111111111111111111111111";
+    try {
+      const read = await client.callTool({ name: "get_profile", arguments: {} });
+      assert.equal(read.isError, false);
+      const write = await client.callTool({
+        name: "update_profile",
+        arguments: { displayName: "Ada Lovelace", walletAddress: wallet },
+      });
+      assert.equal(write.isError, true);
+      const writeBody = JSON.parse(textOf(write)) as { error: { code: string } };
+      assert.equal(writeBody.error.code, "wallet_change_human_only");
+    } finally {
+      console.log = original;
+      await client.close();
+      await server.close();
+    }
+    const logged = lines
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .filter((row) => row.event === "mcp_tool_call");
+    assert.deepEqual(
+      logged.map((row) => ({ tool: row.tool, outcome: row.outcome, apiKeyId: row.apiKeyId, rateClass: row.rateClass })),
+      [
+        { tool: "get_profile", outcome: "ok", apiKeyId: "key-1", rateClass: "read" },
+        { tool: "update_profile", outcome: "wallet_change_human_only", apiKeyId: "key-1", rateClass: "write" },
+      ],
+    );
+    for (const row of logged) {
+      assert.equal(JSON.stringify(row).includes(wallet), false);
+      assert.equal(JSON.stringify(row).includes("displayName"), false);
+    }
+    assert.deepEqual(requests, [
+      { route: "read tool:get_profile", keyId: "key-1", userId: "user-1" },
+      { route: "write tool:update_profile", keyId: "key-1", userId: "user-1" },
+    ]);
   });
 });

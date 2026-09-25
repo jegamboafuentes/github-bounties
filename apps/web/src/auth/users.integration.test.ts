@@ -64,6 +64,22 @@ describe("upsertUserByGoogleSub", () => {
       );
       assert.equal(replacedAvatar.user.id, created.user.id);
       assert.equal(replacedAvatar.user.avatarUrl, "https://lh3.googleusercontent.com/a/second");
+      assert.equal(replacedAvatar.user.displayNameCustom, false);
+
+      await db.update(users).set({ displayNameCustom: true }).where(eq(users.id, created.user.id));
+      const kept = await upsertUserByGoogleSub(
+        {
+          googleSub,
+          email: "third@example.com",
+          displayName: "Third Name",
+          avatarUrl: null,
+        },
+        db,
+        { now: secondSeen },
+      );
+      assert.equal(kept.user.displayName, "Second Name");
+      assert.equal(kept.user.email, "third@example.com");
+      assert.equal(kept.user.displayNameCustom, true);
 
       const rows = await db.select().from(users).where(eq(users.googleSub, googleSub));
       assert.equal(rows.length, 1);

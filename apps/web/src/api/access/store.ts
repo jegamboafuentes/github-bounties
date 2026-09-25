@@ -24,6 +24,13 @@ import { resolveRail, type CdpRail } from "../../escrow/rail";
 import { assertFundedTopUpOpen, topUpFundedBounty } from "../../escrow/top-up";
 import { processLiveX402Exact } from "../../escrow/x402-seller";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
+import {
+  loadAccountProfile,
+  loadEmailNotificationPreferences,
+  loadLinkedAccounts,
+  saveDisplayName,
+  saveEmailNotificationPreferences,
+} from "../../profile/settings";
 import { PublicApiError } from "../public/errors";
 import { claimLegDestination } from "./claim-leg";
 import { refundApiSummary } from "./refund-summary";
@@ -279,6 +286,21 @@ export function createAccessDeps(
         walletAddress: row.walletAddress,
         githubLogin: row.githubLogin,
       };
+    },
+    async loadAccountProfile(userId) {
+      return loadAccountProfile(db, userId);
+    },
+    async saveDisplayName(userId, displayName) {
+      return saveDisplayName(db, userId, displayName);
+    },
+    async loadEmailNotificationPreferences(userId) {
+      return loadEmailNotificationPreferences(db, userId);
+    },
+    async saveEmailNotificationPreferences(userId, patch) {
+      return saveEmailNotificationPreferences(db, userId, patch);
+    },
+    async loadLinkedAccounts(userId) {
+      return loadLinkedAccounts(db, userId);
     },
     async listMyBounties(userId) {
       const posted = await db

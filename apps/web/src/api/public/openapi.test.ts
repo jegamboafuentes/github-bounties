@@ -24,6 +24,9 @@ const WRITE = [
   "/api/v1/me/bounties",
   "/api/v1/me/claims",
   "/api/v1/me/usage",
+  "/api/v1/me/profile",
+  "/api/v1/me/notification-preferences",
+  "/api/v1/me/linked-accounts",
 ];
 
 describe("OpenAPI document", () => {
@@ -32,7 +35,7 @@ describe("OpenAPI document", () => {
     await SwaggerParser.validate(document);
     assert.equal(document.openapi, "3.1.0");
     assert.equal(document.info.title, "GitHub Bounties API");
-    assert.equal(document.info.version, "4.3.0");
+    assert.equal(document.info.version, "4.4.0");
     assert.equal(document.info.version, PUBLIC_API_VERSION);
     assert.match(document.info.description ?? "", /60 requests per minute/);
     assert.match(PUBLIC_API_DESCRIPTION, /Cloud Run instance/);
@@ -85,7 +88,7 @@ describe("OpenAPI document", () => {
         operationIds.add(operation.operationId ?? "");
       }
     }
-    assert.equal(operationIds.size, 18);
+    assert.equal(operationIds.size, 23);
     assert.deepEqual(
       [...operationIds].sort(),
       [
@@ -98,17 +101,33 @@ describe("OpenAPI document", () => {
         "getBountyIntelligence",
         "getMe",
         "getMyUsage",
+        "getNotificationPreferences",
         "getPlatformStats",
+        "getProfile",
         "listBounties",
         "listBountyClaims",
         "listBountyFunders",
+        "listLinkedAccounts",
         "listMyBounties",
         "listMyClaims",
         "refundBounty",
         "signalWorking",
         "topUpBounty",
+        "updateNotificationPreferences",
+        "updateProfile",
       ],
     );
+    const profile = document.paths?.["/api/v1/me/profile"];
+    assert.ok(profile?.get?.responses?.["401"]);
+    assert.ok(profile?.get?.responses?.["403"]);
+    assert.ok(profile?.get?.responses?.["429"]);
+    assert.ok(profile?.patch?.responses?.["400"]);
+    assert.ok(profile?.patch?.responses?.["401"]);
+    assert.ok(profile?.patch?.responses?.["403"]);
+    assert.ok(profile?.patch?.responses?.["429"]);
+    assert.ok(document.paths?.["/api/v1/me/notification-preferences"]?.patch?.responses?.["400"]);
+    assert.ok(document.paths?.["/api/v1/me/linked-accounts"]?.get?.responses?.["403"]);
+    assert.match(json, /wallet_change_human_only/);
     const fund = document.paths?.["/api/v1/bounties/{id}/fund"]?.post?.responses;
     assert.ok(fund?.["400"]);
     assert.ok(fund?.["401"]);

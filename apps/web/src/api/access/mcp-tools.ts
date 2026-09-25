@@ -9,10 +9,15 @@ import {
   handleClaim,
   handleCreateBounty,
   handleFund,
+  handleGetNotificationPreferences,
+  handleGetProfile,
+  handleLinkedAccounts,
   handleMe,
   handleMyBounties,
   handleMyClaims,
   handleRefund,
+  handleUpdateNotificationPreferences,
+  handleUpdateProfile,
   handleUsage,
   handleTopUp,
   handleWorkSignal,
@@ -31,6 +36,8 @@ import {
   createBountyToolSchema,
   fundToolSchema,
   topUpToolSchema,
+  updateNotificationToolSchema,
+  updateProfileToolSchema,
   workSignalToolSchema,
 } from "./openapi";
 
@@ -376,6 +383,84 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       guarded(access, "read", "tool:list_my_claims", null, () => {
         rejectUnknownToolArgs(args, []);
         return handleMyClaims(requirePrincipal(access?.principal), access!.deps);
+      }),
+  );
+
+  server.registerTool(
+    "get_profile",
+    {
+      title: "Display name and email",
+      description:
+        "Requires API key (read scope). The key owner's display name and full Google email. Does not include google_sub or a wallet. displayNameCustom is true after a saved name.",
+      inputSchema: emptyToolSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) =>
+      guarded(access, "read", "tool:get_profile", null, () => {
+        rejectUnknownToolArgs(args, []);
+        return handleGetProfile(requirePrincipal(access?.principal), access!.deps);
+      }),
+  );
+
+  server.registerTool(
+    "update_profile",
+    {
+      title: "Set the display name",
+      description:
+        "Requires API key (write scope). Sets the display name. A wallet or payout-address field is rejected. Idempotency key is not used. Does not change the payout wallet.",
+      inputSchema: updateProfileToolSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) =>
+      guarded(access, "write", "tool:update_profile", null, () =>
+        handleUpdateProfile(requirePrincipal(access?.principal), args, access!.deps),
+      ),
+  );
+
+  server.registerTool(
+    "get_notification_preferences",
+    {
+      title: "Email notification preferences",
+      description:
+        "Requires API key (read scope). Four bounty email flags. A missing row is all true. Welcome is always on and is not listed.",
+      inputSchema: emptyToolSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) =>
+      guarded(access, "read", "tool:get_notification_preferences", null, () => {
+        rejectUnknownToolArgs(args, []);
+        return handleGetNotificationPreferences(requirePrincipal(access?.principal), access!.deps);
+      }),
+  );
+
+  server.registerTool(
+    "update_notification_preferences",
+    {
+      title: "Update email notification preferences",
+      description:
+        "Requires API key (write scope). Partial update of bounty email flags. At least one boolean is required. Wallet fields are rejected. Welcome cannot be turned off.",
+      inputSchema: updateNotificationToolSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) =>
+      guarded(access, "write", "tool:update_notification_preferences", null, () =>
+        handleUpdateNotificationPreferences(requirePrincipal(access?.principal), args, access!.deps),
+      ),
+  );
+
+  server.registerTool(
+    "list_linked_accounts",
+    {
+      title: "Linked accounts",
+      description:
+        "Requires API key (read scope). GitHub login, id, and linkedAt, the full Google email, and the saved wallet address. Read-only. Linking, unlinking, and wallet changes are not tools.",
+      inputSchema: emptyToolSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) =>
+      guarded(access, "read", "tool:list_linked_accounts", null, () => {
+        rejectUnknownToolArgs(args, []);
+        return handleLinkedAccounts(requirePrincipal(access?.principal), access!.deps);
       }),
   );
 }

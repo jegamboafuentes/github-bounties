@@ -17,6 +17,11 @@ export const MCP_TOOL_CLASS: Record<string, ApiClass> = {
   claim_winner: "money",
   claim_pool: "money",
   refund_bounty: "money",
+  get_profile: "read",
+  get_notification_preferences: "read",
+  list_linked_accounts: "read",
+  update_profile: "write",
+  update_notification_preferences: "write",
 };
 
 export function toolClassForMcpTool(name: string | null | undefined): ApiClass {

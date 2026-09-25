@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { describe, it } from "node:test";
 import { eq, sql } from "drizzle-orm";
+import { saveEmailNotificationPreferences } from "../profile/settings";
 import { createDb } from "../db/client";
 import { loadDotenvFiles } from "../db/load-dotenv";
 import { emailOutbox, users } from "../db/schema";
@@ -286,6 +287,71 @@ describe("email outbox", () => {
     } finally {
       await primary.sql.end({ timeout: 5 });
       await other.sql.end({ timeout: 5 });
+    }
+  });
+
+  it("skips a disabled template and does not send a row queued before opt-out", async () => {
+    const { db, sql: pg } = createDb();
+    const googleSub = `test-prefs-${randomUUID()}`;
+    const script = adapterScript(["ok"]);
+    try {
+      const user = await persistGoogleSignIn(
+        {
+          googleSub,
+          email: "quiet@example.com",
+          displayName: "Quiet",
+          avatarUrl: null,
+        },
+        { db, adapter: script.adapter, env: { RESEND_API_KEY: "re_test" } },
+      );
+      await saveEmailNotificationPreferences(db, user.id, {
+        bountyFunded: false,
+        prMerged: true,
+        bountySettled: true,
+        poolClaimable: true,
+      });
+      const skipped = await enqueueEmailForUser(
+        {
+          userId: user.id,
+          template: "bounty_funded",
+          idempotencyKey: `bounty_funded:pref:${user.id}`,
+        },
+        db,
+      );
+      assert.equal(skipped.ok, false);
+      if (!skipped.ok) assert.equal(skipped.reason, "preference_disabled");
+      const funded = await db
+        .select()
+        .from(emailOutbox)
+        .where(eq(emailOutbox.idempotencyKey, `bounty_funded:pref:${user.id}`));
+      assert.equal(funded.length, 0);
+
+      const welcome = await enqueueEmailForUser(
+        {
+          userId: user.id,
+          template: "welcome",
+          idempotencyKey: welcomeIdempotencyKey(user.id),
+        },
+        db,
+      );
+      assert.equal(welcome.ok, true);
+
+      const prKey = `pr_merged:pref:${user.id}`;
+      const queued = await enqueueEmailForUser(
+        { userId: user.id, template: "pr_merged", idempotencyKey: prKey },
+        db,
+      );
+      assert.equal(queued.ok, true);
+      await saveEmailNotificationPreferences(db, user.id, { prMerged: false });
+      const before = script.keys.length;
+      await deliverOutbox({ db, adapter: script.adapter, userId: user.id, env: { RESEND_API_KEY: "re_test" } });
+      assert.equal(script.keys.includes(prKey), false);
+      const [row] = await db.select().from(emailOutbox).where(eq(emailOutbox.idempotencyKey, prKey));
+      assert.equal(row?.status, "failed");
+      assert.equal(row?.lastError, "notification_preference_disabled");
+      assert.ok(script.keys.length >= before);
+    } finally {
+      await pg.end({ timeout: 5 });
     }
   });
 });
