@@ -77,6 +77,7 @@ describe("about page copy", () => {
     assert.equal(ABOUT_ROADMAP_CTA.href, "/roadmap");
     assert.equal(ABOUT_ROADMAP_CTA.label, "See the roadmap");
     assert.equal(ABOUT_ROADMAP_CTA.body, ROADMAP_INTRO);
+    assert.match(ABOUT_ROADMAP_CTA.body, /Shipped versions and what is next/);
     assert.match(ABOUT_ROADMAP_CTA.body, /No invented ship dates/);
     assert.doesNotMatch(ABOUT_ROADMAP_CTA.body, /\bQ[1-4]\b|\b20\d{2}-\d{2}-\d{2}\b/);
   });
