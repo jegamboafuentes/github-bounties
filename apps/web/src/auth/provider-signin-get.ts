@@ -6,7 +6,7 @@
  * the Auth.js handlers.
  */
 import type { EnvMap } from "./env";
-import { readPublicSiteOrigin } from "@/lib/site-env";
+import { originFromSiteUrl } from "@/lib/site-env";
 
 const PROVIDER_SIGNIN_GET = /^\/api\/auth\/signin\/[^/]+\/?$/;
 
@@ -16,15 +16,14 @@ export function isProviderSignInGet(pathname: string): boolean {
 
 /**
  * Cloud Run's `request.url` is the container bind address (`http://0.0.0.0:8080`).
- * Absolute redirects use the public origin (`PUBLIC_BASE_URL`, `AUTH_URL`, or
- * `x-forwarded-host` / `x-forwarded-proto`). A loopback or bind origin becomes
- * a relative `Location: /signin`, which the browser resolves on the host it called.
+ * An absolute Location uses only the configured public origin (`PUBLIC_BASE_URL`,
+ * then `AUTH_URL`). Request host headers are ignored: `x-forwarded-host` is
+ * caller-controlled and would be an open redirect. A missing, loopback, or bind
+ * origin becomes a relative `Location: /signin`.
  */
-export function providerSignInLocation(
-  env: EnvMap = process.env,
-  request?: { host?: string | null; proto?: string | null },
-): string {
-  const origin = readPublicSiteOrigin(env, request);
+export function providerSignInLocation(env: EnvMap = process.env): string {
+  const origin = originFromSiteUrl(env.PUBLIC_BASE_URL) || originFromSiteUrl(env.AUTH_URL);
+  if (!origin) return "/signin";
   let hostname = "";
   try {
     hostname = new URL(origin).hostname.toLowerCase();
@@ -45,19 +44,11 @@ export function providerSignInLocation(
 /** 303 to the site sign-in page. Null means the Auth.js GET handler should run. */
 export function providerSignInGetResponse(
   url: URL,
-  options?: {
-    env?: EnvMap;
-    host?: string | null;
-    proto?: string | null;
-  },
+  options?: { env?: EnvMap },
 ): Response | null {
   if (!isProviderSignInGet(url.pathname)) return null;
-  const location = providerSignInLocation(options?.env, {
-    host: options?.host,
-    proto: options?.proto,
-  });
   return new Response(null, {
     status: 303,
-    headers: { location },
+    headers: { location: providerSignInLocation(options?.env) },
   });
 }
