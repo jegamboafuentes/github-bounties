@@ -70,6 +70,71 @@ describe("OpenAPI document", () => {
     assert.match(json, /payment_required/);
     assert.match(json, /spend_cap_exceeded/);
     assert.match(json, /idempotency_conflict/);
+    const operationIds = new Set<string>();
+    for (const item of Object.values(document.paths ?? {})) {
+      if (!item) continue;
+      for (const method of ["get", "post", "put", "patch", "delete"] as const) {
+        const operation = item[method];
+        if (!operation) continue;
+        assert.equal(typeof operation.operationId, "string", `${method} missing operationId`);
+        assert.match(operation.operationId ?? "", /^[a-z][A-Za-z0-9]+$/);
+        assert.equal(operationIds.has(operation.operationId ?? ""), false, operation.operationId);
+        operationIds.add(operation.operationId ?? "");
+      }
+    }
+    assert.equal(operationIds.size, 18);
+    assert.deepEqual(
+      [...operationIds].sort(),
+      [
+        "cancelBounty",
+        "claimBounty",
+        "clearWorkSignal",
+        "createBounty",
+        "fundBounty",
+        "getBounty",
+        "getBountyIntelligence",
+        "getMe",
+        "getMyUsage",
+        "getPlatformStats",
+        "listBounties",
+        "listBountyClaims",
+        "listBountyFunders",
+        "listMyBounties",
+        "listMyClaims",
+        "refundBounty",
+        "signalWorking",
+        "topUpBounty",
+      ],
+    );
+    const fund = document.paths?.["/api/v1/bounties/{id}/fund"]?.post?.responses;
+    assert.ok(fund?.["400"]);
+    assert.ok(fund?.["401"]);
+    assert.ok(fund?.["429"]);
+    const topUp = document.paths?.["/api/v1/bounties/{id}/top-up"]?.post?.responses;
+    assert.ok(topUp?.["400"]);
+    assert.ok(topUp?.["401"]);
+    assert.ok(topUp?.["429"]);
+    const claim = document.paths?.["/api/v1/bounties/{id}/claim"]?.post?.responses;
+    assert.ok(claim?.["400"]);
+    assert.ok(claim?.["401"]);
+    assert.ok(claim?.["429"]);
+    const refund = document.paths?.["/api/v1/bounties/{id}/refund"]?.post?.responses;
+    assert.ok(refund?.["400"]);
+    assert.ok(refund?.["401"]);
+    assert.ok(refund?.["429"]);
+    assert.ok(document.paths?.["/api/v1/bounties/{id}/claims"]?.get?.responses?.["429"]);
+    assert.ok(document.paths?.["/api/v1/me/claims"]?.get?.responses?.["429"]);
+    assert.match(JSON.stringify(document.paths?.["/api/v1/bounties/{id}/cancel"]?.post?.responses?.["409"]), /already_cancelled/);
+    const usage = document.components?.schemas?.KeyUsage as {
+      properties?: {
+        perTxCapUsdc?: { pattern?: string };
+        dayStart?: { format?: string };
+        entries?: { items?: { properties?: { amountUsdc?: { pattern?: string } } } };
+      };
+    };
+    assert.equal(usage.properties?.perTxCapUsdc?.pattern, String.raw`^\d+\.\d{6}$`);
+    assert.equal(usage.properties?.entries?.items?.properties?.amountUsdc?.pattern, String.raw`^\d+\.\d{6}$`);
+    assert.equal(usage.properties?.dayStart?.format, "date-time");
   });
 
   it("lists the request host first for PROD and for DEV", () => {

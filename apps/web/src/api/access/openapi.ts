@@ -52,6 +52,13 @@ export const paymentSignatureSchema = z
 
 const idSchema = z.string().uuid();
 
+const usdcDecimal = z
+  .string()
+  .regex(/^\d+\.\d{6}$/)
+  .describe("USDC decimal string with 6 fractional digits.");
+
+const usdcDecimalOrNull = usdcDecimal.nullable();
+
 export const cancelToolSchema = z.object({
   id: idSchema.describe("Bounty id."),
   idempotencyKey: idempotencyKeySchema,
@@ -119,8 +126,8 @@ const meSchema = z
       prefix: z.string(),
       env: z.enum(["test", "live"]),
       scopes: z.array(z.enum(["read", "write", "money"])),
-      perTxCapUsdc: z.string(),
-      dailyCapUsdc: z.string(),
+      perTxCapUsdc: usdcDecimalOrNull.describe("Null when this key does not have the money scope. Cap enforcement is unchanged."),
+      dailyCapUsdc: usdcDecimalOrNull.describe("Null when this key does not have the money scope. Cap enforcement is unchanged."),
     }),
   })
   .openapi("Me");
@@ -150,6 +157,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
   registry.registerPath({
     method: "get",
     path: "/api/v1/me",
+    operationId: "getMe",
     summary: "Current key owner",
     description: `The human user that owns the API key. Does not include google_sub. Error codes include ${codes}. Domain codes from bounty and escrow pass through unchanged.`,
     security: bearer,
@@ -162,21 +170,27 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
 
   const usageSchema = z
     .object({
-      perTxCapUsdc: z.string().describe("This key's effective per-transaction cap."),
-      dailyCapUsdc: z.string().describe("This key's effective UTC-day cap."),
-      spentTodayUsdc: z
-        .string()
-        .describe("Reserved plus recorded api_spend_ledger rows for this key since 00:00 UTC."),
-      remainingTodayUsdc: z.string().describe("dailyCapUsdc minus spentTodayUsdc, never below zero."),
-      dayStart: z.string().describe("UTC day start used for spentTodayUsdc."),
+      perTxCapUsdc: usdcDecimalOrNull.describe(
+        "This key's effective per-transaction cap. Null when the key has no money scope.",
+      ),
+      dailyCapUsdc: usdcDecimalOrNull.describe(
+        "This key's effective UTC-day cap. Null when the key has no money scope.",
+      ),
+      spentTodayUsdc: usdcDecimalOrNull.describe(
+        "Reserved plus recorded api_spend_ledger rows for this key since 00:00 UTC. Null when the key has no money scope.",
+      ),
+      remainingTodayUsdc: usdcDecimalOrNull.describe(
+        "dailyCapUsdc minus spentTodayUsdc, never below zero. Null when the key has no money scope.",
+      ),
+      dayStart: z.string().datetime().describe("UTC day start used for spentTodayUsdc."),
       entries: z
         .array(
           z.object({
-            amountUsdc: z.string(),
+            amountUsdc: usdcDecimal,
             kind: z.enum(["fund", "top_up"]),
             bountyId: z.string().uuid(),
             txHash: z.string().nullable(),
-            createdAt: z.string(),
+            createdAt: z.string().datetime(),
           }),
         )
         .describe("Newest reserved or recorded ledger rows for this key. At most 50. No other user's rows."),
@@ -186,6 +200,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
   registry.registerPath({
     method: "get",
     path: "/api/v1/me/usage",
+    operationId: "getMyUsage",
     summary: "This key's spend caps and recent ledger",
     description:
       "Scope read is enough. Returns the key's effective per-transaction cap, daily cap, USDC spent today (UTC, reserved and recorded rows in api_spend_ledger), remaining today, and up to 50 recent ledger entries for this key only. Each entry has amount, kind (fund or top_up), bounty id, tx hash, and time. Never another user's data.",
@@ -201,6 +216,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
   registry.registerPath({
     method: "get",
     path: "/api/v1/me/bounties",
+    operationId: "listMyBounties",
     summary: "Bounties posted or funded by the key owner",
     description: "posted is bounties this user created. funded is contributions this user paid. Wallet addresses are omitted.",
     security: bearer,
@@ -238,6 +254,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
   registry.registerPath({
     method: "post",
     path: "/api/v1/bounties",
+    operationId: "createBounty",
     summary: "Post a bounty",
     description: "Scope write. Creates pending_fund only. Same create path as the website. The body cannot include an address.",
     security: bearer,
@@ -255,6 +272,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
   registry.registerPath({
     method: "post",
     path: "/api/v1/bounties/{id}/work-signal",
+    operationId: "signalWorking",
     summary: "Signal Working on this",
     description: "Scope write. Non-exclusive. Does not change pool eligibility or money.",
     security: bearer,
@@ -270,6 +288,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
   registry.registerPath({
     method: "delete",
     path: "/api/v1/bounties/{id}/work-signal",
+    operationId: "clearWorkSignal",
     summary: "Clear Working on this",
     description: "Scope write. Idempotent when no signal is active.",
     security: bearer,
@@ -284,6 +303,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
   registry.registerPath({
     method: "post",
     path: "/api/v1/bounties/{id}/cancel",
+    operationId: "cancelBounty",
     summary: "Cancel an unfunded bounty",
     description: "Scope write. Only pending_fund. Funded cancel is POST /refund (money scope). Idempotency-Key is required.",
     security: bearer,
@@ -297,8 +317,20 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       401: { description: "Unauthorized.", ...errorContent },
       403: { description: "Missing write scope, or not the poster.", ...errorContent },
       409: {
-        description: "Already cancelled (already_cancelled), funded bounty (not_refundable), or idempotency conflict.",
-        ...errorContent,
+        description:
+          "Already cancelled (error code already_cancelled), funded bounty (not_refundable), or idempotency conflict. already_cancelled does not move USDC.",
+        content: {
+          "application/json": {
+            schema: errorRef,
+            example: {
+              error: {
+                code: "already_cancelled",
+                message: "This bounty is already cancelled.",
+                details: null,
+              },
+            },
+          },
+        },
       },
     },
   });
@@ -309,6 +341,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
   registry.registerPath({
     method: "post",
     path: "/api/v1/bounties/{id}/fund",
+    operationId: "fundBounty",
     summary: "Fund with headless x402",
     description: `${moneyDescription} Poster only.`,
     security: bearer,
@@ -321,15 +354,19 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     },
     responses: {
       200: { description: "Escrow locked.", ...errorContent },
+      400: { description: "Validation failed, or Idempotency-Key missing.", ...errorContent },
+      401: { description: "Missing, invalid, or revoked key.", ...errorContent },
       402: { description: "Payment required.", ...errorContent },
       403: { description: "Missing money scope, wallet, GitHub, or spend cap. Money may be disabled.", ...errorContent },
       409: { description: "Idempotency conflict, or bounty is not pending_fund.", ...errorContent },
+      429: { description: "Per-key money limit (10/hour).", ...errorContent },
     },
   });
 
   registry.registerPath({
     method: "post",
     path: "/api/v1/bounties/{id}/top-up",
+    operationId: "topUpBounty",
     summary: "Top up with headless x402",
     description: `${moneyDescription} Funded bounties only, before the winning merge.`,
     security: bearer,
@@ -343,9 +380,12 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     },
     responses: {
       200: { description: "Top-up applied.", ...errorContent },
+      400: { description: "Validation failed, or Idempotency-Key missing.", ...errorContent },
+      401: { description: "Missing, invalid, or revoked key.", ...errorContent },
       402: { description: "Payment required.", ...errorContent },
       403: { description: "Missing money scope, wallet, GitHub, or spend cap.", ...errorContent },
       409: { description: "Idempotency conflict, or top-ups are closed.", ...errorContent },
+      429: { description: "Per-key money limit (10/hour).", ...errorContent },
     },
   });
 
@@ -355,6 +395,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
   registry.registerPath({
     method: "post",
     path: "/api/v1/bounties/{id}/claim",
+    operationId: "claimBounty",
     summary: "Claim the winner share or the caller's pool share",
     description: `${claimDescription} kind winner calls the website winner Claim. kind pool calls the website pool Claim.`,
     security: bearer,
@@ -366,14 +407,17 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     responses: {
       200: { description: "Claim recorded. destination is the saved wallet.", ...errorContent },
       400: { description: "Address, user id, or Idempotency-Key rejected.", ...errorContent },
+      401: { description: "Missing, invalid, or revoked key.", ...errorContent },
       403: { description: "Money disabled, missing scope, GitHub login mismatch, or not the winner or pool member.", ...errorContent },
       409: { description: "Idempotency conflict, or the pool is not ready.", ...errorContent },
+      429: { description: "Per-key money limit (10/hour).", ...errorContent },
     },
   });
 
   registry.registerPath({
     method: "get",
     path: "/api/v1/bounties/{id}/claims",
+    operationId: "listBountyClaims",
     summary: "Payout status for the caller's legs",
     description: "Scope read. The caller's own winner and pool legs on this bounty: status, amount, and tx hash. Other hunters are omitted.",
     security: bearer,
@@ -382,24 +426,28 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       200: { description: "Caller legs. Empty when this user has none.", ...errorContent },
       401: { description: "Unauthorized.", ...errorContent },
       404: { description: "Bounty not found.", ...errorContent },
+      429: { description: "Per-key read limit (120/min).", ...errorContent },
     },
   });
 
   registry.registerPath({
     method: "get",
     path: "/api/v1/me/claims",
+    operationId: "listMyClaims",
     summary: "The caller's claims across bounties",
     description: "Scope read. Winner claims and pool shares for this key's user, with status and tx hashes.",
     security: bearer,
     responses: {
       200: { description: "Caller claims.", ...errorContent },
       401: { description: "Unauthorized.", ...errorContent },
+      429: { description: "Per-key read limit (120/min).", ...errorContent },
     },
   });
 
   registry.registerPath({
     method: "post",
     path: "/api/v1/bounties/{id}/refund",
+    operationId: "refundBounty",
     summary: "Refund a funded bounty to the recorded payer",
     description:
       "Scope money. DEV only unless API_MONEY_ENABLED is set. Poster only. The refund goes to the recorded on-chain payer, never a caller-supplied address. Idempotency-Key is required. Unfunded drafts use POST /cancel.",
@@ -412,8 +460,10 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     responses: {
       200: { description: "Refunded. destination is the recorded payer.", ...errorContent },
       400: { description: "Address or Idempotency-Key rejected.", ...errorContent },
+      401: { description: "Missing, invalid, or revoked key.", ...errorContent },
       403: { description: "Money disabled, missing money scope, or not the poster.", ...errorContent },
       409: { description: "Not refundable, or idempotency conflict.", ...errorContent },
+      429: { description: "Per-key money limit (10/hour).", ...errorContent },
     },
   });
 }

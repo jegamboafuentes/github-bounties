@@ -119,8 +119,11 @@ describe("MCP read tools", () => {
     await client.connect(clientTransport);
 
     const listed = await client.listTools();
+    const toolNames = listed.tools.map((tool) => tool.name);
+    assert.equal(new Set(toolNames).size, toolNames.length);
+    assert.equal(toolNames.length, 19);
     assert.deepEqual(
-      listed.tools.map((tool) => tool.name).sort(),
+      [...toolNames].sort(),
       [
         "cancel_bounty",
         "claim_pool",

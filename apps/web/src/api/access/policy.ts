@@ -14,6 +14,21 @@ export const KEY_RATE_LIMITS = {
 
 export type ApiClass = keyof typeof KEY_RATE_LIMITS;
 
+/**
+ * RateLimit-Limit, RateLimit-Remaining, and RateLimit-Reset for a keyed call.
+ * `count` is how many requests in the window are already logged, including this
+ * one. Omit it when the request was rejected before it was counted.
+ */
+export function keyedRateLimitHeaders(klass: ApiClass, count?: number): Record<string, string> {
+  const window = KEY_RATE_LIMITS[klass];
+  const remaining = typeof count === "number" ? Math.max(0, window.limit - count) : window.limit;
+  return {
+    "RateLimit-Limit": String(window.limit),
+    "RateLimit-Remaining": String(remaining),
+    "RateLimit-Reset": String(Math.ceil(window.windowMs / 1000)),
+  };
+}
+
 /** DEV defaults. PROD (CDP_NETWORK=base) defaults are lower. Users may only lower these. */
 export const DEV_SPEND_CAPS = { perTxUsdc: "50.000000", dailyUsdc: "200.000000" } as const;
 export const PROD_SPEND_CAPS = { perTxUsdc: "25.000000", dailyUsdc: "100.000000" } as const;
@@ -271,8 +286,29 @@ export function idempotencyExpiresAt(now: Date): Date {
 export type StoredApiResponse = {
   status: number;
   body: unknown;
+  /** Exact JSON bytes stored for replay. jsonb would otherwise reorder object keys. */
+  rawBody?: string;
   headers?: Record<string, string> | null;
 };
+
+/** Persist the response JSON as a string so a later jsonb read cannot reorder keys. */
+export function storedResponseBody(body: unknown): { __raw: string } {
+  return { __raw: JSON.stringify(body) };
+}
+
+export function unpackStoredBody(stored: unknown): { body: unknown; rawBody?: string } {
+  if (stored && typeof stored === "object" && !Array.isArray(stored) && "__raw" in stored) {
+    const raw = (stored as { __raw?: unknown }).__raw;
+    if (typeof raw === "string") {
+      try {
+        return { body: JSON.parse(raw) as unknown, rawBody: raw };
+      } catch {
+        return { body: stored };
+      }
+    }
+  }
+  return { body: stored };
+}
 
 export type IdempotencyRow = {
   keyId: string;
@@ -305,11 +341,13 @@ export function decideIdempotency(
   if (existing.requestHash !== requestHashValue) return { type: "conflict" };
   if (existing.responseStatus === 0) return { type: "in_progress" };
   if (existing.responseStatus === 402 && hasPayment) return { type: "proceed" };
+  const unpacked = unpackStoredBody(existing.responseBody);
   return {
     type: "replay",
     response: {
       status: existing.responseStatus,
-      body: existing.responseBody,
+      body: unpacked.body,
+      rawBody: unpacked.rawBody,
       headers: existing.responseHeaders,
     },
   };

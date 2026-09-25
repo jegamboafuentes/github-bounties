@@ -24,12 +24,13 @@ import {
   handleWorkSignal,
   readIdempotencyKey,
   requirePrincipal,
+  rateHeadersFromError,
   resultFromError,
   runAuthed,
   type ApiPrincipal,
   type ApiResult,
 } from "./handlers";
-import { KEY_RATE_LIMITS, type ApiClass } from "./policy";
+import { keyedRateLimitHeaders, type ApiClass } from "./policy";
 
 export function runtimeAccessDeps(): AccessDeps {
   return createAccessDeps(getRuntimeDb());
@@ -65,14 +66,7 @@ function actionClass(action: V1Action): ApiClass {
   return "write";
 }
 
-/** Same RateLimit-Limit and RateLimit-Reset values keyed 2xx responses already send. */
-export function keyedRateLimitHeaders(klass: ApiClass): Record<string, string> {
-  const window = KEY_RATE_LIMITS[klass];
-  return {
-    "RateLimit-Limit": String(window.limit),
-    "RateLimit-Reset": String(Math.ceil(window.windowMs / 1000)),
-  };
-}
+export { keyedRateLimitHeaders };
 
 function actionRoute(action: V1Action): string {
   switch (action.kind) {
@@ -140,7 +134,8 @@ export function apiResultResponse(result: ApiResult): Response {
     "error" in result.body &&
     (result.body as { error?: { details?: { windowSeconds?: number } } }).error?.details?.windowSeconds;
   if (typeof retryAfter === "number") headers.set("Retry-After", String(retryAfter));
-  return new Response(JSON.stringify(result.body), { status: result.status, headers });
+  const payload = typeof result.rawBody === "string" ? result.rawBody : JSON.stringify(result.body);
+  return new Response(payload, { status: result.status, headers });
 }
 
 export async function handleV1Action(
@@ -173,7 +168,7 @@ export async function handleV1Action(
     const result = resultFromError(err);
     return apiResultResponse({
       ...result,
-      headers: { ...rateHeaders, ...result.headers },
+      headers: { ...rateHeaders, ...rateHeadersFromError(err), ...result.headers },
     });
   }
 }
@@ -277,7 +272,7 @@ export async function handleV1Get(
     const result = resultFromError(err);
     return apiResultResponse({
       ...result,
-      headers: { ...keyedRateLimitHeaders("read"), ...result.headers },
+      headers: { ...keyedRateLimitHeaders("read"), ...rateHeadersFromError(err), ...result.headers },
     });
   }
 }

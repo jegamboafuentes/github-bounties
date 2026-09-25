@@ -127,7 +127,7 @@ claude mcp add --transport http github-bounties https://dev.githubbounties.xyz/m
 
 Authorization is `Authorization: Bearer <key>` on `/api/v1` and `/mcp`. Cookies are ignored. `src/proxy.ts` does not session-gate those paths.
 
-MCP lists every tool to anonymous callers. Keyed tools stay in that list. Each one starts its description with `Requires API key (read scope)`, `Requires API key (write scope)`, or `Requires API key with money scope; DEV only`. Calling a keyed tool without a Bearer key returns `isError: true` and the `unauthorized` envelope (`error.code`, `error.message`, `error.details.scope`). The handler does not run.
+MCP lists 19 tools to anonymous callers. OpenAPI publishes 18 operations, each with its own `operationId`. Keyed tools stay in that list. Each one starts its description with `Requires API key (read scope)`, `Requires API key (write scope)`, or `Requires API key with money scope; DEV only`. Calling a keyed tool without a Bearer key returns `isError: true` and the `unauthorized` envelope (`error.code`, `error.message`, `error.details.scope`). The handler does not run.
 
 Create a key on Settings → API keys. The plaintext is shown once. DEV keys start with `gb_test_`. Mainnet keys start with `gb_live_`. The server stores HMAC-SHA256 (`API_KEY_HMAC_SECRET`) plus a display prefix. Any signed-in user can create a key. The `money` scope stays disabled until that user has a saved payout wallet and a linked GitHub account. There are no agent-owned accounts.
 
