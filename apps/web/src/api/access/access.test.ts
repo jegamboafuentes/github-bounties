@@ -343,6 +343,7 @@ function memory(options?: {
           amountUsdc: userId === BOB ? "7.350000" : "8.330000",
           txHash: TX,
           paidAt: "2026-09-24T12:00:00.000Z",
+          destination: PAYER,
         },
       ];
     },
@@ -1148,8 +1149,10 @@ describe("V4-3 claims, status, and funded refund", () => {
     const { principal: key } = await principal(bag.deps, ["read"]);
     const mine = await handleMyClaims(key, bag.deps);
     const one = await handleBountyClaims(key, BOUNTY, bag.deps);
-    assert.equal((mine.body as { claims: { kind: string; txHash: string }[] }).claims[0]?.kind, "winner");
-    assert.equal((one.body as { legs: { txHash: string }[] }).legs[0]?.txHash, TX);
+    assert.equal((mine.body as { claims: { kind: string; txHash: string; destination: string }[] }).claims[0]?.kind, "winner");
+    assert.equal((one.body as { legs: { txHash: string; destination: string }[] }).legs[0]?.txHash, TX);
+    assert.equal((mine.body as { claims: { destination: string }[] }).claims[0]?.destination, PAYER);
+    assert.equal((one.body as { legs: { destination: string }[] }).legs[0]?.destination, PAYER);
     const json = JSON.stringify(mine.body) + JSON.stringify(one.body);
     assert.equal(json.includes(ATTACKER), false);
     assert.equal(json.includes("wallet"), false);

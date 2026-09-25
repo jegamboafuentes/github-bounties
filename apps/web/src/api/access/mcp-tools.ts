@@ -22,6 +22,7 @@ import {
   type ApiResult,
 } from "./handlers";
 import { PublicApiError } from "../public/errors";
+import { logMcpToolCall, mcpOutcomeCode, mcpOutcomeFromBody } from "../public/mcp-log";
 import { assertNoAddress, assertNoUserOverride } from "./policy";
 import {
   bountyClaimsToolSchema,
@@ -75,6 +76,10 @@ function missingKeyBody(klass: "read" | "write" | "money"): PublicApiErrorBody {
   );
 }
 
+function toolNameFromRoute(route: string): string {
+  return /tool:([a-z0-9_]+)/.exec(route)?.[1] ?? "unknown";
+}
+
 async function guarded(
   access: McpAccess | null | undefined,
   klass: "read" | "write" | "money",
@@ -82,18 +87,32 @@ async function guarded(
   bountyId: string | null,
   run: () => Promise<ApiResult>,
 ): Promise<CallToolResult> {
+  const started = Date.now();
+  const principal = access?.principal ?? null;
+  const emit = (outcome: string) => {
+    logMcpToolCall({
+      tool: toolNameFromRoute(route),
+      apiKeyId: principal?.keyId ?? null,
+      userId: principal?.userId ?? null,
+      outcome,
+      latencyMs: Math.max(0, Date.now() - started),
+      rateClass: klass,
+    });
+  };
   try {
-    if (!access?.principal) {
+    if (!principal || !access) {
+      emit("unauthorized");
       return toolJson(missingKeyBody(klass), true);
     }
-    const principal = requirePrincipal(access.principal);
     const result = await runAuthed(
-      { principal, klass, route, bountyId, ip: access.ip },
+      { principal: requirePrincipal(principal), klass, route, bountyId, ip: access.ip },
       access.deps,
       run,
     );
+    emit(result.status >= 400 ? mcpOutcomeFromBody(result.body) : "ok");
     return fromResult(result);
   } catch (err) {
+    emit(mcpOutcomeCode(err));
     return fromResult(resultFromError(err));
   }
 }
@@ -333,7 +352,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Payout status for my legs",
       description:
-        "Requires API key (read scope). This caller's winner and pool legs on one bounty: status, amount, and tx hash. Other hunters are omitted.",
+        "Requires API key (read scope). This caller's winner and pool legs on one bounty: status, amount, tx hash, and destination (the address paid or the saved wallet to be paid). The fee leg is not included. Other hunters are omitted.",
       inputSchema: looseClaims,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
@@ -349,7 +368,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "My claims",
       description:
-        "Requires API key (read scope). This caller's claims across bounties, with status and tx hashes.",
+        "Requires API key (read scope). This caller's claims across bounties, with status, tx hash, and destination (the address paid or the saved wallet to be paid). The fee leg is not included.",
       inputSchema: emptyToolSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },

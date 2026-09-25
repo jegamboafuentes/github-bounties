@@ -6,6 +6,8 @@ import {
   attributedFromOutflows,
   confirmedOutflowsFromLegs,
   isExpectedPoolDefer,
+  keptPaidAt,
+  ledgerUpdatedAt,
   planSettleLegs,
   shouldTransferLeg,
 } from "./allocation";
@@ -167,5 +169,24 @@ describe("V2-3 allocation legs (ADR 0003)", () => {
       confirmedFeeAtomic: split.feeAtomic,
     });
     assert.equal(leftover, split.shareAtomic);
+  });
+});
+
+describe("per-leg timestamps", () => {
+  it("keeps an earlier paid_at when a later leg settles", () => {
+    const winnerPaid = new Date("2026-09-25T14:16:05.000Z");
+    const poolPaid = new Date("2026-09-25T14:16:19.000Z");
+    assert.equal(keptPaidAt(null, winnerPaid).toISOString(), "2026-09-25T14:16:05.000Z");
+    assert.equal(keptPaidAt(winnerPaid, poolPaid).toISOString(), "2026-09-25T14:16:05.000Z");
+  });
+
+  it("does not let updated_at precede created_at", () => {
+    const created = new Date("2026-09-25T14:16:06.000Z");
+    const earlier = new Date("2026-09-25T14:16:05.000Z");
+    const later = new Date("2026-09-25T14:16:07.000Z");
+    assert.equal(ledgerUpdatedAt(created, earlier).toISOString(), created.toISOString());
+    assert.equal(ledgerUpdatedAt(created, later).toISOString(), later.toISOString());
+    assert.equal(ledgerUpdatedAt(created, created).toISOString(), created.toISOString());
+    assert.equal(ledgerUpdatedAt(null, earlier).toISOString(), earlier.toISOString());
   });
 });

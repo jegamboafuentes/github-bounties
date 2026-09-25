@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { CLAIM_SKIP } from "../webhooks/outcome";
 import { allocationLedger, poolParticipants } from "../db/schema";
 import { overflowNotPaidLabel } from "./display";
-import { payoutShareLabels, toPoolRosterView } from "./roster";
+import { countPaidPayoutLegs, payoutShareLabels, toPoolRosterView } from "./roster";
 import { splitPostFeePool } from "../lib/money";
 
 type Participant = typeof poolParticipants.$inferSelect;
@@ -135,6 +135,8 @@ describe("pool roster view", () => {
     assert.equal(view.breakdown.feeTxHash, "mock:fee");
     assert.equal(view.breakdown.winnerTxHash, "mock:winner");
     assert.equal(view.overflowCaption, null);
+    assert.equal(view.breakdown.paidCount, 2);
+    assert.equal(countPaidPayoutLegs(view), 3);
   });
 
   it("uses 100% of post-fee when E is empty", () => {

@@ -1,9 +1,14 @@
 /**
- * Dry-run by default. Lists every bounty whose funding legs would fail the
- * live payout guard (cdp): a hash that is not an x402 payment id or an
- * `x402-topup:` line. A hash that already has an `x402-topup:` marker is not
- * at-risk and is not listed. The on-chain payer check runs only for unmarked
- * hashes.
+ * Dry-run by default. Lists open or unfinished bounties whose funding legs
+ * would fail the live payout guard (cdp): a hash that is not an x402 payment
+ * id or an `x402-topup:` line. A hash that already has an `x402-topup:` marker
+ * is not at-risk and is not listed. The on-chain payer check runs only for
+ * unmarked hashes.
+ *
+ * Default scan is bounty/escrow status funded, claim_locked, settling,
+ * settled_partial, or refunding. Settled and other terminal rows are skipped.
+ * `--include-settled` scans every status. Hash ownership still considers every
+ * bounty, so a hash shared with a settled row is still "used by another bounty".
  *
  * A leg is recordable only when the hash is a real transaction, it is not a
  * placeholder (`lock:`, `legacy-fund:`, pasted text), it is not used by
@@ -31,6 +36,9 @@ import {
   createLegacyChainReader,
   isReconcileMainnet,
   legacyRpcUrl,
+  parseReconcileCliArgs,
+  reconcileFundingScan,
+  reconcileSummaryLine,
   type FundingLegAssessment,
   type FundingLegRecord,
 } from "../../src/escrow/legacy-funding";
@@ -41,6 +49,8 @@ type Sql = ReturnType<typeof postgres>;
 
 type JoinedRow = {
   bounty_id: string;
+  bounty_status: string;
+  escrow_status: string;
   escrow_id: string;
   escrow_fund_tx_hash: string | null;
   escrow_amount_usdc: string;
@@ -65,26 +75,6 @@ function requireText(value: unknown, label: string): string {
   const parsed = text(value);
   if (parsed == null) throw new Error(`Query returned a non-text ${label}.`);
   return parsed;
-}
-
-function parseArgs(argv: string[]): { apply: boolean; allowProdFlag: boolean } {
-  let apply = false;
-  let allowProdFlag = false;
-  for (const arg of argv) {
-    if (arg === "--") continue;
-    if (arg === "--apply") {
-      apply = true;
-      continue;
-    }
-    if (arg === "--allow-prod") {
-      allowProdFlag = true;
-      continue;
-    }
-    throw new Error(
-      `Unknown argument: ${arg}. Usage: npm run security:reconcile-legacy-funding -- [--apply] [--allow-prod]`,
-    );
-  }
-  return { apply, allowProdFlag };
 }
 
 async function openSql(readOnly: boolean): Promise<Sql> {
@@ -184,7 +174,7 @@ async function assertRpcChain(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const { apply, allowProdFlag } = parseArgs(process.argv.slice(2));
+  const { apply, allowProdFlag, includeSettled } = parseReconcileCliArgs(process.argv.slice(2));
   loadDotenvFiles();
   const mainnet = isReconcileMainnet(process.env);
   const decision = applyGuardDecision({
@@ -200,6 +190,8 @@ async function main(): Promise<void> {
     const rows = await sql<JoinedRow[]>`
       SELECT
         e.bounty_id,
+        b.status AS bounty_status,
+        e.status AS escrow_status,
         e.id AS escrow_id,
         e.fund_tx_hash AS escrow_fund_tx_hash,
         e.amount_usdc::text AS escrow_amount_usdc,
@@ -211,10 +203,13 @@ async function main(): Promise<void> {
         c.amount_usdc::text AS contribution_amount_usdc,
         c.funder_address AS contribution_funder_address
       FROM escrows e
+      INNER JOIN bounties b ON b.id = e.bounty_id
       LEFT JOIN bounty_contributions c ON c.bounty_id = e.bounty_id
     `;
     const parsed = rows.map((row) => ({
       bounty_id: requireText(row.bounty_id, "bounty id"),
+      bounty_status: requireText(row.bounty_status, "bounty status"),
+      escrow_status: requireText(row.escrow_status, "escrow status"),
       escrow_id: requireText(row.escrow_id, "escrow id"),
       escrow_fund_tx_hash: text(row.escrow_fund_tx_hash),
       escrow_amount_usdc: requireText(row.escrow_amount_usdc, "escrow amount"),
@@ -227,7 +222,19 @@ async function main(): Promise<void> {
       contribution_funder_address: text(row.contribution_funder_address),
     }));
     const owners = ownersFor(parsed);
-    const legs = legsFrom(parsed);
+    const inScan = new Set(
+      parsed
+        .filter((row) =>
+          reconcileFundingScan({
+            bountyStatus: row.bounty_status,
+            escrowStatus: row.escrow_status,
+            includeSettled,
+          }),
+        )
+        .map((row) => row.bounty_id),
+    );
+    const legs = legsFrom(parsed).filter((leg) => inScan.has(leg.bountyId));
+    const scanned = inScan.size;
     const fund = resolveFundWalletRuntime(process.env);
     const needsChain = legs.some((leg) => {
       const used = (owners.get(leg.hash.trim().toLowerCase())?.size ?? 0) > 1;
@@ -322,8 +329,20 @@ async function main(): Promise<void> {
     }
 
     const bountyIds = new Set(atRisk.map((leg) => leg.bountyId));
+    const flagged = [...bountyIds].filter((id) =>
+      bountyIsAtRisk(atRisk.filter((leg) => leg.bountyId === id)),
+    ).length;
     console.error(
-      `reconcile-legacy-funding: mode=${apply ? "apply" : "dry-run"} mainnet=${mainnet} at_risk_bounties=${bountyIds.size} at_risk_legs=${atRisk.length} recordable=${atRisk.filter((leg) => leg.recordable).length} recorded=${recorded} flagged=${[...bountyIds].filter((id) => bountyIsAtRisk(atRisk.filter((leg) => leg.bountyId === id))).length}`,
+      reconcileSummaryLine({
+        scanned,
+        flagged,
+        filter: includeSettled ? "all" : "open",
+        mode: apply ? "apply" : "dry-run",
+        mainnet,
+        atRiskLegs: atRisk.length,
+        recordable: atRisk.filter((leg) => leg.recordable).length,
+        recorded,
+      }),
     );
   } finally {
     await sql.end({ timeout: 5 });

@@ -195,7 +195,12 @@ const rosterMemberSchema = z
 
 const detailPayoutSchema = payoutScheduleSchema
   .extend({
-    paidCount: z.number().int(),
+    paidCount: z
+      .number()
+      .int()
+      .describe(
+        "Confirmed hunter payout legs: the winner leg, if paid, plus each paid pool share. The fee leg is not included.",
+      ),
     winnerShareLabel: z.string(),
     poolShareLabel: z.string(),
     feeTxHash: z.string().nullable(),

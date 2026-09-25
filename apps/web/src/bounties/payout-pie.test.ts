@@ -66,6 +66,10 @@ describe("payout pie slices (ADR 0003 amounts)", () => {
     assert.equal(postPool.amountUsdc, "14.700000");
     assert.equal(postWinner.share, 83.300000 / 98);
     assert.equal(postPool.share, 14.700000 / 98);
+    assert.equal(postWinner.label, "Winner (85%)");
+    assert.equal(postPool.label, "Pool (15%)");
+    assert.match(winner.label, /≈83\.3%/);
+    assert.match(pool.label, /≈14\.7%/);
     assert.equal(postWinner.atomic + postPool.atomic, usdcToAtomic("98.000000"));
   });
 
@@ -158,6 +162,8 @@ describe("payout pie slices (ADR 0003 amounts)", () => {
     assert.match(describePayoutPie(pies.face), /Fee \(2%\) 2\.000000 USDC/);
     assert.match(describePayoutPie(pies.face), /Winner \(≈83\.3%\) 83\.300000 USDC/);
     assert.match(describePayoutPie(pies.postFee), /Of post-fee/);
+    assert.match(describePayoutPie(pies.postFee), /Winner \(85%\) 83\.300000 USDC/);
+    assert.match(describePayoutPie(pies.postFee), /Pool \(15%\) 14\.700000 USDC/);
     const labels = payoutShareLabels(splitPostFeePool("100.000000", 0));
     assert.equal(labels.winnerShareLabel, "100% of post-fee");
   });

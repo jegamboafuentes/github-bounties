@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { encodeAbiParameters, getAddress, pad, type Hex } from "viem";
 import { TRANSFER_TOPIC, type TxLog } from "../../scripts/security/match-usdc-transfer";
-import { applyGuardDecision, assessFundingLeg, bountyIsAtRisk, type FundingLegRecord } from "./legacy-funding";
+import {
+  applyGuardDecision,
+  assessFundingLeg,
+  bountyIsAtRisk,
+  parseReconcileCliArgs,
+  reconcileFundingScan,
+  reconcileSummaryLine,
+  type FundingLegRecord,
+} from "./legacy-funding";
 import { coverageDecision } from "./payout-legs";
 import { verifiedInflowAtomic, withVerifiedTopUpHash } from "./payout-guard";
 
@@ -193,5 +201,53 @@ describe("legacy funding assessment", () => {
       applyGuardDecision({ apply: true, mainnet: false, allowProdFlag: false, allowProdEnv: false }),
       { ok: true },
     );
+  });
+
+  it("scans open or unfinished bounties by default and everything with --include-settled", () => {
+    const open = ["funded", "claim_locked", "settling", "settled_partial", "refunding"] as const;
+    for (const status of open) {
+      assert.equal(
+        reconcileFundingScan({ bountyStatus: status, escrowStatus: "settled", includeSettled: false }),
+        true,
+        status,
+      );
+    }
+    for (const status of ["funded", "settling", "settled_partial", "refunding"] as const) {
+      assert.equal(
+        reconcileFundingScan({ bountyStatus: "settled", escrowStatus: status, includeSettled: false }),
+        true,
+        status,
+      );
+    }
+    for (const status of ["settled", "refunded", "cancelled", "expired", "void", "pending_fund"] as const) {
+      assert.equal(
+        reconcileFundingScan({ bountyStatus: status, escrowStatus: "settled", includeSettled: false }),
+        false,
+        status,
+      );
+    }
+    assert.equal(
+      reconcileFundingScan({ bountyStatus: "settled", escrowStatus: "settled", includeSettled: true }),
+      true,
+    );
+    assert.deepEqual(parseReconcileCliArgs(["--apply", "--include-settled"]), {
+      apply: true,
+      allowProdFlag: false,
+      includeSettled: true,
+    });
+    assert.throws(() => parseReconcileCliArgs(["--settled"]), /Unknown argument/);
+    const line = reconcileSummaryLine({
+      scanned: 4,
+      flagged: 1,
+      filter: "open",
+      mode: "dry-run",
+      mainnet: false,
+      atRiskLegs: 1,
+      recordable: 1,
+      recorded: 0,
+    });
+    assert.match(line, /scanned=4/);
+    assert.match(line, /flagged=1/);
+    assert.match(line, /filter=open/);
   });
 });

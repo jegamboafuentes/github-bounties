@@ -230,9 +230,7 @@ export default async function BountyDetailPage({
             currency={bounty.currency}
             payout={bounty.payout}
             canClaim={canClaimPayout}
-            defaultAddress={
-              user?.wallet_address || bounty.payout.payoutAddress || ""
-            }
+            savedWallet={user?.wallet_address ?? ""}
             action={claimPayoutAction}
             signedIn={Boolean(user)}
             signInHref={signInHref}

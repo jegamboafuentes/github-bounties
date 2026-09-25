@@ -154,7 +154,7 @@ Refund and claim check the sum of every remaining unpaid leg before the first tr
 
 Winner claim is `POST /api/v1/bounties/{id}/claim` with `{ "kind": "winner" }`. Pool claim uses `{ "kind": "pool" }`. Both call `claimPayout` / `claimPoolPayout`, which call `settleEscrow` (`winner_and_fee` or `pool_member`). The payout address is the wallet saved on the key owner. The body cannot include an address, destination, `hunterUserId`, or any other user id. The key needs the `money` scope and a linked GitHub login that matches the winning PR author or that caller's own frozen pool row. Otherwise the response is 403 `not_winner` or `not_pool_member`. Authz runs before an idempotent replay. Settler checks inside `settleEscrow` (`not_settler`, facilitator, `payTo`) are unchanged.
 
-`GET /api/v1/bounties/{id}/claims` is the caller's own legs on that bounty. `GET /api/v1/me/claims` is those legs across bounties. Both return status, amount, and tx hash. They omit other hunters.
+`GET /api/v1/bounties/{id}/claims` is the caller's own legs on that bounty. `GET /api/v1/me/claims` is those legs across bounties. Both return status, amount, tx hash, and `destination` (the address paid, or the saved wallet that will be paid). They omit other hunters and the fee leg.
 
 Error codes: `unauthorized`, `key_revoked`, `forbidden_scope`, `rate_limited`, `validation_failed`, `not_found`, `conflict`, `payment_required`, `spend_cap_exceeded`, `idempotency_key_required`, `idempotency_conflict`, `wallet_not_set`, `github_not_linked`, `already_cancelled`, `not_winner`, `not_pool_member`, plus bounty and escrow domain codes unchanged (`bounty_exists`, `not_poster`, `not_fundable`, `not_settler`, …).
 

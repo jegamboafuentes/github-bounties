@@ -82,6 +82,49 @@ describe("money action log", () => {
     assert.equal("destination" in topUp, false);
   });
 
+  it("includes apiKeyId on transfer logs when the caller has a key", () => {
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      for (const action of ["winner_claim", "pool_claim", "refund", "fee_transfer"] as const) {
+        logMoneyAction({
+          action,
+          actorUserId: "user-1",
+          bountyId: "bounty-1",
+          destination: "0x1111111111111111111111111111111111111111",
+          amountUsdc: "1.000000",
+          txHash: "0xabc",
+          result: "ok",
+          requestId: "req-1",
+          apiKeyId: "key-1",
+          leg: action === "refund" ? "REFUND_OUT" : action === "pool_claim" ? "POOL_PAYOUT" : "WINNER_PAYOUT",
+        });
+      }
+      logMoneyAction({
+        action: "winner_claim",
+        actorUserId: "user-1",
+        bountyId: "bounty-1",
+        destination: "0x1111111111111111111111111111111111111111",
+        amountUsdc: "1.000000",
+        txHash: "0xabc",
+        result: "ok",
+        requestId: "req-web",
+      });
+    } finally {
+      console.log = original;
+    }
+    for (const line of lines.slice(0, 4)) {
+      const parsed = JSON.parse(line) as { apiKeyId?: string; leg?: string };
+      assert.equal(parsed.apiKeyId, "key-1");
+      assert.ok(parsed.leg);
+    }
+    const website = JSON.parse(lines[4] ?? "{}") as { apiKeyId?: string };
+    assert.equal("apiKeyId" in website, false);
+  });
+
   it("mints a request id when the header is empty or unsafe", () => {
     assert.equal(takeRequestId("req_42"), "req_42");
     assert.notEqual(takeRequestId("has spaces"), "has spaces");

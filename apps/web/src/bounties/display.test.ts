@@ -81,6 +81,8 @@ describe("board display helpers", () => {
     assert.equal(bountyStatusLabel("settled_partial"), "Winner paid — pool pending");
     assert.match(CLAIM_PAYOUT_COPY, /eligible winner/i);
     assert.match(CLAIM_PAYOUT_COPY, /do not block the winner/i);
+    assert.match(CLAIM_PAYOUT_COPY, /wallet saved in Settings/i);
+    assert.doesNotMatch(CLAIM_PAYOUT_COPY, /bring-your-own/i);
     assert.match(X402_EXACT_FUND_COPY, /x402 exact/i);
     assert.match(X402_EXACT_FUND_COPY, /wallet|WalletConnect/i);
     assert.match(X402_EXACT_FUND_COPY, /no explorer hash|no hash paste|Lock does not need a paste/i);
