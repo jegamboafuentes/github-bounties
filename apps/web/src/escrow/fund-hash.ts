@@ -166,7 +166,7 @@ function failFacilitatorSettlement(
     action: input.action ?? "lock",
     actorUserId: input.actorUserId ?? null,
     bountyId: input.bountyId,
-    destination: input.issued.payTo,
+    payer: null,
     amountUsdc: null,
     txHash: input.txHash ?? null,
     result: "x402_settle_mismatch",

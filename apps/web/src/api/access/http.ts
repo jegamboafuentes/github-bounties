@@ -19,6 +19,7 @@ import {
   handleMyClaims,
   handleMyBounties,
   handleRefund,
+  handleUsage,
   handleTopUp,
   handleWorkSignal,
   readIdempotencyKey,
@@ -36,6 +37,7 @@ export function runtimeAccessDeps(): AccessDeps {
 
 export type V1Action =
   | { kind: "me" }
+  | { kind: "usage" }
   | { kind: "my-bounties" }
   | { kind: "create" }
   | { kind: "signal"; bountyId: string; method: "POST" | "DELETE" }
@@ -53,6 +55,7 @@ function actionClass(action: V1Action): ApiClass {
   }
   if (
     action.kind === "me" ||
+    action.kind === "usage" ||
     action.kind === "my-bounties" ||
     action.kind === "my-claims" ||
     action.kind === "bounty-claims"
@@ -62,10 +65,21 @@ function actionClass(action: V1Action): ApiClass {
   return "write";
 }
 
+/** Same RateLimit-Limit and RateLimit-Reset values keyed 2xx responses already send. */
+export function keyedRateLimitHeaders(klass: ApiClass): Record<string, string> {
+  const window = KEY_RATE_LIMITS[klass];
+  return {
+    "RateLimit-Limit": String(window.limit),
+    "RateLimit-Reset": String(Math.ceil(window.windowMs / 1000)),
+  };
+}
+
 function actionRoute(action: V1Action): string {
   switch (action.kind) {
     case "me":
       return "GET /api/v1/me";
+    case "usage":
+      return "GET /api/v1/me/usage";
     case "my-bounties":
       return "GET /api/v1/me/bounties";
     case "create":
@@ -118,6 +132,7 @@ export function apiResultResponse(result: ApiResult): Response {
   const headers = new Headers({ "cache-control": "no-store", "content-type": "application/json; charset=utf-8" });
   for (const [key, value] of Object.entries(PUBLIC_API_CORS_HEADERS)) headers.set(key, value);
   for (const [key, value] of Object.entries(result.headers ?? {})) headers.set(key, value);
+  if (result.status === 401) headers.set("WWW-Authenticate", "Bearer");
   const retryAfter =
     result.status === 429 &&
     result.body &&
@@ -134,29 +149,32 @@ export async function handleV1Action(
   deps: AccessDeps = runtimeAccessDeps(),
 ): Promise<Response> {
   const ip = clientIpFromRequest(request);
+  const klass = actionClass(action);
+  const rateHeaders = keyedRateLimitHeaders(klass);
   try {
     const principal = requirePrincipal(
       await authenticateBearer(request.headers.get("authorization"), ip, deps),
     );
     const bountyId = actionBountyId(action);
     if (bountyId) acceptBountyId(bountyId);
-    const klass = actionClass(action);
     const result = await runAuthed(
       { principal, klass, route: actionRoute(action), bountyId: actionBountyId(action), ip },
       deps,
       () => perform(request, action, principal, deps),
     );
-    const window = KEY_RATE_LIMITS[klass];
     return apiResultResponse({
       ...result,
       headers: {
-        "RateLimit-Limit": String(window.limit),
-        "RateLimit-Reset": String(Math.ceil(window.windowMs / 1000)),
+        ...rateHeaders,
         ...result.headers,
       },
     });
   } catch (err) {
-    return apiResultResponse(resultFromError(err));
+    const result = resultFromError(err);
+    return apiResultResponse({
+      ...result,
+      headers: { ...rateHeaders, ...result.headers },
+    });
   }
 }
 
@@ -172,6 +190,8 @@ async function perform(
   switch (action.kind) {
     case "me":
       return handleMe(principal, deps);
+    case "usage":
+      return handleUsage(principal, deps);
     case "my-bounties":
       return handleMyBounties(principal, deps);
     case "create":
@@ -239,6 +259,7 @@ export async function handleV1Get(
       await authenticateBearer(request.headers.get("authorization"), ip, resolved),
     );
     const url = new URL(request.url);
+    const rateHeaders = keyedRateLimitHeaders("read");
     const result = await runAuthed(
       { principal, klass: "read", route: `GET ${url.pathname}`, bountyId: null, ip },
       resolved,
@@ -248,9 +269,16 @@ export async function handleV1Get(
         return { status: response.status, body };
       },
     );
-    return apiResultResponse(result);
+    return apiResultResponse({
+      ...result,
+      headers: { ...rateHeaders, ...result.headers },
+    });
   } catch (err) {
-    return apiResultResponse(resultFromError(err));
+    const result = resultFromError(err);
+    return apiResultResponse({
+      ...result,
+      headers: { ...keyedRateLimitHeaders("read"), ...result.headers },
+    });
   }
 }
 

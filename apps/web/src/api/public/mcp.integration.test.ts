@@ -132,6 +132,7 @@ describe("MCP read tools", () => {
         "get_bounty_claims",
         "get_bounty_intelligence",
         "get_me",
+        "get_my_usage",
         "get_stats",
         "list_bounties",
         "list_funders",
@@ -160,6 +161,52 @@ describe("MCP read tools", () => {
     const fundersTool = listed.tools.find((tool) => tool.name === "list_funders");
     assert.match(fundersTool?.description ?? "", /newest first/);
     assert.doesNotMatch(fundersTool?.description ?? "", /oldest first/);
+
+    const keyedPrefix: Record<string, RegExp> = {
+      get_me: /^Requires API key \(read scope\)/,
+      get_my_usage: /^Requires API key \(read scope\)/,
+      list_my_bounties: /^Requires API key \(read scope\)/,
+      get_bounty_claims: /^Requires API key \(read scope\)/,
+      list_my_claims: /^Requires API key \(read scope\)/,
+      create_bounty: /^Requires API key \(write scope\)/,
+      signal_working: /^Requires API key \(write scope\)/,
+      clear_work_signal: /^Requires API key \(write scope\)/,
+      cancel_bounty: /^Requires API key \(write scope\)/,
+      fund_bounty: /^Requires API key with money scope; DEV only/,
+      top_up_bounty: /^Requires API key with money scope; DEV only/,
+      claim_winner: /^Requires API key with money scope; DEV only/,
+      claim_pool: /^Requires API key with money scope; DEV only/,
+      refund_bounty: /^Requires API key with money scope; DEV only/,
+    };
+    for (const tool of listed.tools) {
+      const prefix = keyedPrefix[tool.name];
+      if (prefix) {
+        assert.match(tool.description ?? "", prefix, tool.name);
+      } else {
+        assert.doesNotMatch(tool.description ?? "", /^Requires API key/, tool.name);
+      }
+    }
+
+    async function assertMissingKey(name: string, args: Record<string, unknown>, scope: string) {
+      const denied = await client.callTool({ name, arguments: args });
+      assert.equal(denied.isError, true, name);
+      const body = JSON.parse(textOf(denied)) as { error: { code: string; message: string; details: { scope?: string } } };
+      assert.equal(body.error.code, "unauthorized");
+      assert.match(body.error.message, /^Requires API key/);
+      assert.match(body.error.message, /Bearer/);
+      assert.equal(body.error.details.scope, scope);
+    }
+    await assertMissingKey("get_me", {}, "read");
+    await assertMissingKey(
+      "create_bounty",
+      { issueUrl: "https://github.com/octo/hello/issues/42", amountUsdc: "5" },
+      "write",
+    );
+    await assertMissingKey(
+      "fund_bounty",
+      { id: BOUNTY_ID, idempotencyKey: "fund-anon" },
+      "money",
+    );
 
     const result = await client.callTool({ name: "list_bounties", arguments: { limit: 2 } });
     const payload = JSON.parse(textOf(result)) as { data: { id: string; issue: { title: string } }[] };

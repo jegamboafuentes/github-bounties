@@ -79,7 +79,7 @@ export const apiErrorSchema = z
       code: z
         .string()
         .describe(
-          "Stable code. API codes: validation_failed, not_found, method_not_allowed, rate_limited, internal, unauthorized, key_revoked, forbidden_scope, conflict, payment_required, spend_cap_exceeded, idempotency_key_required, idempotency_conflict, wallet_not_set, github_not_linked. Bounty and escrow domain codes (bounty_exists, not_poster, not_fundable, not_refundable, and the rest) pass through unchanged.",
+          "Stable code. API codes: validation_failed, not_found, method_not_allowed, rate_limited, internal, unauthorized, key_revoked, forbidden_scope, conflict, payment_required, spend_cap_exceeded, idempotency_key_required, idempotency_conflict, wallet_not_set, github_not_linked, already_cancelled. Bounty and escrow domain codes (bounty_exists, not_poster, not_fundable, not_refundable, and the rest) pass through unchanged.",
         ),
       message: z.string(),
       details: z.unknown().nullable(),
@@ -119,7 +119,7 @@ export const payoutScheduleSchema = z
     schedule: z
       .enum(["empty_pool", "roster"])
       .describe(
-        "empty_pool is the list schedule before a roster is loaded (winner receives 100% of post-fee). roster is the live split on the bounty detail.",
+        "roster is the live split from the same roster math on the list and the detail. A bounty with no pool members has emptyPool true and the winner receives 100% of post-fee. empty_pool is kept for older clients and is not emitted.",
       ),
   })
   .openapi("PayoutSchedule");
@@ -257,6 +257,19 @@ export const bountyDetailResponseSchema = z
         prNumber: z.number().int().nullable(),
       })
       .nullable(),
+    funding: z
+      .array(
+        z.object({
+          kind: z.enum(["fund", "top_up"]),
+          amountUsdc: z.string(),
+          txHash: z.string(),
+          createdAt: isoDateTime.nullable(),
+          explorerUrl: z.string().url().nullable(),
+        }),
+      )
+      .describe(
+        "Confirmed fund and top-up transactions, oldest first. Includes top-ups, not only the original escrow fund hash. explorerUrl is the public Base or Base Sepolia transaction page when the hash is a real 0x transaction. Wallet addresses are omitted.",
+      ),
   })
   .openapi("BountyDetail");
 
@@ -337,7 +350,7 @@ publicApiRegistry.registerPath({
   path: "/api/v1/bounties",
   summary: "List and filter the bounty board",
   description:
-    "Public board rows with keyset pagination. Intelligence filters use the cache only and do not call Gemini. amountUsdc is the face. totalFundedUsdc is the verified escrow fund plus confirmed contributions, each fund hash once (0.000000 when there is no verified inflow). The list payout is the empty-pool schedule on the face; the live roster split is on the detail route. funders.avatars are newest contribution first.",
+    "Public board rows with keyset pagination. Intelligence filters use the cache only and do not call Gemini. amountUsdc is the face. totalFundedUsdc is the verified escrow fund plus confirmed contributions, each fund hash once (0.000000 when there is no verified inflow). The list payout uses the same roster split as the detail, including funded bounties with no pool members yet. funders.avatars are newest contribution first.",
   request: { query: listBountiesInputSchema },
   responses: {
     200: {

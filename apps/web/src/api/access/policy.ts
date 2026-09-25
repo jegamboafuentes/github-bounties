@@ -378,6 +378,7 @@ const DOMAIN_STATUS: Record<string, number> = {
   not_refundable: 409,
   not_settleable: 409,
   pool_not_ready: 409,
+  already_cancelled: 409,
   not_claimable: 409,
   conflict: 409,
   invalid_issue_url: 400,

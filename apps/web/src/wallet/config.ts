@@ -1,6 +1,4 @@
-import { http, createConfig, type Config, type CreateConnectorFn } from "wagmi";
-import { injected, walletConnect } from "wagmi/connectors";
-import { base, baseSepolia, type Chain } from "wagmi/chains";
+import { base, baseSepolia } from "wagmi/chains";
 import type { EnvMap } from "../auth/env";
 import { PRODUCT_NAME } from "../lib/constants";
 import { isFundMainnetEnabled, walletConnectMetadataOrigin } from "./env";
@@ -11,8 +9,8 @@ export function resolveFundChain(env: EnvMap = process.env): typeof base | typeo
 }
 
 /**
- * Module default from process.env (DEV = Base Sepolia). Browser connectors
- * must use the runtime passed into `createFundWagmiConfig` / WalletProviders —
+ * Module default from process.env (DEV = Base Sepolia). The browser wagmi
+ * config is created in `wagmi-config.ts` after mount — never per server request.
  * `CDP_*` is not a NEXT_PUBLIC_ build-time value.
  */
 export const FUND_CHAIN = resolveFundChain();
@@ -26,33 +24,6 @@ export function walletConnectAppMetadata(env: EnvMap = process.env, origin?: str
     url,
     icons: [`${url}/icon.png`],
   };
-}
-
-export function createFundWagmiConfig(
-  projectId: string,
-  options: { chain?: Chain; metadataUrl?: string; env?: EnvMap } = {},
-): Config {
-  const chain = options.chain ?? resolveFundChain(options.env);
-  const metadata = walletConnectAppMetadata(options.env, options.metadataUrl);
-  const connectors: CreateConnectorFn[] = [injected({ shimDisconnect: true })];
-  if (projectId) {
-    connectors.push(
-      walletConnect({
-        projectId,
-        showQrModal: true,
-        metadata,
-      }) as CreateConnectorFn,
-    );
-  }
-  return createConfig({
-    chains: [chain],
-    connectors,
-    transports: {
-      [chain.id]: http(),
-    },
-    ssr: true,
-    multiInjectedProviderDiscovery: true,
-  });
 }
 
 export function shortenAddress(address: string): string {

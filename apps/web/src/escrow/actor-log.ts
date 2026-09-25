@@ -16,7 +16,10 @@ export type MoneyActionLog = {
   bountyId: string;
   contributionId?: string | null;
   claimId?: string | null;
+  /** Outbound transfers (settle, claim, refund, fee). Not set on inbound lock / top_up. */
   destination?: string | null;
+  /** Inbound lock / top_up payer. Not set on outbound transfers. */
+  payer?: string | null;
   amountUsdc?: string | null;
   txHash?: string | null;
   result: "ok" | string;
@@ -40,15 +43,17 @@ export function takeRequestId(value: string | null | undefined): string {
  * One structured line per money action. Cloud Logging picks up stdout.
  * Fields are an allowlist so a caller cannot attach secrets.
  */
+const INBOUND_ACTIONS = new Set<MoneyAction>(["lock", "top_up"]);
+
 export function logMoneyAction(entry: MoneyActionLog): void {
-  const line = {
+  const inbound = INBOUND_ACTIONS.has(entry.action);
+  const line: Record<string, unknown> = {
     event: "money_action",
     action: entry.action,
     actorUserId: entry.actorUserId,
     bountyId: entry.bountyId,
     contributionId: entry.contributionId ?? null,
     claimId: entry.claimId ?? null,
-    destination: entry.destination ?? null,
     amountUsdc: entry.amountUsdc ?? null,
     txHash: entry.txHash ?? null,
     result: entry.result,
@@ -56,6 +61,8 @@ export function logMoneyAction(entry: MoneyActionLog): void {
     ...(entry.apiKeyId ? { apiKeyId: entry.apiKeyId } : {}),
     ...(entry.leg ? { leg: entry.leg } : {}),
   };
+  if (inbound) line.payer = entry.payer ?? null;
+  else line.destination = entry.destination ?? null;
   console.log(JSON.stringify(line));
 }
 

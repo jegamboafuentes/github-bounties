@@ -10,8 +10,9 @@ import {
 } from "@/bounties/display";
 import { AmountPresetChips } from "@/components/amount-presets";
 import { ConnectWalletButtons } from "@/components/connect-wallet";
+import type { FundWalletRuntime } from "@/wallet/env";
 import { lockAfterInbound, payX402Exact } from "@/wallet/pay-x402";
-import { useFundWallet } from "@/wallet/providers";
+import { useFundWallet, useWagmiReady } from "@/wallet/providers";
 
 export function FundLockPanel({
   bountyId,
@@ -41,9 +42,8 @@ export function FundLockPanel({
   allowPastedFundHash?: boolean;
 }) {
   const fund = useFundWallet();
+  const wagmiReady = useWagmiReady();
   const face = formatUsdc(faceUsdc);
-  const { address, isConnected, chainId } = useAccount();
-  const { data: walletClient } = useWalletClient();
   const [busy, setBusy] = useState<"pay" | "lock" | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,65 +54,8 @@ export function FundLockPanel({
     ? `${resourceUrl}?topUpUsdc=${encodeURIComponent(topUpAmount.trim())}`
     : resourceUrl;
   const topUpReady = /^\d+(\.\d{1,6})?$/.test(topUpAmount.trim()) && Number(topUpAmount) > 0;
-  const readyToPay = Boolean(
-    isConnected && address && chainId === fund.chainId && walletClient && (!topUp || topUpReady),
-  );
   const showPay = topUp || !paidInbound;
   const pasteAction = topUp ? topUpAction : fundAction;
-
-  async function onPay() {
-    if (!walletClient || !address) {
-      setError(`Connect a ${fund.chainName} wallet first.`);
-      return;
-    }
-    setBusy("pay");
-    setError(null);
-    setMessage(null);
-    try {
-      const paid = await payX402Exact({
-        resourceUrl: payResource,
-        allowMainnet: fund.allowMainnet,
-        signer: {
-          address,
-          signTypedData: async (typed) =>
-            walletClient.signTypedData({
-              account: address,
-              domain: typed.domain,
-              types: typed.types,
-              primaryType: typed.primaryType,
-              message: typed.message,
-            }),
-        },
-      });
-      if (!paid.ok) {
-        setError(`${paid.error}: ${paid.message}`);
-        return;
-      }
-      if (topUp) {
-        if (!paid.topUpApplied) {
-          setError(paid.message || "Top-up was not applied.");
-          return;
-        }
-        setMessage(paid.message || "Top-up added. Reloading…");
-        window.location.assign(`/bounties/${bountyId}`);
-        return;
-      }
-      setPaidInbound(true);
-      setMessage(paid.message || "Payment recorded. Locking in escrow…");
-      const locked = await lockAfterInbound(bountyId);
-      if (!locked.ok) {
-        setError(`${locked.error}: ${locked.message}`);
-        setMessage("Payment recorded. Use Lock in escrow — no hash paste.");
-        return;
-      }
-      setMessage("Paid and locked. Reloading…");
-      window.location.assign(`/bounties/${bountyId}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Pay failed.");
-    } finally {
-      setBusy(null);
-    }
-  }
 
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -157,19 +100,26 @@ export function FundLockPanel({
         </p>
       ) : (
         <div className="flex flex-col gap-3">
-          <ConnectWalletButtons walletConnectConfigured={walletConnectConfigured} />
-          <button
-            type="button"
-            disabled={!readyToPay || busy !== null}
-            onClick={() => void onPay()}
-            className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
-          >
-            {busy === "pay"
-              ? "Paying…"
-              : topUp
-                ? `Add ${topUpAmount.trim() || "…"} ${currency} with wallet`
-                : `Pay ${face} ${currency} with wallet`}
-          </button>
+          {wagmiReady ? (
+            <PayWithWallet
+              fund={fund}
+              bountyId={bountyId}
+              face={face}
+              currency={currency}
+              topUp={topUp}
+              topUpAmount={topUpAmount}
+              topUpReady={topUpReady}
+              payResource={payResource}
+              walletConnectConfigured={walletConnectConfigured}
+              busy={busy}
+              setBusy={setBusy}
+              setError={setError}
+              setMessage={setMessage}
+              setPaidInbound={setPaidInbound}
+            />
+          ) : (
+            <p className="text-sm text-zinc-500">Wallet connection loads in this browser.</p>
+          )}
           <p className="text-xs text-zinc-500">
             One-tap: x402 exact to gb-escrow
             {escrowAddress ? (
@@ -246,5 +196,115 @@ export function FundLockPanel({
       )}
       <p className="text-xs text-zinc-500">{HOSTED_CHECKOUT_DISABLED_COPY}</p>
     </section>
+  );
+}
+
+function PayWithWallet({
+  fund,
+  bountyId,
+  face,
+  currency,
+  topUp,
+  topUpAmount,
+  topUpReady,
+  payResource,
+  walletConnectConfigured,
+  busy,
+  setBusy,
+  setError,
+  setMessage,
+  setPaidInbound,
+}: {
+  fund: FundWalletRuntime;
+  bountyId: string;
+  face: string;
+  currency: string;
+  topUp: boolean;
+  topUpAmount: string;
+  topUpReady: boolean;
+  payResource: string;
+  walletConnectConfigured: boolean;
+  busy: "pay" | "lock" | null;
+  setBusy: (value: "pay" | "lock" | null) => void;
+  setError: (value: string | null) => void;
+  setMessage: (value: string | null) => void;
+  setPaidInbound: (value: boolean) => void;
+}) {
+  const { address, isConnected, chainId } = useAccount();
+  const { data: walletClient } = useWalletClient();
+  const readyToPay = Boolean(
+    isConnected && address && chainId === fund.chainId && walletClient && (!topUp || topUpReady),
+  );
+
+  async function onPay() {
+    if (!walletClient || !address) {
+      setError(`Connect a ${fund.chainName} wallet first.`);
+      return;
+    }
+    setBusy("pay");
+    setError(null);
+    setMessage(null);
+    try {
+      const paid = await payX402Exact({
+        resourceUrl: payResource,
+        allowMainnet: fund.allowMainnet,
+        signer: {
+          address,
+          signTypedData: async (typed) =>
+            walletClient.signTypedData({
+              account: address,
+              domain: typed.domain,
+              types: typed.types,
+              primaryType: typed.primaryType,
+              message: typed.message,
+            }),
+        },
+      });
+      if (!paid.ok) {
+        setError(`${paid.error}: ${paid.message}`);
+        return;
+      }
+      if (topUp) {
+        if (!paid.topUpApplied) {
+          setError(paid.message || "Top-up was not applied.");
+          return;
+        }
+        setMessage(paid.message || "Top-up added. Reloading…");
+        window.location.assign(`/bounties/${bountyId}`);
+        return;
+      }
+      setPaidInbound(true);
+      setMessage(paid.message || "Payment recorded. Locking in escrow…");
+      const locked = await lockAfterInbound(bountyId);
+      if (!locked.ok) {
+        setError(`${locked.error}: ${locked.message}`);
+        setMessage("Payment recorded. Use Lock in escrow — no hash paste.");
+        return;
+      }
+      setMessage("Paid and locked. Reloading…");
+      window.location.assign(`/bounties/${bountyId}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Pay failed.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <>
+      <ConnectWalletButtons walletConnectConfigured={walletConnectConfigured} />
+      <button
+        type="button"
+        disabled={!readyToPay || busy !== null}
+        onClick={() => void onPay()}
+        className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900"
+      >
+        {busy === "pay"
+          ? "Paying…"
+          : topUp
+            ? `Add ${topUpAmount.trim() || "…"} ${currency} with wallet`
+            : `Pay ${face} ${currency} with wallet`}
+      </button>
+    </>
   );
 }

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { allocationLedger, bounties, poolParticipants } from "../db/schema";
 import { CLAIM_SKIP } from "../webhooks/outcome";
@@ -209,6 +209,46 @@ export function toPoolRosterView(args: {
       githubLogin: leg.participantId ? (loginByParticipant.get(leg.participantId) ?? null) : null,
     })),
   };
+}
+
+/**
+ * Same `toPoolRosterView` as `getPoolRoster`, one query pair for a page of bounties.
+ * The list payout and the detail payout both start here.
+ */
+export async function listPoolRosters(
+  db: Database,
+  rows: readonly { id: string; amountUsdc: string }[],
+): Promise<Map<string, PoolRosterView>> {
+  const views = new Map<string, PoolRosterView>();
+  if (rows.length === 0) return views;
+  const ids = rows.map((row) => row.id);
+  const [participants, legs] = await Promise.all([
+    db.select().from(poolParticipants).where(inArray(poolParticipants.bountyId, ids)),
+    db.select().from(allocationLedger).where(inArray(allocationLedger.bountyId, ids)),
+  ]);
+  const participantsBy = new Map<string, ParticipantRow[]>();
+  for (const row of participants) {
+    const list = participantsBy.get(row.bountyId) ?? [];
+    list.push(row);
+    participantsBy.set(row.bountyId, list);
+  }
+  const legsBy = new Map<string, LedgerRow[]>();
+  for (const row of legs) {
+    const list = legsBy.get(row.bountyId) ?? [];
+    list.push(row);
+    legsBy.set(row.bountyId, list);
+  }
+  for (const row of rows) {
+    views.set(
+      row.id,
+      toPoolRosterView({
+        faceUsdc: row.amountUsdc,
+        participants: participantsBy.get(row.id) ?? [],
+        legs: legsBy.get(row.id) ?? [],
+      }),
+    );
+  }
+  return views;
 }
 
 export async function getPoolRoster(

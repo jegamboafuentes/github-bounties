@@ -9,7 +9,7 @@ import type { FacilitatorSettlementCheck } from "../../escrow/fund-hash";
 import type { X402SellerResult } from "../../escrow/x402-seller";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
 import { PublicApiError } from "../public/errors";
-import type { AccessDeps, ApiKeyRecord } from "./deps";
+import type { AccessDeps, ApiKeyRecord, SpendRow } from "./deps";
 import {
   authenticateBearer,
   createApiKey,
@@ -21,11 +21,13 @@ import {
   handleMe,
   handleMyClaims,
   handleRefund,
+  handleUsage,
   handleTopUp,
   revokeApiKey,
   runAuthed,
   type ApiPrincipal,
 } from "./handlers";
+import { apiResultResponse, handleV1Action } from "./http";
 import {
   apiMoneyEnabled,
   generateApiKey,
@@ -65,7 +67,7 @@ function memory(options?: {
 }) {
   const keys: ApiKeyRecord[] = [];
   const logs: { id: string; keyId: string; route: string; status: number; createdAt: Date }[] = [];
-  const spends: { id: string; keyId: string; amountUsdc: string; status: string; createdAt: Date; kind: string }[] = [];
+  const spends: SpendRow[] = [];
   const idem = new Map<string, IdempotencyRow>();
   const calls = { lock: 0, topUp: 0, seller: 0, inbound: 0, cancel: 0, create: 0, claim: 0, refund: 0 };
   const poolPaid = new Set<string>();
@@ -111,15 +113,24 @@ function memory(options?: {
     async sumOpenSpend() {
       return atomicToUsdc(openSpend);
     },
+    async listRecentSpend(keyId, limit) {
+      const cap = Math.min(Math.max(limit, 1), 50);
+      return spends
+        .filter((row) => row.keyId === keyId && (row.status === "reserved" || row.status === "recorded"))
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime() || b.id.localeCompare(a.id))
+        .slice(0, cap);
+    },
     async insertSpend(row) {
-      const id = randomUUID();
+      const id = row.id ?? randomUUID();
       spends.push({
         id,
         keyId: row.keyId,
+        bountyId: row.bountyId,
+        kind: row.kind,
         amountUsdc: row.amountUsdc,
+        txHash: row.txHash ?? null,
         status: row.status,
         createdAt: row.createdAt,
-        kind: row.kind,
       });
       if (row.status === "reserved" || row.status === "recorded") {
         openSpend += usdcToAtomic(row.amountUsdc);
@@ -638,6 +649,119 @@ describe("spend caps, idempotency, and headless x402", () => {
     assert.equal(json.includes("googleSub"), false);
     assert.match(json, /ada@example.com/);
   });
+
+  it("returns already_cancelled and does not cancel again", async () => {
+    const bag = memory({ status: "cancelled" });
+    const { token } = await principal(bag.deps, ["write"]);
+    const response = await handleV1Action(
+      new Request(`https://dev.githubbounties.xyz/api/v1/bounties/${BOUNTY}/cancel`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "idempotency-key": "cancel-again",
+        },
+      }),
+      { kind: "cancel", bountyId: BOUNTY },
+      bag.deps,
+    );
+    assert.equal(response.status, 409);
+    assert.equal(response.headers.get("ratelimit-limit"), "20");
+    assert.equal(response.headers.get("ratelimit-reset"), "60");
+    const body = (await response.json()) as { error: { code: string; message: string } };
+    assert.equal(body.error.code, "already_cancelled");
+    assert.match(body.error.message, /already cancelled/);
+    assert.equal(bag.calls.cancel, 0);
+  });
+
+  it("returns this key's usage and hides other keys", async () => {
+    const bag = memory();
+    const { principal: mine } = await principal(bag.deps, ["read"], { perTx: "10", daily: "40" });
+    const { principal: other } = await principal(bag.deps, ["read"]);
+    const now = new Date("2026-09-24T12:00:00.000Z");
+    await bag.deps.insertSpend({
+      keyId: mine.keyId,
+      bountyId: BOUNTY,
+      kind: "fund",
+      amountUsdc: "5.000000",
+      txHash: TX,
+      status: "recorded",
+      createdAt: now,
+    });
+    await bag.deps.insertSpend({
+      keyId: other.keyId,
+      bountyId: BOUNTY,
+      kind: "top_up",
+      amountUsdc: "9.000000",
+      txHash: TX,
+      status: "recorded",
+      createdAt: new Date("2026-09-24T13:00:00.000Z"),
+    });
+    await bag.deps.insertSpend({
+      keyId: mine.keyId,
+      bountyId: BOUNTY,
+      kind: "fund",
+      amountUsdc: "1.000000",
+      txHash: null,
+      status: "failed",
+      createdAt: now,
+    });
+    bag.setOpenSpend("5.000000");
+    const usage = await handleUsage(mine, bag.deps);
+    const body = usage.body as {
+      perTxCapUsdc: string;
+      dailyCapUsdc: string;
+      spentTodayUsdc: string;
+      remainingTodayUsdc: string;
+      entries: { amountUsdc: string; kind: string; bountyId: string; txHash: string | null; createdAt: string }[];
+    };
+    assert.equal(body.perTxCapUsdc, "10.000000");
+    assert.equal(body.dailyCapUsdc, "40.000000");
+    assert.equal(body.spentTodayUsdc, "5.000000");
+    assert.equal(body.remainingTodayUsdc, "35.000000");
+    assert.equal(body.entries.length, 1);
+    assert.equal(body.entries[0]?.kind, "fund");
+    assert.equal(body.entries[0]?.bountyId, BOUNTY);
+    assert.equal(body.entries[0]?.txHash, TX);
+    assert.equal(JSON.stringify(body).includes("9.000000"), false);
+    const { principal: writer } = await principal(bag.deps, ["write"]);
+    await assert.rejects(
+      () => handleUsage(writer, bag.deps),
+      (err: unknown) => err instanceof Error && "code" in err && err.code === "forbidden_scope",
+    );
+  });
+
+  it("puts RateLimit headers on keyed 4xx and WWW-Authenticate on 401", async () => {
+    const bag = memory();
+    const { token } = await principal(bag.deps, ["write"]);
+    const denied = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me", {
+        headers: { authorization: `Bearer ${token}`, cookie: "authjs.session-token=not-a-jwt" },
+      }),
+      { kind: "me" },
+      bag.deps,
+    );
+    assert.equal(denied.status, 403);
+    assert.equal(denied.headers.get("ratelimit-limit"), "120");
+    assert.equal(denied.headers.get("ratelimit-reset"), "60");
+    assert.equal(denied.headers.get("www-authenticate"), null);
+    assert.equal(denied.headers.get("set-cookie"), null);
+
+    const anon = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me", {
+        headers: { cookie: "authjs.session-token=not-a-jwt" },
+      }),
+      { kind: "me" },
+      bag.deps,
+    );
+    assert.equal(anon.status, 401);
+    assert.equal(anon.headers.get("www-authenticate"), "Bearer");
+    assert.equal(anon.headers.get("ratelimit-limit"), "120");
+    const anonBody = (await anon.json()) as { error: { code: string } };
+    assert.equal(anonBody.error.code, "unauthorized");
+
+    const shaped = apiResultResponse({ status: 401, body: { error: { code: "unauthorized", message: "no", details: null } } });
+    assert.equal(shaped.headers.get("www-authenticate"), "Bearer");
+  });
 });
 
 describe("production money wiring", () => {
@@ -829,5 +953,20 @@ describe("V4-3 claims, status, and funded refund", () => {
     const json = JSON.stringify(mine.body) + JSON.stringify(one.body);
     assert.equal(json.includes(ATTACKER), false);
     assert.equal(json.includes("wallet"), false);
+  });
+
+  it("keeps the shown-once secret out of form restore and browser storage", () => {
+    const root = dirname(fileURLToPath(import.meta.url));
+    const card = readFileSync(join(root, "../../components/api-keys-card.tsx"), "utf8");
+    assert.doesNotMatch(card, /useActionState/);
+    assert.doesNotMatch(card, /localStorage|sessionStorage/);
+    assert.match(card, /pagehide/);
+    assert.match(card, /<p ref=\{nodeRef\}/);
+    assert.match(card, /Confirm revoke/);
+    assert.match(card, /Created \{key\.createdAt\}/);
+    assert.match(card, /Last used/);
+    const config = readFileSync(join(root, "../../../next.config.ts"), "utf8");
+    assert.match(config, /\/settings/);
+    assert.match(config, /no-store/);
   });
 });

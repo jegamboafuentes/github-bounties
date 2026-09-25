@@ -5,6 +5,7 @@ import { useAccount } from "wagmi";
 import { saveWalletAddressAction, type BountyActionState } from "@/app/actions/bounties";
 import { ConnectWalletButtons } from "@/components/connect-wallet";
 import { shortenAddress } from "@/wallet/config";
+import { useWagmiReady } from "@/wallet/providers";
 
 const initial: BountyActionState = { ok: true };
 
@@ -28,6 +29,14 @@ export function WalletForm({
 }
 
 function SaveConnectedAddress({ savedAddress }: { savedAddress: string }) {
+  const ready = useWagmiReady();
+  if (!ready) {
+    return <p className="text-xs text-zinc-500">Wallet connection loads in this browser.</p>;
+  }
+  return <SaveConnectedAddressReady savedAddress={savedAddress} />;
+}
+
+function SaveConnectedAddressReady({ savedAddress }: { savedAddress: string }) {
   const { address, isConnected } = useAccount();
   const [state, action, pending] = useActionState(saveWalletAddressAction, initial);
   const alreadySaved = Boolean(

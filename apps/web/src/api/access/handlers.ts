@@ -5,7 +5,7 @@ import type { ApiKeyScope } from "../../db/schema";
 import { logMoneyAction, moneyResultCode } from "../../escrow/actor-log";
 import { isEscrowError } from "../../escrow/errors";
 import type { FacilitatorSettlementCheck } from "../../escrow/fund-hash";
-import { usdcToAtomic } from "../../lib/money";
+import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
 import {
   buildX402ExactChallenge,
   encodePaymentRequiredHeader,
@@ -405,6 +405,33 @@ export async function handleMe(principal: ApiPrincipal, deps: AccessDeps): Promi
   };
 }
 
+export async function handleUsage(principal: ApiPrincipal, deps: AccessDeps): Promise<ApiResult> {
+  requireScope(principal.scopes, "read");
+  const since = utcDayStart(deps.now());
+  const [spentTodayUsdc, entries] = await Promise.all([
+    deps.sumOpenSpend(principal.keyId, since),
+    deps.listRecentSpend(principal.keyId, 50),
+  ]);
+  const remainingAtomic = usdcToAtomic(principal.dailyCapUsdc) - usdcToAtomic(spentTodayUsdc);
+  return {
+    status: 200,
+    body: {
+      perTxCapUsdc: principal.perTxCapUsdc,
+      dailyCapUsdc: principal.dailyCapUsdc,
+      spentTodayUsdc,
+      remainingTodayUsdc: atomicToUsdc(remainingAtomic > 0n ? remainingAtomic : 0n),
+      dayStart: since.toISOString(),
+      entries: entries.slice(0, 50).map((row) => ({
+        amountUsdc: row.amountUsdc,
+        kind: row.kind,
+        bountyId: row.bountyId,
+        txHash: row.txHash,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    },
+  };
+}
+
 export async function handleMyBounties(principal: ApiPrincipal, deps: AccessDeps): Promise<ApiResult> {
   requireScope(principal.scopes, "read");
   const mine = await deps.listMyBounties(principal.userId);
@@ -508,6 +535,14 @@ export async function handleCancel(
       if (!bounty) throw new PublicApiError("not_found", "Bounty not found.");
       if (bounty.posterUserId !== principal.userId) {
         throw new PublicApiError("not_poster", "Only the poster can cancel this bounty.", null, 403);
+      }
+      if (bounty.status === "cancelled") {
+        throw new PublicApiError(
+          "already_cancelled",
+          "This bounty is already cancelled.",
+          { status: bounty.status },
+          409,
+        );
       }
       if (bounty.status !== "pending_fund") {
         throw new PublicApiError(

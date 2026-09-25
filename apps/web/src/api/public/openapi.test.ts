@@ -22,6 +22,7 @@ const WRITE = [
   "/api/v1/me",
   "/api/v1/me/bounties",
   "/api/v1/me/claims",
+  "/api/v1/me/usage",
 ];
 
 describe("OpenAPI document", () => {

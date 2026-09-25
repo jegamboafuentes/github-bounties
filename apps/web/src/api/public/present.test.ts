@@ -15,6 +15,7 @@ import {
   orderContributionsNewestFirst,
   presentBountyDetail,
   presentFunderList,
+  presentFundingTransactions,
   presentPublicBounty,
   usdcWire,
 } from "./present";
@@ -238,6 +239,95 @@ describe("confirmed funded total", () => {
       assert.equal(detail.bounty.totalFundedUsdc, funded);
       assert.equal(detail.bounty.payout.faceUsdc, face);
     }
+  });
+});
+
+describe("shared roster payout", () => {
+  it("uses the detail roster schedule and split on the list", () => {
+    const face = "100.000000";
+    const split = poolPayoutBreakdown(face, 2);
+    const view = roster(face);
+    view.breakdown = {
+      ...view.breakdown,
+      faceUsdc: split.faceUsdc,
+      feeUsdc: split.feeUsdc,
+      winnerUsdc: split.winnerUsdc,
+      poolTotalUsdc: split.poolTotalUsdc,
+      eachUsdc: split.eachUsdc,
+      eligibleCount: split.eligibleCount,
+      emptyPool: split.emptyPool,
+    };
+    const bounty = board({ status: "funded", amountUsdc: face });
+    const list = presentPublicBounty(bounty, face, view);
+    const detail = presentBountyDetail({
+      bounty,
+      totalFundedUsdc: face,
+      issueBody: null,
+      roster: view,
+      escrow: null,
+    });
+    assert.equal(list.payout.schedule, "roster");
+    assert.equal(detail.bounty.payout.schedule, "roster");
+    assert.equal(list.payout.emptyPool, false);
+    assert.equal(list.payout.winnerUsdc, detail.bounty.payout.winnerUsdc);
+    assert.equal(list.payout.poolTotalUsdc, detail.bounty.payout.poolTotalUsdc);
+    assert.equal(list.payout.feeUsdc, detail.bounty.payout.feeUsdc);
+    assert.equal(list.payout.eachUsdc, detail.bounty.payout.eachUsdc);
+
+    const empty = presentPublicBounty(board({ status: "funded", amountUsdc: "10.000000" }), "10.000000");
+    const emptyDetail = presentBountyDetail({
+      bounty: board({ status: "funded", amountUsdc: "10.000000" }),
+      totalFundedUsdc: "10.000000",
+      issueBody: null,
+      roster: roster("10.000000"),
+      escrow: null,
+    });
+    assert.equal(empty.payout.schedule, "roster");
+    assert.equal(empty.payout.emptyPool, true);
+    assert.equal(emptyDetail.bounty.payout.schedule, "roster");
+    assert.equal(empty.payout.winnerUsdc, emptyDetail.bounty.payout.winnerUsdc);
+    assert.equal(empty.payout.poolTotalUsdc, "0.000000");
+  });
+});
+
+describe("public funding transactions", () => {
+  it("lists the fund and later top-ups with explorer links and no wallets", () => {
+    const fund = `0x${"ab".repeat(32)}`;
+    const topUp = `0x${"cd".repeat(32)}`;
+    const detail = presentBountyDetail({
+      bounty: board({ status: "funded", amountUsdc: "14.500000" }),
+      totalFundedUsdc: "14.500000",
+      issueBody: null,
+      roster: roster("14.500000"),
+      escrow: null,
+      mainnet: false,
+      contributions: [
+        { amountUsdc: "10.000000", fundTxHash: fund, createdAt: new Date("2026-09-01T00:00:00.000Z") },
+        { amountUsdc: "4.500000", fundTxHash: topUp, createdAt: new Date("2026-09-02T00:00:00.000Z") },
+        { amountUsdc: "1.000000", fundTxHash: "not-a-hash", createdAt: new Date("2026-09-03T00:00:00.000Z") },
+      ],
+    });
+    assert.deepEqual(
+      detail.funding.map((row) => row.kind),
+      ["fund", "top_up", "top_up"],
+    );
+    assert.equal(detail.funding[0]?.txHash, fund);
+    assert.equal(detail.funding[1]?.amountUsdc, "4.500000");
+    assert.match(detail.funding[1]?.explorerUrl ?? "", /^https:\/\/sepolia\.basescan\.org\/tx\/0xcd/);
+    assert.equal(detail.funding[2]?.explorerUrl, null);
+    const json = JSON.stringify(detail.funding);
+    assert.equal(json.includes("funderAddress"), false);
+    assert.equal(json.includes("wallet"), false);
+
+    const mainnet = presentFundingTransactions({
+      contributions: [{ amountUsdc: "1", fundTxHash: fund, createdAt: new Date("2026-09-01T00:00:00.000Z") }],
+      escrowFundTxHash: fund,
+      escrowAmountUsdc: "1",
+      mainnet: true,
+    });
+    assert.equal(mainnet[0]?.kind, "fund");
+    assert.match(mainnet[0]?.explorerUrl ?? "", /^https:\/\/basescan\.org\/tx\//);
+    assert.doesNotMatch(mainnet[0]?.explorerUrl ?? "", /sepolia/);
   });
 });
 

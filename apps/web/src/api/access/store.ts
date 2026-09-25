@@ -25,7 +25,7 @@ import { assertFundedTopUpOpen, topUpFundedBounty } from "../../escrow/top-up";
 import { processLiveX402Exact } from "../../escrow/x402-seller";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
 import { PublicApiError } from "../public/errors";
-import type { AccessDeps, ApiKeyRecord, ClaimLegView, PoolLegAuth, WinnerLegAuth } from "./deps";
+import type { AccessDeps, ApiKeyRecord, ClaimLegView, PoolLegAuth, SpendRow, WinnerLegAuth } from "./deps";
 import type { IdempotencyRow } from "./policy";
 
 function asKey(row: typeof apiKeys.$inferSelect): ApiKeyRecord {
@@ -150,6 +150,30 @@ export function createAccessDeps(
         );
       const total = row?.total ?? "0";
       return atomicToUsdc(usdcToAtomic(total));
+    },
+    async listRecentSpend(keyId, limit) {
+      const cap = Math.min(Math.max(limit, 1), 50);
+      const rows = await db
+        .select()
+        .from(apiSpendLedger)
+        .where(
+          and(
+            eq(apiSpendLedger.keyId, keyId),
+            inArray(apiSpendLedger.status, ["reserved", "recorded"]),
+          ),
+        )
+        .orderBy(desc(apiSpendLedger.createdAt), desc(apiSpendLedger.id))
+        .limit(cap);
+      return rows.map((row) => ({
+        id: row.id,
+        keyId: row.keyId,
+        bountyId: row.bountyId,
+        kind: row.kind as SpendRow["kind"],
+        amountUsdc: row.amountUsdc,
+        txHash: row.txHash,
+        status: row.status as SpendRow["status"],
+        createdAt: row.createdAt,
+      }));
     },
     async insertSpend(row) {
       const [inserted] = await db
