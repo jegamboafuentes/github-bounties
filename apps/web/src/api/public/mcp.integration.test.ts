@@ -123,20 +123,33 @@ describe("MCP read tools", () => {
       listed.tools.map((tool) => tool.name).sort(),
       [
         "cancel_bounty",
+        "claim_pool",
+        "claim_winner",
         "clear_work_signal",
         "create_bounty",
         "fund_bounty",
         "get_bounty",
+        "get_bounty_claims",
         "get_bounty_intelligence",
         "get_me",
         "get_stats",
         "list_bounties",
         "list_funders",
         "list_my_bounties",
+        "list_my_claims",
+        "refund_bounty",
         "signal_working",
         "top_up_bounty",
       ],
     );
+    for (const name of ["claim_winner", "claim_pool", "refund_bounty", "fund_bounty", "top_up_bounty"]) {
+      const tool = listed.tools.find((item) => item.name === name);
+      assert.match(tool?.description ?? "", /^Requires API key with money scope; DEV only/);
+    }
+    for (const name of ["get_me", "list_my_bounties", "get_bounty_claims", "list_my_claims"]) {
+      const tool = listed.tools.find((item) => item.name === name);
+      assert.match(tool?.description ?? "", /^Requires API key \(read scope\)/);
+    }
     const listTool = listed.tools.find((tool) => tool.name === "list_bounties");
     assert.match(listTool?.description ?? "", /has_intel/);
     assert.match(listTool?.description ?? "", /totalFundedUsdc/);

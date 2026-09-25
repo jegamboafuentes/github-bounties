@@ -84,6 +84,71 @@ export type MoneyBounty = {
 
 export type MoneyGate = { wallet: boolean; github: boolean };
 
+export type ClaimKind = "winner" | "pool";
+
+export type WinnerLegAuth = {
+  claimId: string;
+  hunterUserId: string;
+  prAuthorLogin: string | null;
+  status: string;
+  amountUsdc: string | null;
+  txHash: string | null;
+  paidAt: Date | null;
+};
+
+export type PoolLegAuth = {
+  participantId: string;
+  userId: string | null;
+  githubLogin: string;
+  shareUsdc: string;
+  txHash: string | null;
+  paidAt: Date | null;
+};
+
+export type ClaimAuthContext = {
+  bounty: {
+    id: string;
+    title: string;
+    status: string;
+    amountUsdc: string;
+    posterUserId: string;
+  } | null;
+  walletAddress: string | null;
+  githubLogin: string | null;
+  winner: WinnerLegAuth | null;
+  pool: PoolLegAuth | null;
+};
+
+export type ClaimLegView = {
+  bountyId: string;
+  title: string;
+  kind: ClaimKind;
+  status: string;
+  amountUsdc: string | null;
+  txHash: string | null;
+  paidAt: string | null;
+};
+
+export type PerformedClaim = {
+  bountyId: string;
+  kind: ClaimKind;
+  status: string;
+  bountyStatus: string;
+  amountUsdc: string;
+  txHash: string | null;
+  destination: string;
+  claimId: string | null;
+  participantId: string | null;
+};
+
+export type PerformedRefund = {
+  bountyId: string;
+  status: string;
+  refundTxHash: string | null;
+  amountUsdc: string;
+  destination: string;
+};
+
 export type AccessDeps = {
   env: NodeJS.ProcessEnv;
   now: () => Date;
@@ -150,4 +215,19 @@ export type AccessDeps = {
     status: string;
     refundTxHash: string | null;
   }>;
+  loadClaimAuthz: (userId: string, bountyId: string, kind: ClaimKind) => Promise<ClaimAuthContext>;
+  performClaim: (input: {
+    bountyId: string;
+    actorUserId: string;
+    kind: ClaimKind;
+    requestId: string;
+    apiKeyId: string;
+  }) => Promise<PerformedClaim>;
+  performRefund: (input: {
+    bountyId: string;
+    actorUserId: string;
+    requestId: string;
+    apiKeyId: string;
+  }) => Promise<PerformedRefund>;
+  listClaims: (userId: string, bountyId: string | null) => Promise<ClaimLegView[]>;
 };

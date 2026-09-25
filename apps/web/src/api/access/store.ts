@@ -1,6 +1,7 @@
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import { createBountyFromIssueUrl } from "../../bounties/create";
 import { clearWorkSignal, signalWorkingOnThis } from "../../bounties/signals";
+import { claimPoolPayout, claimPayout } from "../../claims/payout";
 import type { Database } from "../../db/client";
 import {
   apiIdempotencyKeys,
@@ -9,18 +10,22 @@ import {
   apiSpendLedger,
   bounties,
   bountyContributions,
+  claims,
+  escrows,
   githubLinks,
+  poolParticipants,
   users,
   type ApiKeyEnv,
   type ApiKeyScope,
 } from "../../db/schema";
 import { lockEscrowFunds, refundEscrow } from "../../escrow/service";
 import { recordExactInbound } from "../../escrow/inbound";
-import { resolveRail } from "../../escrow/rail";
+import { resolveRail, type CdpRail } from "../../escrow/rail";
 import { assertFundedTopUpOpen, topUpFundedBounty } from "../../escrow/top-up";
 import { processLiveX402Exact } from "../../escrow/x402-seller";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
-import type { AccessDeps, ApiKeyRecord } from "./deps";
+import { PublicApiError } from "../public/errors";
+import type { AccessDeps, ApiKeyRecord, ClaimLegView, PoolLegAuth, WinnerLegAuth } from "./deps";
 import type { IdempotencyRow } from "./policy";
 
 function asKey(row: typeof apiKeys.$inferSelect): ApiKeyRecord {
@@ -48,7 +53,9 @@ export function createAccessDeps(
   db: Database,
   env: NodeJS.ProcessEnv = process.env,
   now: () => Date = () => new Date(),
+  rail?: CdpRail,
 ): AccessDeps {
+  const payoutRail = () => rail ?? resolveRail(env);
   return {
     env,
     now,
@@ -385,5 +392,245 @@ export function createAccessDeps(
       );
       return { status: result.bountyStatus, refundTxHash: result.refundTxHash };
     },
+    async loadClaimAuthz(userId, bountyId, kind) {
+      const bounty = await this.loadMoneyBounty(bountyId);
+      const [user] = await db
+        .select({ walletAddress: users.walletAddress })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      const [link] = await db
+        .select({ githubLogin: githubLinks.githubLogin, githubId: githubLinks.githubId })
+        .from(githubLinks)
+        .where(eq(githubLinks.userId, userId))
+        .limit(1);
+      const winner = bounty && kind === "winner" ? await loadWinnerLeg(db, bountyId) : null;
+      const pool =
+        bounty && kind === "pool" ? await loadOwnPoolLeg(db, bountyId, userId, link?.githubId ?? null) : null;
+      return {
+        bounty: bounty
+          ? {
+              id: bounty.id,
+              title: bounty.title,
+              status: bounty.status,
+              amountUsdc: bounty.amountUsdc,
+              posterUserId: bounty.posterUserId,
+            }
+          : null,
+        walletAddress: user?.walletAddress ?? null,
+        githubLogin: link?.githubLogin ?? null,
+        winner,
+        pool,
+      };
+    },
+    async performClaim(input) {
+      const wallet = await savedWallet(db, input.actorUserId);
+      if (!wallet) {
+        throw new PublicApiError("wallet_not_set", "Save a payout wallet before claiming with this key.", null, 403);
+      }
+      const railNow = payoutRail();
+      if (input.kind === "winner") {
+        const settled = await claimPayout(
+          input.bountyId,
+          input.actorUserId,
+          { payoutAddress: wallet, persistWallet: false },
+          { db, rail: railNow, requestId: input.requestId, now: now() },
+        );
+        return {
+          bountyId: input.bountyId,
+          kind: "winner" as const,
+          status: settled.claimStatus,
+          bountyStatus: settled.bountyStatus,
+          amountUsdc: settled.winnerUsdc,
+          txHash: settled.payoutTxHash,
+          destination: wallet,
+          claimId: settled.claimId,
+          participantId: null,
+        };
+      }
+      const settled = await claimPoolPayout(
+        input.bountyId,
+        input.actorUserId,
+        { payoutAddress: wallet, persistWallet: false },
+        { db, rail: railNow, requestId: input.requestId, now: now() },
+      );
+      const [member] = await db
+        .select({
+          txHash: poolParticipants.payoutTxHash,
+          shareUsdc: poolParticipants.shareUsdc,
+        })
+        .from(poolParticipants)
+        .where(eq(poolParticipants.id, settled.participantId))
+        .limit(1);
+      return {
+        bountyId: input.bountyId,
+        kind: "pool" as const,
+        status: member?.txHash ? "paid" : "unpaid",
+        bountyStatus: settled.bountyStatus,
+        amountUsdc: member?.shareUsdc ?? settled.poolShareUsdc,
+        txHash: member?.txHash ?? null,
+        destination: wallet,
+        claimId: null,
+        participantId: settled.participantId,
+      };
+    },
+    async performRefund(input) {
+      const result = await refundEscrow(
+        input.bountyId,
+        { actorUserId: input.actorUserId, reason: "cancel" },
+        { db, rail: payoutRail(), requestId: input.requestId, now: now() },
+      );
+      const [escrow] = await db
+        .select({ funderAddress: escrows.funderAddress })
+        .from(escrows)
+        .where(eq(escrows.bountyId, input.bountyId))
+        .limit(1);
+      const [bounty] = await db
+        .select({ amountUsdc: bounties.amountUsdc })
+        .from(bounties)
+        .where(eq(bounties.id, input.bountyId))
+        .limit(1);
+      return {
+        bountyId: input.bountyId,
+        status: result.bountyStatus,
+        refundTxHash: result.refundTxHash,
+        amountUsdc: bounty?.amountUsdc ?? "0.000000",
+        destination: escrow?.funderAddress?.trim() || "",
+      };
+    },
+    async listClaims(userId, bountyId) {
+      if (bountyId) {
+        const bounty = await this.loadMoneyBounty(bountyId);
+        if (!bounty) throw new PublicApiError("not_found", "Bounty not found.");
+      }
+      const [link] = await db
+        .select({ githubId: githubLinks.githubId })
+        .from(githubLinks)
+        .where(eq(githubLinks.userId, userId))
+        .limit(1);
+      const winnerRows = await db
+        .select({
+          bountyId: claims.bountyId,
+          title: bounties.title,
+          status: claims.status,
+          amountUsdc: claims.payoutUsdc,
+          txHash: claims.payoutTxHash,
+          paidAt: claims.paidAt,
+          createdAt: bounties.createdAt,
+        })
+        .from(claims)
+        .innerJoin(bounties, eq(bounties.id, claims.bountyId))
+        .where(
+          and(eq(claims.hunterUserId, userId), bountyId ? eq(claims.bountyId, bountyId) : sql`true`),
+        )
+        .orderBy(desc(bounties.createdAt))
+        .limit(50);
+      const poolRows = await db
+        .select({
+          bountyId: poolParticipants.bountyId,
+          title: bounties.title,
+          shareUsdc: poolParticipants.shareUsdc,
+          txHash: poolParticipants.payoutTxHash,
+          paidAt: poolParticipants.paidAt,
+          skipReason: poolParticipants.skipReason,
+          createdAt: bounties.createdAt,
+        })
+        .from(poolParticipants)
+        .innerJoin(bounties, eq(bounties.id, poolParticipants.bountyId))
+        .where(
+          and(
+            eq(poolParticipants.role, "pool"),
+            or(
+              eq(poolParticipants.userId, userId),
+              link ? eq(poolParticipants.githubId, link.githubId) : sql`false`,
+            ),
+            bountyId ? eq(poolParticipants.bountyId, bountyId) : sql`true`,
+          ),
+        )
+        .orderBy(desc(bounties.createdAt))
+        .limit(50);
+      const legs: (ClaimLegView & { createdAt: Date })[] = [
+        ...winnerRows.map((row) => ({
+          bountyId: row.bountyId,
+          title: row.title,
+          kind: "winner" as const,
+          status: row.status,
+          amountUsdc: row.amountUsdc,
+          txHash: row.txHash,
+          paidAt: row.paidAt?.toISOString() ?? null,
+          createdAt: row.createdAt,
+        })),
+        ...poolRows.map((row) => ({
+          bountyId: row.bountyId,
+          title: row.title,
+          kind: "pool" as const,
+          status: row.txHash ? "paid" : row.skipReason ? "skipped" : "unpaid",
+          amountUsdc: row.shareUsdc,
+          txHash: row.txHash,
+          paidAt: row.paidAt?.toISOString() ?? null,
+          createdAt: row.createdAt,
+        })),
+      ];
+      legs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      return legs.slice(0, 50).map(({ createdAt: _created, ...leg }) => leg);
+    },
+  };
+}
+
+async function savedWallet(db: Database, userId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ walletAddress: users.walletAddress })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row?.walletAddress?.trim() || null;
+}
+
+async function loadWinnerLeg(db: Database, bountyId: string): Promise<WinnerLegAuth | null> {
+  const rows = await db
+    .select()
+    .from(claims)
+    .where(and(eq(claims.bountyId, bountyId), inArray(claims.status, ["eligible", "paid"])))
+    .orderBy(desc(claims.updatedAt));
+  const claim = rows.find((row) => row.status === "eligible") ?? rows.find((row) => row.status === "paid");
+  if (!claim) return null;
+  return {
+    claimId: claim.id,
+    hunterUserId: claim.hunterUserId,
+    prAuthorLogin: claim.prAuthorLogin,
+    status: claim.status,
+    amountUsdc: claim.payoutUsdc,
+    txHash: claim.payoutTxHash,
+    paidAt: claim.paidAt,
+  };
+}
+
+async function loadOwnPoolLeg(
+  db: Database,
+  bountyId: string,
+  userId: string,
+  githubId: bigint | null,
+): Promise<PoolLegAuth | null> {
+  const rows = await db
+    .select()
+    .from(poolParticipants)
+    .where(
+      and(
+        eq(poolParticipants.bountyId, bountyId),
+        eq(poolParticipants.role, "pool"),
+        or(eq(poolParticipants.userId, userId), githubId != null ? eq(poolParticipants.githubId, githubId) : sql`false`),
+      ),
+    );
+  const mine =
+    rows.find((row) => row.userId === userId) ??
+    rows.find((row) => githubId != null && row.githubId === githubId);
+  if (!mine) return null;
+  return {
+    participantId: mine.id,
+    userId: mine.userId,
+    githubLogin: mine.githubLogin,
+    shareUsdc: mine.shareUsdc,
+    txHash: mine.payoutTxHash,
+    paidAt: mine.paidAt,
   };
 }

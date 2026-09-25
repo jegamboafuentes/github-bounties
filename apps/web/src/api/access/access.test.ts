@@ -8,14 +8,19 @@ import type { ApiKeyScope } from "../../db/schema";
 import type { FacilitatorSettlementCheck } from "../../escrow/fund-hash";
 import type { X402SellerResult } from "../../escrow/x402-seller";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
+import { PublicApiError } from "../public/errors";
 import type { AccessDeps, ApiKeyRecord } from "./deps";
 import {
   authenticateBearer,
   createApiKey,
+  handleBountyClaims,
   handleCancel,
+  handleClaim,
   handleCreateBounty,
   handleFund,
   handleMe,
+  handleMyClaims,
+  handleRefund,
   handleTopUp,
   revokeApiKey,
   runAuthed,
@@ -33,7 +38,14 @@ import {
 
 const SECRET = "test-hmac-secret-value";
 const USER = "00000000-0000-4000-8000-000000000001";
+const BOB = "00000000-0000-4000-8000-0000000000b0";
+const MALLORY = "00000000-0000-4000-8000-0000000000c0";
 const BOUNTY = "00000000-0000-4000-8000-000000000022";
+const CLAIM_ID = "00000000-0000-4000-8000-0000000000c1";
+const POOL_ID = "00000000-0000-4000-8000-0000000000d1";
+const BOB_POOL_ID = "00000000-0000-4000-8000-0000000000d2";
+const RECORDED_PAYER = "0x3333333333333333333333333333333333333333";
+const ATTACKER = "0x9999999999999999999999999999999999999999";
 const PAY_TO = "0x1111111111111111111111111111111111111111";
 const PAYER = "0x2222222222222222222222222222222222222222";
 const TX = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -55,7 +67,8 @@ function memory(options?: {
   const logs: { id: string; keyId: string; route: string; status: number; createdAt: Date }[] = [];
   const spends: { id: string; keyId: string; amountUsdc: string; status: string; createdAt: Date; kind: string }[] = [];
   const idem = new Map<string, IdempotencyRow>();
-  const calls = { lock: 0, topUp: 0, seller: 0, inbound: 0, cancel: 0, create: 0 };
+  const calls = { lock: 0, topUp: 0, seller: 0, inbound: 0, cancel: 0, create: 0, claim: 0, refund: 0 };
+  const poolPaid = new Set<string>();
   let openSpend = BigInt(0);
   const deps: AccessDeps = {
     env: options?.env ?? envFor(),
@@ -216,18 +229,102 @@ function memory(options?: {
       calls.cancel += 1;
       return { status: "cancelled", refundTxHash: null };
     },
+    async loadClaimAuthz(userId, bountyId, kind) {
+      if (bountyId !== BOUNTY) {
+        return { bounty: null, walletAddress: null, githubLogin: null, winner: null, pool: null };
+      }
+      const login = userId === BOB ? "bob" : userId === MALLORY ? "mallory" : options?.github === false ? null : "octocat";
+      const wallet = options?.wallet === false ? null : PAYER;
+      return {
+        bounty: {
+          id: BOUNTY,
+          title: "Seed",
+          status: options?.status ?? "funded",
+          amountUsdc: options?.face ?? "10.000000",
+          posterUserId: options?.poster ?? USER,
+        },
+        walletAddress: wallet,
+        githubLogin: login,
+        winner: {
+          claimId: CLAIM_ID,
+          hunterUserId: USER,
+          prAuthorLogin: "OctoCat",
+          status: "eligible",
+          amountUsdc: null,
+          txHash: null,
+          paidAt: null,
+        },
+        pool:
+          kind === "pool" && (userId === USER || userId === BOB)
+            ? {
+                participantId: userId === BOB ? BOB_POOL_ID : POOL_ID,
+                userId,
+                githubLogin: login ?? "",
+                shareUsdc: "7.350000",
+                txHash: poolPaid.has(userId) ? TX : null,
+                paidAt: null,
+              }
+            : null,
+      };
+    },
+    async performClaim(input) {
+      calls.claim += 1;
+      assert.equal("destination" in input, false);
+      assert.equal("payoutAddress" in input, false);
+      assert.equal("hunterUserId" in input, false);
+      if (input.kind === "pool") poolPaid.add(input.actorUserId);
+      return {
+        bountyId: input.bountyId,
+        kind: input.kind,
+        status: "paid",
+        bountyStatus: input.kind === "pool" ? "settled_partial" : "settled",
+        amountUsdc: input.kind === "pool" ? "7.350000" : "8.330000",
+        txHash: TX,
+        destination: PAYER,
+        claimId: input.kind === "winner" ? CLAIM_ID : null,
+        participantId: input.kind === "pool" ? (input.actorUserId === BOB ? BOB_POOL_ID : POOL_ID) : null,
+      };
+    },
+    async performRefund(input) {
+      calls.refund += 1;
+      const keys = Object.keys(input).sort();
+      assert.deepEqual(keys, ["actorUserId", "apiKeyId", "bountyId", "requestId"]);
+      return {
+        bountyId: input.bountyId,
+        status: "cancelled",
+        refundTxHash: TX,
+        amountUsdc: options?.face ?? "10.000000",
+        destination: RECORDED_PAYER,
+      };
+    },
+    async listClaims(userId, bountyId) {
+      if (bountyId && bountyId !== BOUNTY) throw new PublicApiError("not_found", "Bounty not found.");
+      if (userId !== USER && userId !== BOB) return [];
+      return [
+        {
+          bountyId: BOUNTY,
+          title: "Seed",
+          kind: userId === BOB ? ("pool" as const) : ("winner" as const),
+          status: "paid",
+          amountUsdc: userId === BOB ? "7.350000" : "8.330000",
+          txHash: TX,
+          paidAt: "2026-09-24T12:00:00.000Z",
+        },
+      ];
+    },
   };
-  return { deps, keys, calls, spends, setOpenSpend: (usdc: string) => { openSpend = usdcToAtomic(usdc); } };
+  return { deps, keys, calls, spends, poolPaid, setOpenSpend: (usdc: string) => { openSpend = usdcToAtomic(usdc); } };
 }
 
 async function principal(
   deps: AccessDeps,
   scopes: ApiKeyScope[] = ["read", "write", "money"],
   caps?: { perTx?: string; daily?: string },
+  userId = USER,
 ): Promise<{ token: string; principal: ApiPrincipal }> {
   const created = await createApiKey(
     {
-      userId: USER,
+      userId,
       name: "agent",
       scopes,
       perTxCapUsdc: caps?.perTx,
@@ -555,5 +652,182 @@ describe("production money wiring", () => {
     assert.match(source, /actorUserId: input\.actorUserId/);
     assert.match(source, /recordExactInbound\(/);
     assert.doesNotMatch(source, /fundTxHash:\s*body/);
+    const claimFn = source.slice(source.indexOf("async performClaim"), source.indexOf("async performRefund"));
+    assert.match(claimFn, /claimPayout\(/);
+    assert.match(claimFn, /claimPoolPayout\(/);
+    assert.match(claimFn, /persistWallet: false/);
+    assert.doesNotMatch(claimFn, /payoutAddress: input/);
+    const refundFn = source.slice(source.indexOf("async performRefund"), source.indexOf("async listClaims"));
+    assert.match(refundFn, /actorUserId: input\.actorUserId, reason: "cancel"/);
+    assert.doesNotMatch(refundFn, /funderAddress:\s*(input|body|args)/);
+  });
+});
+
+function codeOf(err: unknown): string {
+  return err && typeof err === "object" && "code" in err && typeof err.code === "string" ? err.code : "";
+}
+
+describe("V4-3 claims, status, and funded refund", () => {
+  it("rejects an address, a destination, and a user id before any payout", async () => {
+    const bag = memory();
+    const { principal: key } = await principal(bag.deps);
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      await assert.rejects(
+        () => handleClaim(key, BOUNTY, { kind: "winner", payoutAddress: ATTACKER }, "claim-addr", bag.deps),
+        (err: unknown) => codeOf(err) === "validation_failed",
+      );
+      await assert.rejects(
+        () => handleClaim(key, BOUNTY, { kind: "winner", destination: ATTACKER }, "claim-dest", bag.deps),
+        (err: unknown) => codeOf(err) === "validation_failed",
+      );
+      await assert.rejects(
+        () => handleClaim(key, BOUNTY, { kind: "winner", hunterUserId: MALLORY }, "claim-user", bag.deps),
+        (err: unknown) => codeOf(err) === "validation_failed",
+      );
+      await assert.rejects(
+        () => handleRefund(key, BOUNTY, { funderAddress: ATTACKER }, "refund-addr", bag.deps),
+        (err: unknown) => codeOf(err) === "validation_failed",
+      );
+    } finally {
+      console.log = original;
+    }
+    assert.equal(bag.calls.claim, 0);
+    assert.equal(bag.calls.refund, 0);
+    assert.equal(lines.some((line) => line.includes(ATTACKER)), false);
+  });
+
+  it("requires money scope and a linked GitHub account", async () => {
+    const reader = memory();
+    const { principal: readKey } = await principal(reader.deps, ["read"]);
+    await assert.rejects(
+      () => handleClaim(readKey, BOUNTY, { kind: "winner" }, "claim-scope", reader.deps),
+      (err: unknown) => codeOf(err) === "forbidden_scope",
+    );
+    assert.equal(reader.calls.claim, 0);
+
+    const unlinked = memory({ github: false });
+    const { principal: payer } = await principal(unlinked.deps, ["read", "write"]);
+    payer.scopes.add("money");
+    await assert.rejects(
+      () => handleClaim(payer, BOUNTY, { kind: "winner" }, "claim-gh", unlinked.deps),
+      (err: unknown) => codeOf(err) === "github_not_linked",
+    );
+    assert.equal(unlinked.calls.claim, 0);
+  });
+
+  it("returns 403 not_winner when the linked login is not the merged PR author", async () => {
+    const bag = memory();
+    const { principal: mallory } = await principal(bag.deps, ["read", "write", "money"], undefined, MALLORY);
+    await assert.rejects(
+      () => handleClaim(mallory, BOUNTY, { kind: "winner" }, "claim-mallory", bag.deps),
+      (err: unknown) => codeOf(err) === "not_winner",
+    );
+    assert.equal(bag.calls.claim, 0);
+  });
+
+  it("replays a winner claim without paying twice and logs the saved wallet", async () => {
+    const bag = memory();
+    const { principal: key } = await principal(bag.deps);
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    try {
+      const first = await handleClaim(key, BOUNTY, { kind: "winner" }, "claim-1", bag.deps);
+      const second = await handleClaim(key, BOUNTY, { kind: "winner" }, "claim-1", bag.deps);
+      assert.equal(first.status, 200);
+      assert.deepEqual(second.body, first.body);
+      const body = first.body as { destination?: string; txHash?: string; kind?: string };
+      assert.equal(body.destination, PAYER);
+      assert.equal(body.kind, "winner");
+      assert.equal(body.txHash, TX);
+    } finally {
+      console.log = original;
+    }
+    assert.equal(bag.calls.claim, 1);
+    const paid = lines
+      .map((line) => JSON.parse(line) as { event?: string; result?: string; destination?: string; apiKeyId?: string; leg?: string })
+      .filter((row) => row.event === "money_action" && row.result === "ok");
+    assert.equal(paid.length, 1);
+    assert.equal(paid[0]?.destination, PAYER);
+    assert.equal(paid[0]?.leg, "WINNER_PAYOUT");
+    assert.equal(paid[0]?.apiKeyId, key.keyId);
+  });
+
+  it("lets a pool member claim only their own share", async () => {
+    const bag = memory();
+    const { principal: alice } = await principal(bag.deps);
+    const { principal: bob } = await principal(bag.deps, ["read", "write", "money"], undefined, BOB);
+    await handleClaim(alice, BOUNTY, { kind: "pool" }, "pool-alice", bag.deps);
+    assert.equal(bag.poolPaid.has(USER), true);
+    assert.equal(bag.poolPaid.has(BOB), false);
+    await handleClaim(bob, BOUNTY, { kind: "pool" }, "pool-bob", bag.deps);
+    assert.equal(bag.poolPaid.has(BOB), true);
+    assert.equal(bag.calls.claim, 2);
+    const { principal: mallory } = await principal(bag.deps, ["read", "write", "money"], undefined, MALLORY);
+    await assert.rejects(
+      () => handleClaim(mallory, BOUNTY, { kind: "pool" }, "mallory-pool", bag.deps),
+      (err: unknown) => codeOf(err) === "not_pool_member",
+    );
+    assert.equal(bag.calls.claim, 2);
+    await assert.rejects(
+      () => handleClaim(bob, BOUNTY, { kind: "winner" }, "bob-winner", bag.deps),
+      (err: unknown) => codeOf(err) === "not_winner",
+    );
+    assert.equal(bag.calls.claim, 2);
+  });
+
+  it("refuses claim and refund on mainnet config", async () => {
+    const bag = memory({ env: envFor("base"), status: "funded" });
+    const { principal: key } = await principal(bag.deps);
+    await assert.rejects(
+      () => handleClaim(key, BOUNTY, { kind: "winner" }, "claim-mainnet", bag.deps),
+      (err: unknown) => codeOf(err) === "forbidden_scope",
+    );
+    await assert.rejects(
+      () => handleRefund(key, BOUNTY, {}, "refund-mainnet", bag.deps),
+      (err: unknown) => codeOf(err) === "forbidden_scope",
+    );
+    assert.equal(bag.calls.claim, 0);
+    assert.equal(bag.calls.refund, 0);
+  });
+
+  it("refunds only through the recorded payer and replays without a second call", async () => {
+    const bag = memory({ status: "funded" });
+    const { principal: key } = await principal(bag.deps);
+    const first = await handleRefund(key, BOUNTY, {}, "refund-1", bag.deps);
+    const second = await handleRefund(key, BOUNTY, {}, "refund-1", bag.deps);
+    assert.equal(bag.calls.refund, 1);
+    assert.deepEqual(second.body, first.body);
+    const body = first.body as { destination?: string; refundTxHash?: string };
+    assert.equal(body.destination, RECORDED_PAYER);
+    assert.equal(body.refundTxHash, TX);
+    assert.notEqual(body.destination, ATTACKER);
+
+    const stranger = memory({ status: "funded", poster: MALLORY });
+    const { principal: other } = await principal(stranger.deps);
+    await assert.rejects(
+      () => handleRefund(other, BOUNTY, {}, "refund-stranger", stranger.deps),
+      (err: unknown) => codeOf(err) === "not_poster",
+    );
+    assert.equal(stranger.calls.refund, 0);
+  });
+
+  it("lists only the caller's claim legs", async () => {
+    const bag = memory();
+    const { principal: key } = await principal(bag.deps, ["read"]);
+    const mine = await handleMyClaims(key, bag.deps);
+    const one = await handleBountyClaims(key, BOUNTY, bag.deps);
+    assert.equal((mine.body as { claims: { kind: string; txHash: string }[] }).claims[0]?.kind, "winner");
+    assert.equal((one.body as { legs: { txHash: string }[] }).legs[0]?.txHash, TX);
+    const json = JSON.stringify(mine.body) + JSON.stringify(one.body);
+    assert.equal(json.includes(ATTACKER), false);
+    assert.equal(json.includes("wallet"), false);
   });
 });

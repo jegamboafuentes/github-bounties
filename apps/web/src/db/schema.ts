@@ -786,7 +786,7 @@ export const apiSpendLedger = pgTable(
 );
 
 /**
- * Idempotency-Key store for fund, top-up, and cancel.
+ * Idempotency-Key store for fund, top-up, cancel, claim, and refund.
  * `response_status` 0 means in progress. 402 is a payment challenge and may be
  * replaced when the same key retries with a payment signature.
  */

@@ -25,6 +25,18 @@ export const fundBodySchema = z
   .strict()
   .openapi("FundBody");
 
+export const claimBodySchema = z
+  .object({
+    kind: z.enum(["winner", "pool"]).describe("winner pays the merged-PR author share. pool pays the caller's own frozen share."),
+  })
+  .strict()
+  .openapi("ClaimBody");
+
+export const refundBodySchema = z
+  .object({})
+  .strict()
+  .openapi("RefundBody");
+
 export const idempotencyKeySchema = z
   .string()
   .trim()
@@ -58,6 +70,21 @@ export const topUpToolSchema = fundToolSchema.extend({
 export const workSignalToolSchema = z.object({
   id: idSchema.describe("Bounty id."),
 });
+
+export const claimToolSchema = z
+  .object({
+    id: idSchema.describe("Bounty id."),
+    idempotencyKey: idempotencyKeySchema,
+  })
+  .strict();
+
+export const refundToolSchema = claimToolSchema;
+
+export const bountyClaimsToolSchema = z
+  .object({
+    id: idSchema.describe("Bounty id."),
+  })
+  .strict();
 
 export const createBountyToolSchema = createBountyBodySchema;
 
@@ -220,7 +247,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     method: "post",
     path: "/api/v1/bounties/{id}/cancel",
     summary: "Cancel an unfunded bounty",
-    description: "Scope write. Only pending_fund. Funded cancel and refund is not available. Idempotency-Key is required.",
+    description: "Scope write. Only pending_fund. Funded cancel is POST /refund (money scope). Idempotency-Key is required.",
     security: bearer,
     request: {
       params: z.object({ id: idSchema }),
@@ -278,6 +305,74 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       402: { description: "Payment required.", ...errorContent },
       403: { description: "Missing money scope, wallet, GitHub, or spend cap.", ...errorContent },
       409: { description: "Idempotency conflict, or top-ups are closed.", ...errorContent },
+    },
+  });
+
+  const claimDescription =
+    "Scope money. DEV only unless API_MONEY_ENABLED is set. Pays the wallet saved for the key owner. The body cannot include an address, destination, or user id. Linked GitHub login must match the winner or the caller's own pool member. Idempotency-Key is required. A replay returns the stored response and does not pay again.";
+
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/bounties/{id}/claim",
+    summary: "Claim the winner share or the caller's pool share",
+    description: `${claimDescription} kind winner calls the website winner Claim. kind pool calls the website pool Claim.`,
+    security: bearer,
+    request: {
+      params: z.object({ id: idSchema }),
+      headers: z.object({ "Idempotency-Key": idempotencyKeySchema }),
+      body: { content: json(claimBodySchema) },
+    },
+    responses: {
+      200: { description: "Claim recorded. destination is the saved wallet.", ...errorContent },
+      400: { description: "Address, user id, or Idempotency-Key rejected.", ...errorContent },
+      403: { description: "Money disabled, missing scope, GitHub login mismatch, or not the winner or pool member.", ...errorContent },
+      409: { description: "Idempotency conflict, or the pool is not ready.", ...errorContent },
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/bounties/{id}/claims",
+    summary: "Payout status for the caller's legs",
+    description: "Scope read. The caller's own winner and pool legs on this bounty: status, amount, and tx hash. Other hunters are omitted.",
+    security: bearer,
+    request: { params: z.object({ id: idSchema }) },
+    responses: {
+      200: { description: "Caller legs. Empty when this user has none.", ...errorContent },
+      401: { description: "Unauthorized.", ...errorContent },
+      404: { description: "Bounty not found.", ...errorContent },
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/me/claims",
+    summary: "The caller's claims across bounties",
+    description: "Scope read. Winner claims and pool shares for this key's user, with status and tx hashes.",
+    security: bearer,
+    responses: {
+      200: { description: "Caller claims.", ...errorContent },
+      401: { description: "Unauthorized.", ...errorContent },
+    },
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/bounties/{id}/refund",
+    summary: "Refund a funded bounty to the recorded payer",
+    description:
+      "Scope money. DEV only unless API_MONEY_ENABLED is set. Poster only. The refund goes to the recorded on-chain payer, never a caller-supplied address. Idempotency-Key is required. Unfunded drafts use POST /cancel.",
+    security: bearer,
+    request: {
+      params: z.object({ id: idSchema }),
+      headers: z.object({ "Idempotency-Key": idempotencyKeySchema }),
+      body: { content: json(refundBodySchema) },
+    },
+    responses: {
+      200: { description: "Refunded. destination is the recorded payer.", ...errorContent },
+      400: { description: "Address or Idempotency-Key rejected.", ...errorContent },
+      403: { description: "Money disabled, missing money scope, or not the poster.", ...errorContent },
+      409: { description: "Not refundable, or idempotency conflict.", ...errorContent },
     },
   });
 }

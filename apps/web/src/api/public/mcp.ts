@@ -13,8 +13,8 @@ const INSTRUCTIONS = [
   "list_funders returns public contribution rows (name, GitHub login, avatar, amount, time), newest first.",
   "get_bounty_intelligence reads the Gemini cache only and must not be treated as a refresh.",
   "get_stats returns platform totals.",
-  "get_me and list_my_bounties read the key owner. create_bounty, signal_working, clear_work_signal, and cancel_bounty need the write scope. cancel_bounty is unfunded only.",
-  "fund_bounty and top_up_bounty need the money scope. They are headless x402: call once for payment requirements, then retry with the same idempotencyKey and paymentSignature. The exclusive claim-lock is retired. Settle, claims, and wallet changes are not tools.",
+  "get_me, list_my_bounties, get_bounty_claims, and list_my_claims read the key owner. create_bounty, signal_working, clear_work_signal, and cancel_bounty need the write scope. cancel_bounty is unfunded only.",
+  "fund_bounty, top_up_bounty, claim_winner, claim_pool, and refund_bounty need the money scope and are DEV only until API_MONEY_ENABLED is on for mainnet. Fund and top-up are headless x402. Claims pay the saved wallet. Refunds pay the recorded payer. The exclusive claim-lock is retired. Wallet changes are not tools.",
 ].join(" ");
 
 function toolJson(value: unknown): CallToolResult {
@@ -40,7 +40,7 @@ function failureFrom(err: unknown): CallToolResult {
 
 export function createBountiesMcpServer(api: PublicReadApi, access?: McpAccess | null): McpServer {
   const server = new McpServer(
-    { name: "github-bounties", version: "4.2.0" },
+    { name: "github-bounties", version: "4.3.0" },
     { instructions: INSTRUCTIONS },
   );
 

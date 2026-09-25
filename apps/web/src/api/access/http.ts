@@ -10,11 +10,15 @@ import { createAccessDeps } from "./store";
 import type { AccessDeps } from "./deps";
 import {
   authenticateBearer,
+  handleBountyClaims,
   handleCancel,
+  handleClaim,
   handleCreateBounty,
   handleFund,
   handleMe,
+  handleMyClaims,
   handleMyBounties,
+  handleRefund,
   handleTopUp,
   handleWorkSignal,
   readIdempotencyKey,
@@ -37,11 +41,24 @@ export type V1Action =
   | { kind: "signal"; bountyId: string; method: "POST" | "DELETE" }
   | { kind: "cancel"; bountyId: string }
   | { kind: "fund"; bountyId: string }
-  | { kind: "top-up"; bountyId: string };
+  | { kind: "top-up"; bountyId: string }
+  | { kind: "claim"; bountyId: string }
+  | { kind: "refund"; bountyId: string }
+  | { kind: "bounty-claims"; bountyId: string }
+  | { kind: "my-claims" };
 
 function actionClass(action: V1Action): ApiClass {
-  if (action.kind === "fund" || action.kind === "top-up") return "money";
-  if (action.kind === "me" || action.kind === "my-bounties") return "read";
+  if (action.kind === "fund" || action.kind === "top-up" || action.kind === "claim" || action.kind === "refund") {
+    return "money";
+  }
+  if (
+    action.kind === "me" ||
+    action.kind === "my-bounties" ||
+    action.kind === "my-claims" ||
+    action.kind === "bounty-claims"
+  ) {
+    return "read";
+  }
   return "write";
 }
 
@@ -61,11 +78,27 @@ function actionRoute(action: V1Action): string {
       return `POST /api/v1/bounties/${action.bountyId}/fund`;
     case "top-up":
       return `POST /api/v1/bounties/${action.bountyId}/top-up`;
+    case "claim":
+      return `POST /api/v1/bounties/${action.bountyId}/claim`;
+    case "refund":
+      return `POST /api/v1/bounties/${action.bountyId}/refund`;
+    case "bounty-claims":
+      return `GET /api/v1/bounties/${action.bountyId}/claims`;
+    case "my-claims":
+      return "GET /api/v1/me/claims";
   }
 }
 
 function actionBountyId(action: V1Action): string | null {
-  if (action.kind === "signal" || action.kind === "cancel" || action.kind === "fund" || action.kind === "top-up") {
+  if (
+    action.kind === "signal" ||
+    action.kind === "cancel" ||
+    action.kind === "fund" ||
+    action.kind === "top-up" ||
+    action.kind === "claim" ||
+    action.kind === "refund" ||
+    action.kind === "bounty-claims"
+  ) {
     return action.bountyId;
   }
   return null;
@@ -167,6 +200,26 @@ async function perform(
         origin,
         deps,
       );
+    case "claim":
+      return handleClaim(
+        principal,
+        action.bountyId,
+        await readJsonBody(request),
+        readIdempotencyKey(idempotency, true) as string,
+        deps,
+      );
+    case "refund":
+      return handleRefund(
+        principal,
+        action.bountyId,
+        await readJsonBody(request),
+        readIdempotencyKey(idempotency, true) as string,
+        deps,
+      );
+    case "bounty-claims":
+      return handleBountyClaims(principal, action.bountyId, deps);
+    case "my-claims":
+      return handleMyClaims(principal, deps);
   }
 }
 
