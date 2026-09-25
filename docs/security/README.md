@@ -61,6 +61,63 @@ npm run security:derive-corrections
 There is no address argument. Do not pass a sender, a poster wallet, or the
 escrow wallet on the command line.
 
+## Legacy funding the payout guard does not count yet
+
+Claim, refund, and expiry refuse a payout when verified inflow does not cover
+the remaining legs. On the live rail a hash counts when x402 settle recorded
+it, or when `escrows.x402_payment_id` contains `x402-topup:<hash>`. A hash
+that already has that marker keeps counting. The facilitator settled it, and
+the recorded payer is whoever x402 reported. There is no extra on-chain payer
+check for those hashes. DEV `7bf910cc`'s cross-account top-up from `0xacc0…`
+already has the marker, so it is covered and the dry-run does not list it.
+
+The on-chain payer check applies only to an unmarked legacy hash being newly
+verified: configured USDC, `Transfer` to the escrow address, `from` the
+recorded payer, amount at least the recorded amount, and the hash not used by
+any other bounty. Placeholder hashes (`lock:`, `legacy-fund:`, or any string
+that is not a 32-byte transaction hash) never count. Among open DEV bounties,
+`b99a9163`'s `0xfd0a…641f` leg is the unmarked contribution.
+
+`apps/web/scripts/security/reconcile-legacy-funding.ts` lists every bounty on
+the target database whose legs would fail that check. It does not change
+bounty status and it does not send USDC.
+
+Dry-run is the default and is safe on PROD. Postgres is opened read-only.
+Stdout is one JSON object per at-risk leg (`legacy_fund_at_risk` with
+`bountyId`, `hash`, `reason`, `chainFrom`, `recordable`). Stderr is a one-line
+count. `--apply` appends `x402-topup:` lines only for legs whose receipt
+matched. It does not invent hashes.
+
+`--apply` on mainnet (`CDP_NETWORK=base` or equivalent) exits without writing
+unless both `--allow-prod` and `LEGACY_FUND_RECONCILE_ALLOW_PROD=1` are set.
+CDP API keys are not required. `DATABASE_URL` is. Receipts use `BASE_RPC_URL`
+when it is set, otherwise the public Base RPC for the configured network. The
+script exits if that RPC chain id does not match.
+
+From `apps/web`, against DEV first:
+
+```
+npm run security:reconcile-legacy-funding
+npm run security:reconcile-legacy-funding -- --apply
+```
+
+Read the dry-run before `--apply`. On DEV the expected output is `b99a9163`
+only. `7bf910cc` is not flagged. A `payer_mismatch` row is an unmarked hash
+whose on-chain sender is not the recorded payer; it is listed and is not
+recorded. After a recordable hash is cached, a new refund call (new
+idempotency key) skips legs that already have a refund tx and pays only the
+remaining recorded payers.
+
+PROD dry-run:
+
+```
+npm run security:reconcile-legacy-funding
+```
+
+Do not pass `--apply` on PROD unless the owner has approved that specific run
+and both gates above are set. Applying still only writes verified
+`x402-topup:` lines.
+
 ## Migrate 0010 — case-insensitive fund hashes
 
 Migration `0010_case_insensitive_fund_tx_hash` replaces the 0009 unique

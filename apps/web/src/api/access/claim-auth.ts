@@ -1,3 +1,4 @@
+import { POOL_ROSTER_NOT_FROZEN_MESSAGE } from "../../claims/errors";
 import { PublicApiError } from "../public/errors";
 import type { ClaimAuthContext, ClaimKind } from "./deps";
 
@@ -53,6 +54,9 @@ export function authorizeClaimCaller(actorUserId: string, kind: ClaimKind, ctx: 
       );
     }
     return;
+  }
+  if (!ctx.rosterFrozen) {
+    throw new PublicApiError("pool_not_ready", POOL_ROSTER_NOT_FROZEN_MESSAGE, null, 409);
   }
   const pool = ctx.pool;
   const loginOk = Boolean(pool) && githubLoginsMatch(ctx.githubLogin, pool?.githubLogin);

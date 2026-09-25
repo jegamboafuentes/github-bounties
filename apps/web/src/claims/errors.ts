@@ -34,3 +34,6 @@ export const NOT_ELIGIBLE_MESSAGE =
 
 export const POOL_NOT_READY_MESSAGE =
   "The winner must claim first. Your frozen pool share stays reserved until then.";
+
+export const POOL_ROSTER_NOT_FROZEN_MESSAGE =
+  "The pool roster is not frozen yet. Pool shares can be claimed after the winning merge freezes the roster.";

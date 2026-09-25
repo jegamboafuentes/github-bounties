@@ -103,6 +103,43 @@ const errorRef = z.object({
   }),
 });
 
+export const payoutLegSchema = z
+  .object({
+    destination: z.string().nullable().describe("Stored payout address for this leg. Never a caller-supplied address."),
+    amount: usdcDecimal.describe("Leg amount in USDC."),
+    kind: z.string().describe("WINNER_PAYOUT, FEE_OUT, POOL_PAYOUT, or REFUND_OUT."),
+    status: z.enum(["paid", "failed", "pending"]),
+    txHash: z.string().nullable(),
+    reason: z.string().nullable(),
+  })
+  .openapi("PayoutLeg");
+
+const claimResultSchema = z
+  .object({
+    id: z.string().uuid(),
+    kind: z.enum(["winner", "pool"]),
+    status: z.string(),
+    bountyStatus: z.string(),
+    amountUsdc: z.string(),
+    txHash: z.string().nullable(),
+    destination: z.string(),
+    claimId: z.string().uuid().nullable(),
+    participantId: z.string().uuid().nullable(),
+    legs: z.array(payoutLegSchema).describe("Every settle leg, not only the one this call paid."),
+  })
+  .openapi("ClaimResult");
+
+const refundResultSchema = z
+  .object({
+    id: z.string().uuid(),
+    status: z.string(),
+    refundTxHash: z.string().nullable().describe("Last confirmed refund leg. Kept for older clients."),
+    amountUsdc: z.string(),
+    destination: z.string().describe("Recorded payer of the first or only leg. Kept for older clients."),
+    legs: z.array(payoutLegSchema).describe("Every refund leg: paid (with tx hash), failed, or pending."),
+  })
+  .openapi("RefundResult");
+
 const createdBountySchema = z
   .object({
     id: z.string().uuid(),
@@ -405,7 +442,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       body: { content: json(claimBodySchema) },
     },
     responses: {
-      200: { description: "Claim recorded. destination is the saved wallet.", ...errorContent },
+      200: { description: "Claim recorded. destination is the saved wallet. legs lists every settle leg.", content: json(claimResultSchema) },
       400: { description: "Address, user id, or Idempotency-Key rejected.", ...errorContent },
       401: { description: "Missing, invalid, or revoked key.", ...errorContent },
       403: { description: "Money disabled, missing scope, GitHub login mismatch, or not the winner or pool member.", ...errorContent },
@@ -458,11 +495,19 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       body: { content: json(refundBodySchema) },
     },
     responses: {
-      200: { description: "Refunded. destination is the recorded payer.", ...errorContent },
+      200: {
+        description:
+          "Refunded. destination and refundTxHash stay for older clients. legs lists every payer leg with status and tx hash. A replay of the same Idempotency-Key returns this stored body.",
+        content: json(refundResultSchema),
+      },
       400: { description: "Address or Idempotency-Key rejected.", ...errorContent },
+      409: {
+        description:
+          "Not refundable, idempotency conflict, or insufficient_bounty_funds before any transfer. insufficient_bounty_funds details list verifiedAtomic, paidAtomic, requiredAtomic, and every leg.",
+        ...errorContent,
+      },
       401: { description: "Missing, invalid, or revoked key.", ...errorContent },
       403: { description: "Money disabled, missing money scope, or not the poster.", ...errorContent },
-      409: { description: "Not refundable, or idempotency conflict.", ...errorContent },
       429: { description: "Per-key money limit (10/hour).", ...errorContent },
     },
   });

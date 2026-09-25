@@ -27,15 +27,17 @@ export type EscrowErrorCode =
   | "rail_failed"
   | "illegal_transition";
 
+export type EscrowErrorDetails = Record<string, unknown>;
+
 export class EscrowError extends Error {
   readonly code: EscrowErrorCode;
   readonly missing?: string[];
-  readonly details?: Record<string, string>;
+  readonly details?: EscrowErrorDetails;
 
   constructor(
     code: EscrowErrorCode,
     message: string,
-    extras?: { missing?: string[]; details?: Record<string, string> },
+    extras?: { missing?: string[]; details?: EscrowErrorDetails },
   ) {
     super(message);
     this.name = "EscrowError";

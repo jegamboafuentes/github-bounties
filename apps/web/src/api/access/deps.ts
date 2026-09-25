@@ -117,6 +117,8 @@ export type ClaimAuthContext = {
   githubLogin: string | null;
   winner: WinnerLegAuth | null;
   pool: PoolLegAuth | null;
+  /** True when at least one pool participant row is frozen. Pool claims check this before membership. */
+  rosterFrozen: boolean;
 };
 
 export type ClaimLegView = {
@@ -139,6 +141,7 @@ export type PerformedClaim = {
   destination: string;
   claimId: string | null;
   participantId: string | null;
+  legs: PayoutLegView[];
 };
 
 export type PerformedRefund = {
@@ -147,6 +150,16 @@ export type PerformedRefund = {
   refundTxHash: string | null;
   amountUsdc: string;
   destination: string;
+  legs: PayoutLegView[];
+};
+
+export type PayoutLegView = {
+  destination: string | null;
+  amount: string;
+  kind: string;
+  status: "paid" | "failed" | "pending";
+  txHash: string | null;
+  reason: string | null;
 };
 
 export type AccessDeps = {
