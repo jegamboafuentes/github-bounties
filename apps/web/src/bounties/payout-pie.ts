@@ -1,4 +1,4 @@
-import { FEE_BPS } from "../lib/constants";
+import { FEE_BPS, POOL_BPS_OF_POST_FEE } from "../lib/constants";
 import { atomicToUsdc, splitPostFeePool, usdcToAtomic } from "../lib/money";
 import { payoutShareLabels } from "./roster";
 
@@ -89,6 +89,14 @@ export function payoutPiesFromBreakdown(breakdown: PayoutPieBreakdownInput): {
   const postFeeUsdc = atomicToUsdc(
     usdcToAtomic(breakdown.winnerUsdc) + usdcToAtomic(breakdown.poolTotalUsdc),
   );
+  // Face labels are shares of face (≈83.3 / ≈14.7). Under "Of post-fee" the
+  // same amounts are 85% and 15% of the post-fee pot (ADR 0003).
+  const postFeeWinnerPct = (10_000 - POOL_BPS_OF_POST_FEE) / 100;
+  const postFeePoolPct = POOL_BPS_OF_POST_FEE / 100;
+  const postWinnerLabel = breakdown.emptyPool
+    ? "Winner (100% of post-fee)"
+    : `Winner (${postFeeWinnerPct}%)`;
+  const postPoolLabel = breakdown.emptyPool ? "Pool (0)" : `Pool (${postFeePoolPct}%)`;
 
   return {
     face: pie("face", "Of face", breakdown.faceUsdc, [
@@ -101,10 +109,10 @@ export function payoutPiesFromBreakdown(breakdown: PayoutPieBreakdownInput): {
       },
     ]),
     postFee: pie("postFee", "Of post-fee", postFeeUsdc, [
-      { key: "winner", label: winnerLabel, amountUsdc: breakdown.winnerUsdc },
+      { key: "winner", label: postWinnerLabel, amountUsdc: breakdown.winnerUsdc },
       {
         key: "pool",
-        label: poolLabel,
+        label: postPoolLabel,
         amountUsdc: breakdown.emptyPool ? "0" : breakdown.poolTotalUsdc,
       },
     ]),

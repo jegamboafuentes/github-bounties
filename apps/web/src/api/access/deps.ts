@@ -129,6 +129,8 @@ export type ClaimLegView = {
   amountUsdc: string | null;
   txHash: string | null;
   paidAt: string | null;
+  /** Address this leg was paid to, or the saved wallet it will be paid to. Null when neither is set. */
+  destination: string | null;
 };
 
 export type PerformedClaim = {
@@ -149,7 +151,8 @@ export type PerformedRefund = {
   status: string;
   refundTxHash: string | null;
   amountUsdc: string;
-  destination: string;
+  /** Single-payer refund only. Null when `legs` has more than one entry. */
+  destination: string | null;
   legs: PayoutLegView[];
 };
 

@@ -1,7 +1,12 @@
 import { LOCK_NOT_MONEY_COPY } from "../../bounties/display";
 import { publicWorkSignals } from "../../bounties/signals";
 import type { BoardBounty } from "../../bounties/list";
-import { toPoolRosterView, type PoolRosterView, type RosterMemberView } from "../../bounties/roster";
+import {
+  countPaidPayoutLegs,
+  toPoolRosterView,
+  type PoolRosterView,
+  type RosterMemberView,
+} from "../../bounties/roster";
 import { normalizeFundTxHash } from "../../escrow/fund-hash";
 import type { BountyContributionView } from "../../escrow/top-up";
 import type { EscrowSnapshot } from "../../escrow/read";
@@ -50,7 +55,8 @@ export function rosterPayout(roster: PoolRosterView) {
     eligibleCount: breakdown.eligibleCount,
     emptyPool: breakdown.emptyPool,
     schedule: "roster" as const,
-    paidCount: breakdown.paidCount,
+    // Hunter legs only. breakdown.paidCount is the planned pool size, not who has been paid.
+    paidCount: countPaidPayoutLegs(roster),
     winnerShareLabel: breakdown.winnerShareLabel,
     poolShareLabel: breakdown.poolShareLabel,
     feeTxHash: breakdown.feeTxHash,

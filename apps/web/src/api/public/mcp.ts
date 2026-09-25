@@ -1,8 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { McpAccess } from "../access/http";
 import { registerAuthedMcpTools } from "../access/mcp-tools";
-import { PublicApiError, publicApiErrorBody, type PublicApiErrorBody } from "./errors";
+import { mcpBountyId, runLoggedMcpTool } from "./mcp-log";
 import { acceptBountyId, acceptListInput } from "./query";
 import type { PublicReadApi } from "./service";
 import { listBountiesInputSchema, bountyIdParamsSchema } from "./schemas";
@@ -17,27 +16,6 @@ const INSTRUCTIONS = [
   "get_me, get_my_usage, list_my_bounties, get_bounty_claims, and list_my_claims read the key owner. get_my_usage needs only the read scope. create_bounty, signal_working, clear_work_signal, and cancel_bounty need the write scope. cancel_bounty is unfunded only and returns already_cancelled when the bounty is already cancelled.",
   "fund_bounty, top_up_bounty, claim_winner, claim_pool, and refund_bounty need the money scope and stay off on mainnet until API_MONEY_ENABLED is turned on. Fund and top-up are headless x402: call once for payment requirements, then retry with the same idempotencyKey and paymentSignature. Claims pay the saved wallet. Refunds pay the recorded payer. claim_winner, claim_pool, and refund_bounty return a legs array. A refund of a bounty already in refunding skips legs that already have a refund tx. Unknown arguments are validation_failed. The exclusive claim-lock is retired. Wallet changes are not tools.",
 ].join(" ");
-
-function toolJson(value: unknown): CallToolResult {
-  return { content: [{ type: "text", text: JSON.stringify(value) }] };
-}
-
-function toolFailure(body: PublicApiErrorBody): CallToolResult {
-  return { isError: true, content: [{ type: "text", text: JSON.stringify(body) }] };
-}
-
-function failureFrom(err: unknown): CallToolResult {
-  if (err instanceof PublicApiError) {
-    return toolFailure(publicApiErrorBody(err.code, err.message, err.details));
-  }
-  console.error(
-    JSON.stringify({
-      event: "public_mcp_internal",
-      message: err instanceof Error ? err.message : "unknown",
-    }),
-  );
-  return toolFailure(publicApiErrorBody("internal", "Internal error.", null));
-}
 
 export function createBountiesMcpServer(api: PublicReadApi, access?: McpAccess | null): McpServer {
   const server = new McpServer(
@@ -54,13 +32,14 @@ export function createBountiesMcpServer(api: PublicReadApi, access?: McpAccess |
       inputSchema: listBountiesInputSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
-    async (args) => {
-      try {
-        return toolJson(await api.listBounties(acceptListInput(args)));
-      } catch (err) {
-        return failureFrom(err);
-      }
-    },
+    async (args) =>
+      runLoggedMcpTool({
+        tool: "list_bounties",
+        rateClass: "read",
+        access,
+        recordRequest: true,
+        run: () => api.listBounties(acceptListInput(args)),
+      }),
   );
 
   server.registerTool(
@@ -72,13 +51,15 @@ export function createBountiesMcpServer(api: PublicReadApi, access?: McpAccess |
       inputSchema: bountyIdParamsSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
-    async (args) => {
-      try {
-        return toolJson(await api.getBounty(acceptBountyId(args.id)));
-      } catch (err) {
-        return failureFrom(err);
-      }
-    },
+    async (args) =>
+      runLoggedMcpTool({
+        tool: "get_bounty",
+        rateClass: "read",
+        access,
+        bountyId: mcpBountyId(args.id),
+        recordRequest: true,
+        run: () => api.getBounty(acceptBountyId(args.id)),
+      }),
   );
 
   server.registerTool(
@@ -90,13 +71,15 @@ export function createBountiesMcpServer(api: PublicReadApi, access?: McpAccess |
       inputSchema: bountyIdParamsSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
-    async (args) => {
-      try {
-        return toolJson(await api.listFunders(acceptBountyId(args.id)));
-      } catch (err) {
-        return failureFrom(err);
-      }
-    },
+    async (args) =>
+      runLoggedMcpTool({
+        tool: "list_funders",
+        rateClass: "read",
+        access,
+        bountyId: mcpBountyId(args.id),
+        recordRequest: true,
+        run: () => api.listFunders(acceptBountyId(args.id)),
+      }),
   );
 
   server.registerTool(
@@ -108,13 +91,15 @@ export function createBountiesMcpServer(api: PublicReadApi, access?: McpAccess |
       inputSchema: bountyIdParamsSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async (args) => {
-      try {
-        return toolJson(await api.getIntelligence(acceptBountyId(args.id)));
-      } catch (err) {
-        return failureFrom(err);
-      }
-    },
+    async (args) =>
+      runLoggedMcpTool({
+        tool: "get_bounty_intelligence",
+        rateClass: "read",
+        access,
+        bountyId: mcpBountyId(args.id),
+        recordRequest: true,
+        run: () => api.getIntelligence(acceptBountyId(args.id)),
+      }),
   );
 
   server.registerTool(
@@ -126,13 +111,14 @@ export function createBountiesMcpServer(api: PublicReadApi, access?: McpAccess |
       inputSchema: {},
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },
-    async () => {
-      try {
-        return toolJson(await api.getStats());
-      } catch (err) {
-        return failureFrom(err);
-      }
-    },
+    async () =>
+      runLoggedMcpTool({
+        tool: "get_stats",
+        rateClass: "read",
+        access,
+        recordRequest: true,
+        run: () => api.getStats(),
+      }),
   );
 
   registerAuthedMcpTools(server, access);

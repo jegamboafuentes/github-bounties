@@ -6,6 +6,7 @@ import { bountyContributions, escrows } from "../db/schema";
 import { usdcToAtomic } from "../lib/money";
 import { resolveFundWalletRuntime } from "../wallet/env";
 import { isMainnetNetwork, type CdpRailMode } from "./env";
+import { REFUNDABLE_BOUNTY_STATUSES, SETTLEABLE_BOUNTY_STATUSES } from "./state";
 import {
   fundHashIsVerified,
   isChainTxHash,
@@ -292,7 +293,105 @@ export async function reconcileLegacyFunding(
       .set({ x402PaymentId: next, updatedAt: new Date() })
       .where(eq(escrows.id, escrow.id));
     paymentId = next;
-    recorded.push(leg.hash.trim().toLowerCase());
+    const hash = leg.hash.trim().toLowerCase();
+    recorded.push(hash);
+    logLegacyFundVerified({
+      bountyId,
+      hash,
+      amountUsdc: leg.amountUsdc,
+      outcome: "cached",
+    });
   }
   return recorded;
+}
+
+/** Audit line after a legacy funding hash is verified on-chain and cached. */
+export function logLegacyFundVerified(input: {
+  bountyId: string;
+  hash: string;
+  amountUsdc: string;
+  outcome: "cached";
+}): void {
+  console.log(
+    JSON.stringify({
+      event: "legacy_fund_verified",
+      bountyId: input.bountyId,
+      hash: input.hash.trim().toLowerCase(),
+      amountUsdc: input.amountUsdc,
+      outcome: input.outcome,
+    }),
+  );
+}
+
+/**
+ * Statuses the legacy-funding dry-run scans by default.
+ * Open or unfinished money: funded, claim_locked, settling, settled_partial, refunding.
+ * Settled, refunded, cancelled, expired, void, and pending_fund are skipped unless
+ * `--include-settled` is set. `claim_locked` is a leftover status value, not a live lock.
+ */
+export const RECONCILE_OPEN_BOUNTY_STATUSES = [
+  ...new Set<string>([...SETTLEABLE_BOUNTY_STATUSES, ...REFUNDABLE_BOUNTY_STATUSES]),
+];
+
+export const RECONCILE_OPEN_ESCROW_STATUSES = [
+  "funded",
+  "settling",
+  "settled_partial",
+  "refunding",
+] as const;
+
+const openReconcileBounty = new Set<string>(RECONCILE_OPEN_BOUNTY_STATUSES);
+const openReconcileEscrow = new Set<string>(RECONCILE_OPEN_ESCROW_STATUSES);
+
+/** True when this bounty/escrow pair should be assessed. `--include-settled` scans every status. */
+export function reconcileFundingScan(input: {
+  bountyStatus: string;
+  escrowStatus: string;
+  includeSettled: boolean;
+}): boolean {
+  if (input.includeSettled) return true;
+  return openReconcileBounty.has(input.bountyStatus) || openReconcileEscrow.has(input.escrowStatus);
+}
+
+export function parseReconcileCliArgs(argv: string[]): {
+  apply: boolean;
+  allowProdFlag: boolean;
+  includeSettled: boolean;
+} {
+  let apply = false;
+  let allowProdFlag = false;
+  let includeSettled = false;
+  for (const arg of argv) {
+    if (arg === "--") continue;
+    if (arg === "--apply") {
+      apply = true;
+      continue;
+    }
+    if (arg === "--allow-prod") {
+      allowProdFlag = true;
+      continue;
+    }
+    if (arg === "--include-settled") {
+      includeSettled = true;
+      continue;
+    }
+    throw new Error(
+      `Unknown argument: ${arg}. Usage: npm run security:reconcile-legacy-funding -- [--apply] [--allow-prod] [--include-settled]`,
+    );
+  }
+  return { apply, allowProdFlag, includeSettled };
+}
+
+/** One stderr line. `filter=open` is the default; `filter=all` is `--include-settled`. */
+export function reconcileSummaryLine(input: {
+  scanned: number;
+  flagged: number;
+  filter: "open" | "all";
+  mode: "dry-run" | "apply";
+  mainnet: boolean;
+  atRiskLegs: number;
+  recordable: number;
+  recorded: number;
+}): string {
+  return `reconcile-legacy-funding: scanned=${input.scanned} flagged=${input.flagged} filter=${input.filter} mode=${input.mode} mainnet=${input.mainnet} at_risk_legs=${input.atRiskLegs} recordable=${input.recordable} recorded=${input.recorded}`;
 }

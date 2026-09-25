@@ -113,6 +113,28 @@ function txForParticipant(row: ParticipantRow, legs: LedgerRow[]): string | null
   return leg?.txHash ?? null;
 }
 
+/**
+ * Confirmed hunter payouts: the winner leg plus each paid pool share.
+ * The fee leg is not a hunter payout and is not counted.
+ * Ledger rows win when present; roster paid flags cover a hash that is not on a leg yet.
+ * The same leg is not counted twice.
+ */
+export function countPaidPayoutLegs(
+  roster: Pick<PoolRosterView, "legs" | "winner" | "pool" | "breakdown">,
+): number {
+  const hunterLegs = roster.legs.filter(
+    (leg) =>
+      (leg.kind === "WINNER_PAYOUT" || leg.kind === "POOL_PAYOUT") &&
+      (leg.status === "confirmed" || Boolean(leg.txHash?.trim())),
+  );
+  const winnerFromLedger = hunterLegs.some((leg) => leg.kind === "WINNER_PAYOUT");
+  const poolFromLedger = hunterLegs.filter((leg) => leg.kind === "POOL_PAYOUT").length;
+  const winnerPaid =
+    winnerFromLedger || Boolean(roster.winner?.paid) || Boolean(roster.breakdown.winnerTxHash?.trim());
+  const poolFromRoster = roster.pool.filter((member) => member.paid).length;
+  return (winnerPaid ? 1 : 0) + Math.max(poolFromLedger, poolFromRoster);
+}
+
 export function payoutShareLabels(split: PostFeePoolSplit): {
   winnerShareLabel: string;
   poolShareLabel: string;

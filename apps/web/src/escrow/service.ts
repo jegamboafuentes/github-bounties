@@ -27,6 +27,7 @@ import {
   ensurePendingLegs,
   findLedgerRow,
   isExpectedPoolDefer,
+  keptPaidAt,
   legHasTxHash,
   loadAllocationLegs,
   loadFrozenSettleSet,
@@ -418,7 +419,7 @@ export async function settleEscrow(
   // Settler rule before the idempotent return. A fully settled bounty used to
   // answer 200 ok:true to every signed-in user, including a funder who is
   // neither the poster nor the winning hunter.
-  await assertSettleAuthorized(opts.db, bounty, bountyId, scope, input, freeze, requestId);
+  await assertSettleAuthorized(opts.db, bounty, bountyId, scope, input, freeze, requestId, opts.apiKeyId);
 
   if (
     (bounty.status === "settled" || escrow?.status === "settled") &&
@@ -470,6 +471,7 @@ export async function settleEscrow(
       txHash: null,
       result: moneyResultCode(err),
       requestId,
+      apiKeyId: opts.apiKeyId ?? null,
     });
     throw err;
   }
@@ -563,7 +565,7 @@ export async function settleEscrow(
       .where(eq(bounties.id, bountyId));
   }
 
-  let ledgerRows = await ensurePendingLegs(opts.db, bountyId, planned);
+  let ledgerRows = await ensurePendingLegs(opts.db, bountyId, planned, now);
   ledgerRows = await syncEscrowHashesOntoLedger(opts.db, planned, ledgerRows, escrow, now);
 
   let payoutTxHash = escrow.payoutTxHash;
@@ -802,6 +804,11 @@ export async function settleEscrow(
         });
 
       if (hunter.claimId) {
+        const [currentClaim] = await tx
+          .select({ paidAt: claims.paidAt })
+          .from(claims)
+          .where(eq(claims.id, hunter.claimId))
+          .limit(1);
         await tx
           .update(claims)
           .set({
@@ -809,7 +816,7 @@ export async function settleEscrow(
             payoutAddress: hunter.address,
             payoutUsdc: split.winnerUsdc,
             payoutTxHash,
-            paidAt: now,
+            paidAt: keptPaidAt(currentClaim?.paidAt, now),
             updatedAt: now,
           })
           .where(eq(claims.id, hunter.claimId));
@@ -940,6 +947,7 @@ async function assertSettleAuthorized(
   },
   freeze: Awaited<ReturnType<typeof loadFrozenSettleSet>>,
   requestId: string,
+  apiKeyId?: string | null,
 ): Promise<void> {
   if (scope === "pool_member") {
     await assertPoolMemberActor(db, freeze, input);
@@ -967,6 +975,7 @@ async function assertSettleAuthorized(
       txHash: null,
       result: "not_settler",
       requestId,
+      apiKeyId: apiKeyId ?? null,
     });
     throw new EscrowError("not_settler", "Only the poster or the winning hunter can settle.");
   }

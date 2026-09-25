@@ -8,6 +8,7 @@ import {
 import type { PayoutClaimView } from "@/claims";
 import { GitHubAvatar } from "@/components/github-avatar";
 import { FEE_BPS } from "@/lib/constants";
+import Link from "next/link";
 
 export function ClaimPayoutPanel({
   bountyId,
@@ -15,7 +16,7 @@ export function ClaimPayoutPanel({
   currency,
   payout,
   canClaim,
-  defaultAddress,
+  savedWallet,
   action,
   signedIn,
   signInHref,
@@ -27,7 +28,8 @@ export function ClaimPayoutPanel({
   currency: string;
   payout: PayoutClaimView;
   canClaim: boolean;
-  defaultAddress: string;
+  /** Wallet saved on the signed-in user. Claim pays this address. */
+  savedWallet: string;
   action: (formData: FormData) => void | Promise<void>;
   signedIn: boolean;
   signInHref: string;
@@ -127,23 +129,15 @@ export function ClaimPayoutPanel({
         </p>
       ) : null}
 
-      {canClaim ? (
+      {canClaim && savedWallet.trim() ? (
         <form action={action} className="flex flex-col gap-3">
           <input type="hidden" name="bountyId" value={bountyId} />
           <input type="hidden" name="claimId" value={payout.id} />
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">Base payout address</span>
-            <input
-              name="payoutAddress"
-              type="text"
-              required
-              defaultValue={defaultAddress}
-              placeholder="0x…"
-              autoComplete="off"
-              spellCheck={false}
-              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-950"
-            />
-          </label>
+          <input type="hidden" name="payoutAddress" value={savedWallet.trim()} />
+          <p className="text-sm text-zinc-700 dark:text-zinc-200">
+            Pays your saved wallet{" "}
+            <span className="break-all font-mono text-xs">{savedWallet.trim()}</span>.
+          </p>
           <button
             type="submit"
             className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white dark:bg-zinc-100 dark:text-zinc-900"
@@ -151,10 +145,18 @@ export function ClaimPayoutPanel({
             Claim winner share {formatUsdc(claimAmount)} {currency}
           </button>
           <p className="text-xs text-zinc-500">
-            Saves this address on your account. Settles winner share + 2% fee only — pool members
-            claim their own shares. Mock rail until CDP_* is set. {HOSTED_CHECKOUT_DISABLED_COPY}
+            Settles winner share + 2% fee only — pool members claim their own shares. Mock rail
+            until CDP_* is set. {HOSTED_CHECKOUT_DISABLED_COPY}
           </p>
         </form>
+      ) : canClaim ? (
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          Claim pays your saved wallet.{" "}
+          <Link href="/settings" className="underline underline-offset-4">
+            Save a payout wallet in Settings
+          </Link>{" "}
+          before claiming.
+        </p>
       ) : paid ? (
         <p className="text-sm text-emerald-800 dark:text-emerald-300">
           Payout complete. Poster and the board show completed (paid).

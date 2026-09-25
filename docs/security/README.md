@@ -78,15 +78,24 @@ any other bounty. Placeholder hashes (`lock:`, `legacy-fund:`, or any string
 that is not a 32-byte transaction hash) never count. Among open DEV bounties,
 `b99a9163`'s `0xfd0a…641f` leg is the unmarked contribution.
 
-`apps/web/scripts/security/reconcile-legacy-funding.ts` lists every bounty on
-the target database whose legs would fail that check. It does not change
-bounty status and it does not send USDC.
+`apps/web/scripts/security/reconcile-legacy-funding.ts` lists bounties whose
+legs would fail that check. By default it scans only open or unfinished
+bounty or escrow statuses: `funded`, `claim_locked`, `settling`,
+`settled_partial`, and `refunding`. Already settled, refunded, cancelled,
+expired, void, and pending_fund rows are not scanned. `--include-settled`
+scans every status. Settled DEV bounties such as `0aef5f9a`, `145f3f18`, and
+`434a1afc` are noise under the default filter. It does not change bounty
+status and it does not send USDC.
 
 Dry-run is the default and is safe on PROD. Postgres is opened read-only.
 Stdout is one JSON object per at-risk leg (`legacy_fund_at_risk` with
-`bountyId`, `hash`, `reason`, `chainFrom`, `recordable`). Stderr is a one-line
-count. `--apply` appends `x402-topup:` lines only for legs whose receipt
-matched. It does not invent hashes.
+`bountyId`, `hash`, `reason`, `chainFrom`, `recordable`). Stderr is one line:
+`scanned` N, `flagged` M, and `filter=open` or `filter=all`. `--apply` appends
+`x402-topup:` lines only for legs whose receipt matched. It does not invent
+hashes. Each newly cached hash also writes one `legacy_fund_verified` line
+(`bountyId`, `hash`, `amountUsdc`, `outcome=cached`). The same line is written
+when a live payout verifies and caches a legacy hash. Arguments and receipts
+are not logged.
 
 `--apply` on mainnet (`CDP_NETWORK=base` or equivalent) exits without writing
 unless both `--allow-prod` and `LEGACY_FUND_RECONCILE_ALLOW_PROD=1` are set.
@@ -98,6 +107,7 @@ From `apps/web`, against DEV first:
 
 ```
 npm run security:reconcile-legacy-funding
+npm run security:reconcile-legacy-funding -- --include-settled
 npm run security:reconcile-legacy-funding -- --apply
 ```
 
@@ -113,6 +123,9 @@ PROD dry-run:
 ```
 npm run security:reconcile-legacy-funding
 ```
+
+Add `--include-settled` only when a terminal bounty needs to be listed. The
+default dry-run does not.
 
 Do not pass `--apply` on PROD unless the owner has approved that specific run
 and both gates above are set. Applying still only writes verified

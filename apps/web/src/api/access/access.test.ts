@@ -343,6 +343,7 @@ function memory(options?: {
           amountUsdc: userId === BOB ? "7.350000" : "8.330000",
           txHash: TX,
           paidAt: "2026-09-24T12:00:00.000Z",
+          destination: PAYER,
         },
       ];
     },
@@ -1143,13 +1144,80 @@ describe("V4-3 claims, status, and funded refund", () => {
     assert.equal(stranger.calls.refund, 0);
   });
 
+  it("does not pair one refund payer with another leg's transaction", async () => {
+    const bag = memory({ status: "funded" });
+    const leg1 = "0x089200000000000000000000000000000000A7F4";
+    const leg2 = "0x86eb000000000000000000000000000000003098";
+    const tx1 = `0x${"21".repeat(32)}`;
+    const tx2 = `0x${"cf".repeat(32)}`;
+    bag.deps.performRefund = async () => {
+      bag.calls.refund += 1;
+      return {
+        bountyId: BOUNTY,
+        status: "cancelled",
+        refundTxHash: tx2,
+        amountUsdc: "2.000000",
+        destination: leg1,
+        legs: [
+          {
+            destination: leg1,
+            amount: "1.000000",
+            kind: "REFUND_OUT",
+            status: "paid" as const,
+            txHash: tx1,
+            reason: null,
+          },
+          {
+            destination: leg2,
+            amount: "1.000000",
+            kind: "REFUND_OUT",
+            status: "paid" as const,
+            txHash: tx2,
+            reason: null,
+          },
+        ],
+      };
+    };
+    const { principal: key } = await principal(bag.deps);
+    const lines: string[] = [];
+    const original = console.log;
+    console.log = (line?: unknown) => {
+      lines.push(String(line));
+    };
+    let body: {
+      destination?: string | null;
+      refundTxHash?: string | null;
+      legs?: { destination: string | null; txHash: string | null }[];
+    };
+    try {
+      const first = await handleRefund(key, BOUNTY, {}, "refund-split", bag.deps);
+      body = first.body as typeof body;
+    } finally {
+      console.log = original;
+    }
+    assert.equal(body.destination, null);
+    assert.equal(body.refundTxHash, null);
+    assert.equal(body.legs?.[0]?.destination, leg1);
+    assert.equal(body.legs?.[0]?.txHash, tx1);
+    assert.equal(body.legs?.[1]?.destination, leg2);
+    assert.equal(body.legs?.[1]?.txHash, tx2);
+    const summary = lines
+      .map((line) => JSON.parse(line) as { event?: string; destination?: string | null; txHash?: string | null; result?: string })
+      .filter((row) => row.event === "money_action" && row.result === "ok");
+    assert.equal(summary.length, 1);
+    assert.equal(summary[0]?.destination, null);
+    assert.equal(summary[0]?.txHash, null);
+  });
+
   it("lists only the caller's claim legs", async () => {
     const bag = memory();
     const { principal: key } = await principal(bag.deps, ["read"]);
     const mine = await handleMyClaims(key, bag.deps);
     const one = await handleBountyClaims(key, BOUNTY, bag.deps);
-    assert.equal((mine.body as { claims: { kind: string; txHash: string }[] }).claims[0]?.kind, "winner");
-    assert.equal((one.body as { legs: { txHash: string }[] }).legs[0]?.txHash, TX);
+    assert.equal((mine.body as { claims: { kind: string; txHash: string; destination: string }[] }).claims[0]?.kind, "winner");
+    assert.equal((one.body as { legs: { txHash: string; destination: string }[] }).legs[0]?.txHash, TX);
+    assert.equal((mine.body as { claims: { destination: string }[] }).claims[0]?.destination, PAYER);
+    assert.equal((one.body as { legs: { destination: string }[] }).legs[0]?.destination, PAYER);
     const json = JSON.stringify(mine.body) + JSON.stringify(one.body);
     assert.equal(json.includes(ATTACKER), false);
     assert.equal(json.includes("wallet"), false);

@@ -133,12 +133,53 @@ const refundResultSchema = z
   .object({
     id: z.string().uuid(),
     status: z.string(),
-    refundTxHash: z.string().nullable().describe("Last confirmed refund leg. Kept for older clients."),
+    refundTxHash: z
+      .string()
+      .nullable()
+      .describe(
+        "Single-payer refund only: that leg's transaction hash. Null when legs has more than one entry; read legs.",
+      ),
     amountUsdc: z.string(),
-    destination: z.string().describe("Recorded payer of the first or only leg. Kept for older clients."),
-    legs: z.array(payoutLegSchema).describe("Every refund leg: paid (with tx hash), failed, or pending."),
+    destination: z
+      .string()
+      .nullable()
+      .describe(
+        "Single-payer refund only: that leg's payer. Null when legs has more than one entry, so it cannot pair with another leg's hash. Read legs.",
+      ),
+    legs: z.array(payoutLegSchema).describe("Every refund leg: paid (with tx hash), failed, or pending. Source of truth for a multi-payer refund."),
   })
   .openapi("RefundResult");
+
+export const claimLegSchema = z
+  .object({
+    bountyId: z.string().uuid(),
+    title: z.string(),
+    kind: z.enum(["winner", "pool"]),
+    status: z.string(),
+    amountUsdc: z.string().nullable(),
+    txHash: z.string().nullable(),
+    paidAt: z.string().datetime().nullable(),
+    destination: z
+      .string()
+      .nullable()
+      .describe(
+        "Address this leg was paid to, or the saved wallet it will be paid to. The fee leg is not listed. Never a caller-supplied address.",
+      ),
+  })
+  .openapi("ClaimLeg");
+
+const claimListSchema = z
+  .object({
+    claims: z.array(claimLegSchema),
+  })
+  .openapi("MyClaims");
+
+const bountyClaimListSchema = z
+  .object({
+    bountyId: z.string().uuid(),
+    legs: z.array(claimLegSchema),
+  })
+  .openapi("BountyClaims");
 
 const createdBountySchema = z
   .object({
@@ -456,11 +497,12 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     path: "/api/v1/bounties/{id}/claims",
     operationId: "listBountyClaims",
     summary: "Payout status for the caller's legs",
-    description: "Scope read. The caller's own winner and pool legs on this bounty: status, amount, and tx hash. Other hunters are omitted.",
+    description:
+      "Scope read. The caller's own winner and pool legs on this bounty: status, amount, tx hash, and destination (the address paid, or the saved wallet to be paid). The fee leg is not included. Other hunters are omitted.",
     security: bearer,
     request: { params: z.object({ id: idSchema }) },
     responses: {
-      200: { description: "Caller legs. Empty when this user has none.", ...errorContent },
+      200: { description: "Caller legs. Empty when this user has none.", content: json(bountyClaimListSchema) },
       401: { description: "Unauthorized.", ...errorContent },
       404: { description: "Bounty not found.", ...errorContent },
       429: { description: "Per-key read limit (120/min).", ...errorContent },
@@ -472,10 +514,11 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     path: "/api/v1/me/claims",
     operationId: "listMyClaims",
     summary: "The caller's claims across bounties",
-    description: "Scope read. Winner claims and pool shares for this key's user, with status and tx hashes.",
+    description:
+      "Scope read. Winner claims and pool shares for this key's user, with status, tx hash, and destination (the address paid, or the saved wallet to be paid). The fee leg is not included.",
     security: bearer,
     responses: {
-      200: { description: "Caller claims.", ...errorContent },
+      200: { description: "Caller claims.", content: json(claimListSchema) },
       401: { description: "Unauthorized.", ...errorContent },
       429: { description: "Per-key read limit (120/min).", ...errorContent },
     },
@@ -497,7 +540,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     responses: {
       200: {
         description:
-          "Refunded. destination and refundTxHash stay for older clients. legs lists every payer leg with status and tx hash. A replay of the same Idempotency-Key returns this stored body.",
+          "Refunded. A single payer keeps destination and refundTxHash for that one leg. A multi-payer refund sets both to null; legs lists every payer leg with status and tx hash. A replay of the same Idempotency-Key returns this stored body.",
         content: json(refundResultSchema),
       },
       400: { description: "Address or Idempotency-Key rejected.", ...errorContent },

@@ -4,6 +4,7 @@ import { isBountyError } from "../../bounties/errors";
 import { isClaimError } from "../../claims";
 import type { ApiKeyScope } from "../../db/schema";
 import { logMoneyAction, moneyResultCode } from "../../escrow/actor-log";
+import { refundApiSummary } from "./refund-summary";
 import { isEscrowError } from "../../escrow/errors";
 import type { FacilitatorSettlementCheck } from "../../escrow/fund-hash";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
@@ -1076,25 +1077,31 @@ export async function handleRefund(
           requestId: idempotencyKey,
           apiKeyId: principal.keyId,
         });
+        const legs = refunded.legs ?? [];
+        const summary = refundApiSummary({
+          legs,
+          destination: refunded.destination,
+          refundTxHash: refunded.refundTxHash,
+        });
         auditMoney(principal, {
           action: "refund",
           bountyId: id,
           leg: "REFUND_OUT",
           result: "ok",
           requestId: idempotencyKey,
-          destination: refunded.destination,
+          destination: summary.destination,
           amountUsdc: refunded.amountUsdc,
-          txHash: refunded.refundTxHash,
+          txHash: summary.refundTxHash,
         });
         return {
           status: 200,
           body: {
             id,
             status: refunded.status,
-            refundTxHash: refunded.refundTxHash,
+            refundTxHash: summary.refundTxHash,
             amountUsdc: refunded.amountUsdc,
-            destination: refunded.destination,
-            legs: refunded.legs ?? [],
+            destination: summary.destination,
+            legs,
           },
         };
       } catch (err) {

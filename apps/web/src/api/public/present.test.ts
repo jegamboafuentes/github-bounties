@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { poolPayoutBreakdown } from "../../bounties/display";
 import type { BoardBounty } from "../../bounties/list";
-import type { PoolRosterView } from "../../bounties/roster";
+import { countPaidPayoutLegs, type PoolRosterView } from "../../bounties/roster";
 import type { BountyContributionView } from "../../escrow/top-up";
 import {
   confirmedTotalFor,
@@ -87,6 +87,7 @@ function contribution(
     githubLogin: "ada",
     funderAddress: "0xabcsecretwallet",
     fundTxHash: "0xfund",
+    refundTxHash: null,
     avatarUrl: null,
     ...partial,
   };
@@ -274,6 +275,65 @@ describe("confirmed funded total", () => {
         signaledAt: signaledAt.toISOString(),
       },
     ]);
+  });
+
+  it("counts paid winner and pool legs and skips the fee leg", () => {
+    const base = roster("1.100000");
+    const paid: PoolRosterView = {
+      ...base,
+      winner: {
+        id: "winner",
+        githubLogin: "octocat",
+        githubId: "1",
+        userId: "user-1",
+        role: "winner",
+        qualifyingPrNumber: 1,
+        qualifyingPrUrl: null,
+        shareUsdc: "0.916300",
+        payoutTxHash: "0xwinner",
+        skipReason: null,
+        frozen: true,
+        unlinked: false,
+        paid: true,
+      },
+      pool: [
+        {
+          id: "pool",
+          githubLogin: "alice",
+          githubId: "2",
+          userId: "user-2",
+          role: "pool",
+          qualifyingPrNumber: 2,
+          qualifyingPrUrl: null,
+          shareUsdc: "0.161700",
+          payoutTxHash: "0xpool",
+          skipReason: null,
+          frozen: true,
+          unlinked: false,
+          paid: true,
+        },
+      ],
+      breakdown: {
+        ...base.breakdown,
+        paidCount: 1,
+        winnerTxHash: "0xwinner",
+      },
+      legs: [
+        { kind: "FEE_OUT", participantId: null, amountUsdc: "0.022000", txHash: "0xfee", status: "confirmed", githubLogin: null },
+        { kind: "WINNER_PAYOUT", participantId: "winner", amountUsdc: "0.916300", txHash: "0xwinner", status: "confirmed", githubLogin: "octocat" },
+        { kind: "POOL_PAYOUT", participantId: "pool", amountUsdc: "0.161700", txHash: "0xpool", status: "confirmed", githubLogin: "alice" },
+      ],
+    };
+    assert.equal(countPaidPayoutLegs(paid), 2);
+    const detail = presentBountyDetail({
+      bounty: board({ status: "settled", amountUsdc: "1.100000" }),
+      totalFundedUsdc: "1.100000",
+      issueBody: null,
+      roster: paid,
+      escrow: null,
+    });
+    assert.equal(detail.bounty.payout.paidCount, 2);
+    assert.equal(paid.breakdown.paidCount, 1);
   });
 });
 
