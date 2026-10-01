@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isDevSite, LOCAL_SITE_ORIGIN, readPublicSiteOrigin } from "./site-env";
+import { isDevSite, LOCAL_SITE_ORIGIN, mappedHostHeader, readPublicSiteOrigin } from "./site-env";
+
+describe("mappedHostHeader", () => {
+  it("reads Host and ignores X-Forwarded-Host", () => {
+    const headers = new Headers({
+      host: "dev.githubbounties.xyz",
+      "x-forwarded-host": "admin-dev.githubbounties.xyz",
+    });
+    assert.equal(mappedHostHeader(headers), "dev.githubbounties.xyz");
+    assert.equal(mappedHostHeader(new Headers({ host: "admin-dev.githubbounties.xyz" })), "admin-dev.githubbounties.xyz");
+  });
+});
 
 describe("isDevSite", () => {
   it("shows the DEV pill on the DEV custom domain", () => {

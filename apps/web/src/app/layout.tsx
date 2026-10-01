@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { mappedHostHeader } from "@/lib/site-env";
 import { buildSocialMetadata } from "@/lib/social-metadata";
 import { WalletProviders } from "@/wallet/providers";
 import { readWalletConnectProjectId, resolveFundWalletRuntime } from "@/wallet/env";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
   return buildSocialMetadata(process.env, {
-    host: requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host"),
+    host: mappedHostHeader(requestHeaders),
     proto: requestHeaders.get("x-forwarded-proto"),
   });
 }

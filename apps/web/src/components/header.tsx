@@ -4,14 +4,14 @@ import { getOptionalSession } from "@/auth";
 import { signOutToHome } from "@/app/actions/auth";
 import { BrandWordmark } from "@/components/brand-wordmark";
 import { PRODUCT_NAME } from "@/lib/constants";
-import { isDevSite } from "@/lib/site-env";
+import { isDevSite, mappedHostHeader } from "@/lib/site-env";
 
 export async function AppHeader() {
   const session = await getOptionalSession();
   const signedIn = Boolean(session?.user?.id);
   const requestHeaders = await headers();
   const showDev = isDevSite({
-    host: requestHeaders.get("x-forwarded-host") || requestHeaders.get("host"),
+    host: mappedHostHeader(requestHeaders),
   });
 
   return (

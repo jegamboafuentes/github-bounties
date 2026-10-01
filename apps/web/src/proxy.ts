@@ -10,11 +10,36 @@ import { authConfig } from "@/auth/config";
 import { hasSessionSecret } from "@/auth/env";
 import { isProtectedApiPath, isProtectedPagePath } from "@/auth/paths";
 import { providerSignInLocation } from "@/auth/provider-signin-get";
+import { mappedHostHeader } from "@/lib/site-env";
 
 const { auth } = NextAuth(authConfig);
 
 function requestHost(req: { headers: Headers; nextUrl: URL }): string {
-  return req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? req.nextUrl.host;
+  return mappedHostHeader(req.headers) ?? req.nextUrl.host;
+}
+
+/**
+ * POST /signin is the Google server action. Next.js turns a missing Origin or
+ * an unreadable body into a 500. Reject those before the action handler runs.
+ * A real browser submit sends Origin plus multipart (with a boundary) or
+ * text/plain.
+ */
+export function malformedSignInPostStatus(req: {
+  method: string;
+  nextUrl: { pathname: string };
+  headers: { get(name: string): string | null };
+}): 400 | null {
+  if (req.method !== "POST") return null;
+  const pathname = req.nextUrl.pathname.replace(/\/+$/, "") || "/";
+  if (pathname !== "/signin") return null;
+  const origin = req.headers.get("origin")?.trim() ?? "";
+  if (!origin || origin.toLowerCase() === "null") return 400;
+  const contentType = req.headers.get("content-type")?.trim() ?? "";
+  const media = contentType.split(";")[0]?.trim().toLowerCase() ?? "";
+  if (req.headers.get("content-length")?.trim() === "0") return 400;
+  if (media === "multipart/form-data") return /boundary=/i.test(contentType) ? null : 400;
+  if (media === "text/plain") return null;
+  return 400;
 }
 
 function withRobots(response: NextResponse, robots: boolean): NextResponse {
@@ -91,6 +116,12 @@ export default function proxy(
   req: Parameters<typeof sessionProxy>[0],
   event: Parameters<typeof sessionProxy>[1],
 ) {
+  if (malformedSignInPostStatus(req) === 400) {
+    return new NextResponse("Bad Request", {
+      status: 400,
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
   const pathname = req.nextUrl.pathname;
   const host = requestHost(req);
   const decision = classifyHostRequest(host, pathname);

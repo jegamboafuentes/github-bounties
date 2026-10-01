@@ -10,17 +10,18 @@
  * AUTH_URL stays the public origin. This module rewrites an Auth.js request
  * only onto an origin we construct from an allowlist: the pinned admin
  * hostnames, otherwise AUTH_URL / NEXTAUTH_URL, otherwise PUBLIC_BASE_URL.
- * A Host or x-forwarded-host value that is not on that list is never copied
- * into a redirect or an OAuth redirect_uri.
+ * The allowlist key is the Host header. Client `X-Forwarded-Host` is ignored.
+ * A Host value that is not on the list is never copied into a redirect or an
+ * OAuth redirect_uri.
  */
 import { ADMIN_DEV_HOST, ADMIN_PROD_HOST, adminConsoleOrigin, hostnameFromHeader } from "@/admin/hosts";
 import type { EnvMap } from "./env";
-import { originFromSiteUrl } from "@/lib/site-env";
+import { mappedHostHeader, originFromSiteUrl } from "@/lib/site-env";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
 export function requestHostHeader(headers: { get(name: string): string | null }): string | null {
-  return headers.get("x-forwarded-host") ?? headers.get("host");
+  return mappedHostHeader(headers);
 }
 
 function configuredAuthOrigin(env: EnvMap): string | null {
@@ -56,14 +57,21 @@ export function allowlistedAuthOrigin(
   return adminConsoleOrigin(hostHeader) ?? configuredAuthOrigin(env) ?? loopbackAuthOrigin(hostHeader);
 }
 
-/** Rewrite an Auth.js request onto the allowlisted origin. */
+/** Rewrite an Auth.js request onto the allowlisted origin. Drops client X-Forwarded-Host. */
 export function prepareAuthRequest(request: Request, env: EnvMap = process.env): Request {
+  const headers = new Headers(request.headers);
+  headers.delete("x-forwarded-host");
   const origin = allowlistedAuthOrigin(requestHostHeader(request.headers), env);
-  if (!origin) return request;
   const current = new URL(request.url);
-  if (current.origin === origin) return request;
-  const next = new URL(`${current.pathname}${current.search}`, origin);
-  return new Request(next, request);
+  const url =
+    origin && current.origin !== origin ? new URL(`${current.pathname}${current.search}`, origin) : request.url;
+  const hasBody = request.method !== "GET" && request.method !== "HEAD";
+  return new Request(url, {
+    method: request.method,
+    headers,
+    body: hasBody ? request.body : null,
+    ...(hasBody ? { duplex: "half" } : {}),
+  });
 }
 
 function allowedCallbackOrigins(baseUrl: string, env: EnvMap): Set<string> {
