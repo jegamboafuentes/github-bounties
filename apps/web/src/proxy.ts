@@ -83,7 +83,10 @@ export function needsSession(pathname: string, host: string): boolean {
   return pathname === "/" || pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
-export default function proxy(req: Parameters<typeof sessionProxy>[0]) {
+export default function proxy(
+  req: Parameters<typeof sessionProxy>[0],
+  event: Parameters<typeof sessionProxy>[1],
+) {
   const pathname = req.nextUrl.pathname;
   const host = requestHost(req);
   const decision = classifyHostRequest(host, pathname);
@@ -98,7 +101,7 @@ export default function proxy(req: Parameters<typeof sessionProxy>[0]) {
   if (!needsSession(pathname, host)) {
     return withRobots(NextResponse.next(), decision.robots);
   }
-  return sessionProxy(req);
+  return sessionProxy(req, event);
 }
 
 export const config = {

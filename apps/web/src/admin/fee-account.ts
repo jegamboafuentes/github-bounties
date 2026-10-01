@@ -59,6 +59,12 @@ export async function cdpNamedAccountClient(): Promise<NamedAccountClient> {
   const { CdpClient } = await import("@coinbase/cdp-sdk");
   const cdp = new CdpClient();
   return {
-    getAccount: (args) => cdp.evm.getAccount(args),
+    getAccount: async (args) => {
+      const account = await cdp.evm.getAccount(args);
+      return {
+        address: account.address,
+        transfer: account.transfer.bind(account) as NamedAccount["transfer"],
+      };
+    },
   };
 }

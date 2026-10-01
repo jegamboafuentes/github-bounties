@@ -21,6 +21,7 @@ export function ClaimPayoutPanel({
   signInHref,
   escrowFail,
   winnerUsdc,
+  feeBps,
 }: {
   bountyId: string;
   faceUsdc: string;

@@ -13,7 +13,6 @@ import {
   resolvePublicIssue,
 } from "../github/public-read";
 import { readPlatformSettings } from "../admin/settings";
-import type { Database } from "../db/client";
 import { DEFAULT_CHAIN, DEFAULT_CURRENCY } from "../lib/constants";
 import { normalizeBountyAmountUsdc } from "./amount";
 import { BountyError } from "./errors";
