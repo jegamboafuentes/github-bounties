@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { bountyAmountEditBlocked } from "../bounties/update-amount";
+import { amountEditRefusal, BOUNTY_NOT_EDITABLE_MESSAGE } from "../bounties/update-amount";
 import type { Database } from "../db/client";
 import { bountyContributions, bounties, escrows } from "../db/schema";
 import { loadAllocationLegs } from "../escrow/allocation";
@@ -43,27 +43,29 @@ export async function softDeleteBounty(input: {
       .from(bountyContributions)
       .where(eq(bountyContributions.bountyId, input.bountyId));
     const allocationLegs = await loadAllocationLegs(database, input.bountyId);
-    if (
-      bountyAmountEditBlocked({
-        bountyStatus: bounty.status,
-        escrow: escrow
-          ? {
-              status: escrow.status,
-              amountUsdc: escrow.amountUsdc,
-              fundTxHash: escrow.fundTxHash,
-              x402PaymentId: escrow.x402PaymentId,
-            }
-          : null,
-        contributions,
-        allocationLegs: allocationLegs.map((leg) => ({
-          kind: leg.kind,
-          amountUsdc: leg.amountUsdc,
-          txHash: leg.txHash,
-          status: leg.status,
-        })),
-        railMode,
-      })
-    ) {
+    const refusal = amountEditRefusal({
+      bountyStatus: bounty.status,
+      escrow: escrow
+        ? {
+            status: escrow.status,
+            amountUsdc: escrow.amountUsdc,
+            fundTxHash: escrow.fundTxHash,
+            x402PaymentId: escrow.x402PaymentId,
+          }
+        : null,
+      contributions,
+      allocationLegs: allocationLegs.map((leg) => ({
+        kind: leg.kind,
+        amountUsdc: leg.amountUsdc,
+        txHash: leg.txHash,
+        status: leg.status,
+      })),
+      railMode,
+    });
+    if (refusal === "not_editable") {
+      throw new AdminError(409, "bounty_not_editable", BOUNTY_NOT_EDITABLE_MESSAGE);
+    }
+    if (refusal === "has_funds") {
       throw new AdminError(
         409,
         BOUNTY_HAS_FUNDS_REFUND_FIRST,

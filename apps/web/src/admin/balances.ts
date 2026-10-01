@@ -82,7 +82,16 @@ export async function expectedEscrowLiabilitiesAtomic(db: Database): Promise<big
   const result = await db.execute(sql`
     select coalesce(sum(
       case
-        when e.status in ('refunded', 'settled', 'failed', 'pending') then 0
+        when e.status in ('refunded', 'settled') then 0
+        when e.status in ('pending', 'failed') and (
+          (e.x402_payment_id is not null and btrim(e.x402_payment_id) <> '')
+          or (
+            e.fund_tx_hash is not null
+            and btrim(e.fund_tx_hash) <> ''
+            and e.fund_tx_hash not like 'mock:%'
+          )
+        ) then (e.amount_usdc * 1000000)::bigint
+        when e.status in ('pending', 'failed') then 0
         else greatest(
           0,
           (e.amount_usdc * 1000000)::bigint - coalesce(paid.atomic, 0)
@@ -100,7 +109,20 @@ export async function expectedEscrowLiabilitiesAtomic(db: Database): Promise<big
         and l.kind in ('WINNER_PAYOUT', 'POOL_PAYOUT', 'FEE_OUT', 'REFUND_OUT')
     ) paid on true
     where b.deleted_at is null
-      and e.status in ('funded', 'settling', 'settled_partial')
+      and (
+        e.status in ('funded', 'settling', 'settled_partial')
+        or (
+          e.status in ('pending', 'failed')
+          and (
+            (e.x402_payment_id is not null and btrim(e.x402_payment_id) <> '')
+            or (
+              e.fund_tx_hash is not null
+              and btrim(e.fund_tx_hash) <> ''
+              and e.fund_tx_hash not like 'mock:%'
+            )
+          )
+        )
+      )
   `);
   return scalar(result);
 }

@@ -10,7 +10,7 @@ import {
 } from "./env";
 import { EscrowError } from "./errors";
 import { createMockRail, resolveRail } from "./rail";
-import { attributedAtomic, reconcileBountyNotes } from "./reconcile";
+import { attributedAtomic, reconcileBountyNotes, unappliedSettledInbound } from "./reconcile";
 import { moneyIdempotencyKey } from "./idempotency";
 import { escrowHealth } from "./service";
 
@@ -98,6 +98,55 @@ describe("CDP env + mainnet refuse", () => {
     });
     assert.ok(notes.some((n) => n.includes("rail=mock")));
     assert.ok(notes.some((n) => n.includes("Hosted checkout")));
+
+    const pendingMock = attributedAtomic({
+      bountyId: "b",
+      faceUsdc: "100.000000",
+      escrowStatus: "pending",
+      fundTxHash: "mock:1",
+      payoutTxHash: null,
+      feeTxHash: null,
+      refundTxHash: null,
+    });
+    assert.equal(pendingMock, 0n);
+    assert.equal(
+      unappliedSettledInbound({ escrowStatus: "pending", fundTxHash: "mock:1", x402PaymentId: null }),
+      false,
+    );
+
+    const unapplied = attributedAtomic({
+      bountyId: "b",
+      faceUsdc: "100.000000",
+      escrowStatus: "pending",
+      fundTxHash: "0xabc",
+      payoutTxHash: null,
+      feeTxHash: null,
+      refundTxHash: null,
+    });
+    assert.equal(unapplied, 100_000_000n);
+    assert.equal(
+      unappliedSettledInbound({ escrowStatus: "pending", fundTxHash: null, x402PaymentId: "x402:pay" }),
+      true,
+    );
+    assert.equal(
+      unappliedSettledInbound({ escrowStatus: "failed", fundTxHash: "0xabc", x402PaymentId: null }),
+      true,
+    );
+    assert.equal(
+      unappliedSettledInbound({ escrowStatus: "funded", fundTxHash: "0xabc", x402PaymentId: "x402:pay" }),
+      false,
+    );
+    const unappliedNotes = reconcileBountyNotes({
+      bountyId: "b",
+      faceUsdc: "100.000000",
+      escrowStatus: "pending",
+      fundTxHash: "0xabc",
+      payoutTxHash: null,
+      feeTxHash: null,
+      refundTxHash: null,
+    });
+    assert.ok(unappliedNotes.some((n) => n.includes("INBOUND_UNAPPLIED")));
+    assert.ok(unappliedNotes.some((n) => n.includes("attributed_atomic=100000000")));
     const health = escrowHealth({});
     assert.equal(health.ticket, "V2-5");
     assert.equal(health.hosted_checkout.enabled, false);

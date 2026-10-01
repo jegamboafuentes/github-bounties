@@ -45,7 +45,7 @@ export function inboundIsRecorded(row: {
 /**
  * Persist an x402 `exact` settlement on a still-pending escrow row.
  * Does not flip status to funded — poster Lock confirms FUND_IN.
- * Recon treats pending as 0 attributed, so storing the hash here is safe.
+ * A still-pending row with this real hash stays in recon as INBOUND_UNAPPLIED.
  */
 export async function recordExactInbound(
   db: Database,

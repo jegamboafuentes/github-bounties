@@ -588,3 +588,20 @@ export function buildOpenApiDocument(input: OpenApiServerContext = {}) {
 }
 
 export type ListBountiesInput = z.infer<typeof listBountiesInputSchema>;
+
+/** Operation count from a generated OpenAPI document. One operationId is one operation. */
+export function countOpenApiOperations(
+  paths: ReturnType<typeof buildOpenApiDocument>["paths"],
+): number {
+  let count = 0;
+  for (const item of Object.values(paths ?? {})) {
+    if (!item) continue;
+    for (const method of ["get", "post", "put", "patch", "delete"] as const) {
+      const operation = item[method];
+      if (operation && typeof operation === "object" && "operationId" in operation && operation.operationId) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}

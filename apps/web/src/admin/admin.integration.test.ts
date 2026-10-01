@@ -125,6 +125,18 @@ describe("admin settings, stamping, and soft delete", () => {
         () => softDeleteBounty({ bountyId: funded.id, actorEmail: "admin@example.com", db }),
         (err: unknown) => err instanceof AdminError && err.code === "bounty_has_funds_refund_first",
       );
+
+      for (const [issue, status] of [
+        [5, "cancelled"],
+        [6, "settled"],
+      ] as const) {
+        const draft = await post(db, posterId, fullName, issue);
+        await db.update(bounties).set({ status }).where(eq(bounties.id, draft.id));
+        await assert.rejects(
+          () => softDeleteBounty({ bountyId: draft.id, actorEmail: "admin@example.com", db }),
+          (err: unknown) => err instanceof AdminError && err.code === "bounty_not_editable",
+        );
+      }
       const settings = await readPlatformSettings(db);
       assert.equal(settings.feeBps >= 0, true);
       const [row] = await db.select().from(platformSettings).limit(1);

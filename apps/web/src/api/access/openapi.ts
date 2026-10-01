@@ -8,14 +8,24 @@ extendZodWithOpenApi(z);
 export const createBountyBodySchema = z
   .object({
     issueUrl: z.string().trim().min(1).max(500).describe("Public GitHub issue URL."),
-    amountUsdc: z.string().trim().min(1).max(40).describe("Face USDC. Creates pending_fund only."),
+    amountUsdc: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .describe("Face USDC. Greater than 0 and at most 1,000,000, up to 6 decimal places. Creates pending_fund only."),
   })
   .strict()
   .openapi("CreateBountyBody");
 
 export const topUpBodySchema = z
   .object({
-    amountUsdc: z.string().trim().min(1).max(40).describe("USDC to add. No address fields."),
+    amountUsdc: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .describe("USDC to add. Greater than 0 and at most 1,000,000, up to 6 decimal places. No address fields."),
   })
   .strict()
   .openapi("TopUpBody");
@@ -27,7 +37,7 @@ export const updateBountyAmountBodySchema = z
       .trim()
       .min(1)
       .max(40)
-      .describe("New face USDC. Same min, max, and decimal rules as create. The value must change."),
+      .describe("New face USDC. Greater than 0 and at most 1,000,000, up to 6 decimal places. The value must change."),
   })
   .strict()
   .openapi("UpdateBountyAmountBody");
@@ -142,7 +152,12 @@ export const createBountyToolSchema = createBountyBodySchema;
 
 export const updateBountyAmountToolSchema = z.object({
   bounty_id: idSchema.describe("Bounty id."),
-  amount_usdc: z.string().trim().min(1).max(40).describe("New face USDC. Same rules as create."),
+  amount_usdc: z
+    .string()
+    .trim()
+    .min(1)
+    .max(40)
+    .describe("New face USDC. Greater than 0 and at most 1,000,000, up to 6 decimal places."),
 });
 
 export const updatedBountyAmountSchema = z
@@ -491,7 +506,8 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       403: { description: "Missing write scope, or not the poster.", ...errorContent },
       404: { description: "Bounty not found.", ...errorContent },
       409: {
-        description: "bounty_has_funds when anything is funded or in flight, or amount_unchanged when the face is already this value.",
+        description:
+          "bounty_has_funds when anything is funded or in flight, bounty_not_editable when the bounty is not pending_fund and nothing was funded, or amount_unchanged when the face is already this value.",
         content: {
           "application/json": {
             schema: errorRef,

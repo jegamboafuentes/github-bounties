@@ -19,6 +19,11 @@ import { BountyError } from "./errors";
 export const BOUNTY_HAS_FUNDS_MESSAGE =
   "This bounty already has funds or a payment in progress. The amount can be changed only while it is unfunded.";
 
+export const BOUNTY_NOT_EDITABLE_MESSAGE =
+  "Only an unfunded pending bounty can be edited or deleted.";
+
+export type AmountEditRefusal = "ok" | "not_editable" | "has_funds";
+
 const UNFUNDED_STATUS = "pending_fund";
 const UNFUNDED_ESCROW_STATUS = "pending";
 
@@ -36,20 +41,19 @@ export type AmountEditFunding = {
 };
 
 /**
- * True when the face must stay put.
- * Uses the escrow inbound, verified-inflow, and open/in-flight status helpers.
- * Work signals and winner claims do not count: they are not funding.
+ * True when money, an inbound, or an in-flight leg is already on the bounty.
+ * A cancelled or settled draft with none of that is not "funded".
  */
-export function bountyAmountEditBlocked(input: AmountEditFunding): boolean {
-  if (input.bountyStatus !== UNFUNDED_STATUS) return true;
+function fundingRecorded(input: AmountEditFunding): boolean {
   if ((IN_FLIGHT_BOUNTY_STATUSES as readonly string[]).includes(input.bountyStatus)) return true;
   if ((OPEN_MONEY_BOUNTY_STATUSES as readonly string[]).includes(input.bountyStatus)) return true;
   const escrow = input.escrow;
-  if (!escrow || escrow.status !== UNFUNDED_ESCROW_STATUS) return true;
-  if ((TRANSACTED_ESCROW_STATUSES as readonly string[]).includes(escrow.status)) return true;
+  if (escrow && escrow.status !== UNFUNDED_ESCROW_STATUS) return true;
+  if (escrow && (TRANSACTED_ESCROW_STATUSES as readonly string[]).includes(escrow.status)) return true;
   if (inboundIsRecorded(escrow)) return true;
   if (input.contributions.length > 0) return true;
   if (
+    escrow &&
     verifiedInflowAtomic({
       railMode: input.railMode,
       escrow: {
@@ -73,6 +77,32 @@ export function bountyAmountEditBlocked(input: AmountEditFunding): boolean {
     return true;
   }
   return false;
+}
+
+/**
+ * `has_funds` when anything is funded or in flight.
+ * `not_editable` when the status is not pending_fund and nothing was funded.
+ * Work signals and winner claims do not count: they are not funding.
+ */
+export function amountEditRefusal(input: AmountEditFunding): AmountEditRefusal {
+  if (fundingRecorded(input)) return "has_funds";
+  if (input.bountyStatus !== UNFUNDED_STATUS) return "not_editable";
+  if (!input.escrow || input.escrow.status !== UNFUNDED_ESCROW_STATUS) return "has_funds";
+  return "ok";
+}
+
+/** True when the face must stay put. */
+export function bountyAmountEditBlocked(input: AmountEditFunding): boolean {
+  return amountEditRefusal(input) !== "ok";
+}
+
+function throwAmountEditRefusal(refusal: AmountEditRefusal): void {
+  if (refusal === "has_funds") {
+    throw new BountyError("bounty_has_funds", BOUNTY_HAS_FUNDS_MESSAGE);
+  }
+  if (refusal === "not_editable") {
+    throw new BountyError("bounty_not_editable", BOUNTY_NOT_EDITABLE_MESSAGE);
+  }
 }
 
 /** Create-validator rules, plus a real change against the current face. */
@@ -158,8 +188,8 @@ export async function updateBountyAmount(input: UpdateBountyAmountInput): Promis
       .from(bountyContributions)
       .where(eq(bountyContributions.bountyId, input.bountyId));
     const allocationLegs = await loadAllocationLegs(database, input.bountyId);
-    if (
-      bountyAmountEditBlocked({
+    throwAmountEditRefusal(
+      amountEditRefusal({
         bountyStatus: bounty.status,
         escrow: escrow
           ? {
@@ -177,10 +207,8 @@ export async function updateBountyAmount(input: UpdateBountyAmountInput): Promis
           status: leg.status,
         })),
         railMode,
-      })
-    ) {
-      throw new BountyError("bounty_has_funds", BOUNTY_HAS_FUNDS_MESSAGE);
-    }
+      }),
+    );
 
     const next = assertNewBountyAmount(bounty.amountUsdc, input.amountUsdc);
     const [saved] = await database
@@ -189,7 +217,7 @@ export async function updateBountyAmount(input: UpdateBountyAmountInput): Promis
       .where(eq(bounties.id, bounty.id))
       .returning({ id: bounties.id, status: bounties.status, amountUsdc: bounties.amountUsdc });
     if (!saved || saved.status !== "pending_fund") {
-      throw new BountyError("bounty_has_funds", BOUNTY_HAS_FUNDS_MESSAGE);
+      throwAmountEditRefusal(saved && ["cancelled", "expired", "void", "settled"].includes(saved.status) ? "not_editable" : "has_funds");
     }
     if (escrow) {
       await database

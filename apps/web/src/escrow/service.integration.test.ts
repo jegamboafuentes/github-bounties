@@ -6,12 +6,16 @@ import { createDb } from "../db/client";
 import { loadDotenvFiles } from "../db/load-dotenv";
 import { bounties, claims, escrows, feeLedger, allocationLedger, poolParticipants, repos, users } from "../db/schema";
 import { createBountyFromIssueUrl } from "../bounties/create";
+import { sharePaidLabel } from "../bounties/display";
 import { fundBounty } from "../bounties/fund";
+import { payoutPiesFromBreakdown } from "../bounties/payout-pie";
+import { getPoolRoster } from "../bounties/roster";
 import { EscrowError } from "./errors";
 import { VOIDED_UNFUNDED_CODE } from "./fail";
 import { getEscrowSnapshot } from "./read";
+import { attributedAtomic, reconcileBountyNotes } from "./reconcile";
 import { createMockRail, MOCK_FEE_ADDRESS } from "./rail";
-import { expireUnmergedBounties, lockEscrowFunds, refundEscrow, settleEscrow } from "./service";
+import { expireUnmergedBounties, LOCK_FACE_CHANGED_MESSAGE, lockEscrowFunds, refundEscrow, settleEscrow } from "./service";
 import { probeCdpEnv } from "./env";
 
 loadDotenvFiles();
@@ -436,6 +440,86 @@ describe("V1-5 escrow fund / settle / refund (mock rail)", () => {
       assert.equal(row?.status, "funded");
       assert.equal(row?.failCode, null);
       assert.equal(row?.failReason, null);
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("refuses Lock when the face changes during the lock", async () => {
+    const { db, sql, posterId, fullName, rail } = await fixture();
+    try {
+      const created = await postBounty(db, posterId, fullName, 30, "10");
+      await assert.rejects(
+        () =>
+          lockEscrowFunds(created.id, posterId, {
+            db,
+            rail,
+            beforeLockWrite: async (tx) => {
+              await tx.update(bounties).set({ amountUsdc: "20.000000" }).where(eq(bounties.id, created.id));
+            },
+          }),
+        (err: unknown) =>
+          err instanceof EscrowError &&
+          err.code === "not_fundable" &&
+          err.message === LOCK_FACE_CHANGED_MESSAGE,
+      );
+      const [bounty] = await db.select().from(bounties).where(eq(bounties.id, created.id));
+      const [escrow] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
+      assert.equal(bounty?.status, "pending_fund");
+      assert.equal(bounty?.amountUsdc, "10.000000");
+      assert.equal(escrow?.status, "pending");
+      assert.equal(escrow?.failCode, null);
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("keeps a settled x402 inbound visible when Lock then refuses the face", async () => {
+    const { db, sql, posterId, fullName, rail } = await fixture();
+    try {
+      const created = await postBounty(db, posterId, fullName, 31, "10");
+      const hash = `0x${created.id.replace(/-/g, "")}facechg`;
+      await db
+        .update(escrows)
+        .set({
+          fundTxHash: hash,
+          x402PaymentId: `x402:${created.id}`,
+          funderAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        })
+        .where(eq(escrows.bountyId, created.id));
+      await assert.rejects(
+        () =>
+          lockEscrowFunds(created.id, posterId, {
+            db,
+            rail,
+            beforeLockWrite: async (tx) => {
+              await tx.update(bounties).set({ amountUsdc: "20.000000" }).where(eq(bounties.id, created.id));
+            },
+          }),
+        (err: unknown) =>
+          err instanceof EscrowError &&
+          err.code === "not_fundable" &&
+          err.message === LOCK_FACE_CHANGED_MESSAGE,
+      );
+      const [bounty] = await db.select().from(bounties).where(eq(bounties.id, created.id));
+      const [escrow] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
+      assert.equal(bounty?.status, "pending_fund");
+      assert.equal(escrow?.status, "pending");
+      assert.equal(escrow?.fundTxHash, hash);
+      assert.equal(escrow?.x402PaymentId, `x402:${created.id}`);
+      assert.equal(escrow?.failCode, "not_fundable");
+      assert.equal(escrow?.failReason, LOCK_FACE_CHANGED_MESSAGE);
+      const row = {
+        bountyId: created.id,
+        faceUsdc: bounty?.amountUsdc ?? "0",
+        escrowStatus: "pending" as const,
+        fundTxHash: escrow?.fundTxHash ?? null,
+        payoutTxHash: null,
+        feeTxHash: null,
+        refundTxHash: null,
+      };
+      assert.equal(attributedAtomic(row), 10_000_000n);
+      assert.ok(reconcileBountyNotes(row).some((note) => note.includes("INBOUND_UNAPPLIED")));
     } finally {
       await sql.end({ timeout: 5 });
     }
@@ -1086,6 +1170,77 @@ describe("V2-3 escrow multi-payee settle (mock rail)", () => {
       assert.equal(winner?.payoutTxHash ?? null, null);
       assert.equal(pool?.payoutTxHash, poolLeg?.txHash);
       assert.notEqual(pool?.payoutTxHash, escrow?.payoutTxHash);
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("pays the winner's own pool share on a separate tx and still shows the winner as Paid", async () => {
+    const { db, sql, posterId, hunterId, fullName, rail } = await fixture();
+    const aliceId = randomUUID();
+    await db.insert(users).values({
+      id: aliceId,
+      googleSub: `alice-both-${randomUUID().slice(0, 8)}`,
+      email: `alice-both-${randomUUID().slice(0, 8)}@example.com`,
+      displayName: "Alice",
+      walletAddress: ALICE_ADDRESS,
+    });
+    try {
+      const created = await postBounty(db, posterId, fullName, 72);
+      await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await markEligibleClaim(db, created.id, hunterId);
+      await insertFreeze(db, {
+        bountyId: created.id,
+        winner: {
+          userId: hunterId,
+          login: "winner",
+          address: HUNTER_ADDRESS,
+          shareUsdc: "83.300000",
+        },
+        pool: [
+          { userId: aliceId, login: "alice", address: ALICE_ADDRESS, shareUsdc: "7.350000" },
+          { userId: hunterId, login: "winner-also", address: HUNTER_ADDRESS, shareUsdc: "7.350000" },
+        ],
+      });
+      await settleEscrow(created.id, { actorUserId: posterId, scope: "all" }, { db, rail });
+      const people = await db.select().from(poolParticipants).where(eq(poolParticipants.bountyId, created.id));
+      const winner = people.find((row) => row.role === "winner");
+      const poolRows = people.filter((row) => row.role === "pool");
+      const [escrow] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
+      const legs = await db.select().from(allocationLedger).where(eq(allocationLedger.bountyId, created.id));
+      const poolLegs = legs.filter((row) => row.kind === "POOL_PAYOUT");
+      assert.equal(poolRows.length, 2);
+      assert.equal(poolLegs.length, 2);
+      assert.equal(winner?.payoutTxHash ?? null, null);
+      assert.ok(escrow?.payoutTxHash);
+      for (const member of poolRows) {
+        const leg = poolLegs.find((row) => row.participantId === member.id);
+        assert.ok(leg?.txHash);
+        assert.equal(member.payoutTxHash, leg?.txHash);
+        assert.notEqual(member.payoutTxHash, escrow?.payoutTxHash);
+        assert.equal(leg?.status, "confirmed");
+      }
+      const winnerPool = poolRows.find((row) => row.userId === hunterId);
+      assert.ok(winnerPool?.payoutTxHash);
+      const roster = await getPoolRoster(created.id, db);
+      assert.ok(roster);
+      assert.equal(roster.winner?.paid, true);
+      assert.equal(sharePaidLabel(Boolean(roster.winner?.paid)), "Paid");
+      assert.equal(sharePaidLabel(Boolean(roster.breakdown.winnerTxHash)), "Paid");
+      assert.equal(roster.breakdown.winnerTxHash, escrow?.payoutTxHash);
+      assert.ok(roster.pool.every((member) => member.paid));
+      assert.ok(roster.pool.every((member) => sharePaidLabel(member.paid) === "Paid"));
+      const winnerPaidOnPage = Boolean(
+        roster.winner?.paid || roster.breakdown.winnerTxHash,
+      );
+      assert.equal(winnerPaidOnPage, true);
+      const pies = payoutPiesFromBreakdown(roster.breakdown);
+      for (const pie of [pies.face, pies.postFee]) {
+        const slice = pie.slices.find((item) => item.key === "winner");
+        assert.ok(slice);
+        assert.notEqual(slice.amountUsdc, "0.000000");
+        assert.doesNotMatch(`${slice.label} ${pie.caption}`, /pending/i);
+      }
     } finally {
       await sql.end({ timeout: 5 });
     }

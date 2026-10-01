@@ -638,7 +638,7 @@ export async function handleUpdateBountyAmount(
   assertNoAddress(body);
   const parsed = updateBountyAmountBodySchema.safeParse(body);
   if (!parsed.success) {
-    throw new PublicApiError("validation_failed", "amount_usdc is required.", zodErrorDetails(parsed.error));
+    throw validationFromZod(parsed.error, "amount_usdc is required.");
   }
   const id = acceptBountyId(bountyId);
   const updated = await deps.updateBountyAmount({

@@ -95,7 +95,7 @@ describe("public API error shape", () => {
     assert.equal(needsSession("/mcp", "dev.githubbounties.xyz"), false);
     const proxy = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../proxy.ts"), "utf8");
     assert.match(proxy, /if \(!needsSession\(pathname, host\)\)/);
-    assert.match(proxy, /return sessionProxy\(req\)/);
+    assert.match(proxy, /return sessionProxy\(req, event\)/);
   });
 
   it("read-only /api/v1 routes still answer writes with methodNotAllowed", () => {

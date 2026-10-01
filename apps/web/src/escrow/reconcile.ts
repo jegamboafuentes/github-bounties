@@ -4,6 +4,23 @@ import { attributedFromOutflows, type ConfirmedOutflows } from "./allocation";
 import { isMockTxHash } from "./idempotency";
 import type { EscrowStatus } from "./state";
 
+/**
+ * x402 (or another real inbound) settled, but Lock did not commit.
+ * Pending escrow normally attributes 0. This case must stay visible for refund
+ * or ops review. Lock cannot move before settle: the poster pays, then Locks.
+ */
+export function unappliedSettledInbound(row: {
+  escrowStatus?: string | null;
+  fundTxHash?: string | null;
+  x402PaymentId?: string | null;
+}): boolean {
+  const status = row.escrowStatus;
+  if (status && status !== "pending" && status !== "failed") return false;
+  if (row.x402PaymentId?.trim()) return true;
+  const hash = row.fundTxHash?.trim() ?? "";
+  return Boolean(hash) && !isMockTxHash(hash);
+}
+
 export type EscrowReconRow = {
   bountyId: string;
   faceUsdc: string;
@@ -45,6 +62,9 @@ function confirmedOutflows(row: EscrowReconRow): ConfirmedOutflows | null {
  */
 export function attributedAtomic(row: EscrowReconRow): bigint {
   const split = splitFaceUsdc(row.faceUsdc, bountyFeeBps(row.feeBps));
+  if (unappliedSettledInbound(row)) {
+    return split.faceAtomic;
+  }
   if (row.escrowStatus === "pending" || row.escrowStatus === "failed") {
     return BigInt(0);
   }
@@ -82,6 +102,11 @@ export function reconcileBountyNotes(row: EscrowReconRow): string[] {
   if (isMockTxHash(row.fundTxHash) || isMockTxHash(row.payoutTxHash) || isMockTxHash(row.feeTxHash) || isMockTxHash(row.refundTxHash)) {
     notes.push(
       "rail=mock — hashes are not on-chain. Missing CDP_* (see result.missingEnv). Not a silent wallet-loss: mock is explicit.",
+    );
+  }
+  if (unappliedSettledInbound(row)) {
+    notes.push(
+      "INBOUND_UNAPPLIED: a payment settled but Lock did not commit. Hold the USDC for refund or ops review. Do not drop it from escrow recon.",
     );
   }
   if (row.escrowStatus === "settled_partial") {

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { PUBLIC_ROADMAP, ROADMAP_STATUS_LABEL, type RoadmapStatus } from "@/home/roadmap";
+import { publicSurfaceCounts } from "@/api/public/surface-counts";
+import { roadmapWithSurface, ROADMAP_STATUS_LABEL, type RoadmapStatus } from "@/home/roadmap";
 
 function statusClass(status: RoadmapStatus): string {
   if (status === "shipped") {
@@ -11,10 +12,11 @@ function statusClass(status: RoadmapStatus): string {
   return "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
 }
 
-export function PublicRoadmap() {
+export async function PublicRoadmap() {
+  const items = roadmapWithSurface(await publicSurfaceCounts());
   return (
     <ol className="relative space-y-3 border-l border-zinc-200 pl-5 dark:border-zinc-800">
-      {PUBLIC_ROADMAP.map((item) => (
+      {items.map((item) => (
         <li key={item.id} className="relative">
           <span
             aria-hidden="true"

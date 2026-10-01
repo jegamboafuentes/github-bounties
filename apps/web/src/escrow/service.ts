@@ -54,7 +54,7 @@ import {
   type ContributionRefundLeg,
 } from "./top-up";
 import { x402ExactStatus } from "./x402";
-import { reconcileBountyNotes, type EscrowReconRow } from "./reconcile";
+import { reconcileBountyNotes, unappliedSettledInbound, type EscrowReconRow } from "./reconcile";
 import {
   assertEscrowTransition,
   ESCROW_LOCKED,
@@ -76,6 +76,11 @@ export type EscrowServiceOpts = {
   apiKeyId?: string | null;
   /** Overrides the Base JSON-RPC reader used to count legacy funding. Tests inject this. */
   legacyChain?: LegacyChainReader;
+  /**
+   * Test seam. Runs inside the lock transaction before the funded update so a
+   * test can change the face after Lock has already read it.
+   */
+  beforeLockWrite?: (tx: Database) => Promise<void>;
 };
 
 async function coverageAfterLegacy(
@@ -131,6 +136,9 @@ function toRecon(
     feeBps: bountyFeeBps(feeBps),
   };
 }
+
+export const LOCK_FACE_CHANGED_MESSAGE =
+  "Bounty face changed during lock. Retry Lock so escrow matches the current amount.";
 
 export type LockResult = {
   bountyId: string;
@@ -255,6 +263,7 @@ export async function lockEscrowFunds(
   }
 
   await opts.db.transaction(async (tx) => {
+    if (opts.beforeLockWrite) await opts.beforeLockWrite(tx as unknown as Database);
     const [updated] = await tx
       .update(bounties)
       .set({ status: "funded", fundedAt: now, updatedAt: now })
@@ -273,10 +282,7 @@ export async function lockEscrowFunds(
         .where(eq(bounties.id, bountyId))
         .limit(1);
       if (current && current.amountUsdc !== bounty.amountUsdc) {
-        throw new EscrowError(
-          "not_fundable",
-          "Bounty face changed during lock. Retry Lock so escrow matches the current amount.",
-        );
+        throw new EscrowError("not_fundable", LOCK_FACE_CHANGED_MESSAGE);
       }
       throw new EscrowError("not_fundable", "Bounty is no longer pending_fund.");
     }
@@ -314,6 +320,32 @@ export async function lockEscrowFunds(
       funderAddress,
       now,
     });
+  }).catch(async (err: unknown) => {
+    if (err instanceof EscrowError && err.message === LOCK_FACE_CHANGED_MESSAGE) {
+      const inbound = unappliedSettledInbound({
+        escrowStatus: existingBeforeLock?.status ?? "pending",
+        fundTxHash: existingBeforeLock?.fundTxHash ?? null,
+        x402PaymentId: existingBeforeLock?.x402PaymentId ?? null,
+      });
+      if (inbound) {
+        await persistEscrowFail(opts.db, bountyId, {
+          code: "not_fundable",
+          reason: LOCK_FACE_CHANGED_MESSAGE,
+          now,
+        });
+        logMoneyAction({
+          action: "lock",
+          actorUserId,
+          bountyId,
+          payer: funderAddress,
+          amountUsdc: bounty.amountUsdc,
+          txHash: existingBeforeLock?.fundTxHash ?? null,
+          result: "not_fundable",
+          requestId,
+        });
+      }
+    }
+    throw err;
   });
 
   const escrow = await loadEscrow(opts.db, bountyId);
