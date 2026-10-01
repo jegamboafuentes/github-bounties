@@ -15,7 +15,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { POOL_BPS_OF_POST_FEE } from "../lib/constants";
+import { FEE_BPS, POOL_BPS_OF_POST_FEE } from "../lib/constants";
 
 /**
  * V1 domain schema plus additive V2-1 pool tables.
@@ -316,7 +316,7 @@ const ACTIVE_BOUNTY_STATUSES = sql`status in (
   'settling',
   'settled_partial',
   'refunding'
-)`;
+) and deleted_at is null`;
 
 export const bounties = pgTable(
   "bounties",
@@ -355,6 +355,10 @@ export const bounties = pgTable(
       precision: 20,
       scale: 6,
     }),
+    /** Stamped from platform_settings at creation. Settle never re-reads the setting. */
+    feeBps: integer("fee_bps").notNull().default(FEE_BPS),
+    deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
+    deletedBy: text("deleted_by"),
     ...timestamps,
   },
   (table) => [
@@ -367,6 +371,11 @@ export const bounties = pgTable(
     index("bounties_repo_issue_idx").on(table.repoId, table.githubIssueNumber),
     check("bounties_issue_positive", sql`${table.githubIssueNumber} > 0`),
     check("bounties_amount_positive", sql`${table.amountUsdc} > 0`),
+    check("bounties_fee_bps_range", sql`${table.feeBps} >= 0 AND ${table.feeBps} <= 1000`),
+    check(
+      "bounties_pool_bps_range",
+      sql`${table.participationPoolBps} IS NULL OR (${table.participationPoolBps} >= 1000 AND ${table.participationPoolBps} <= 2000)`,
+    ),
   ],
 );
 
@@ -710,7 +719,7 @@ export const bountyContributions = pgTable(
  * is shown once. `key_hash` is HMAC-SHA256 with `API_KEY_HMAC_SECRET`.
  * Caps are a ceiling the user may only lower. No agent-owned accounts.
  */
-export const API_KEY_SCOPES = ["read", "write", "money"] as const;
+export const API_KEY_SCOPES = ["read", "write", "money", "admin"] as const;
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
 export const API_KEY_ENVS = ["test", "live"] as const;
 export type ApiKeyEnv = (typeof API_KEY_ENVS)[number];
@@ -745,7 +754,7 @@ export const apiKeys = pgTable(
     check("api_keys_hash_present", sql`length(trim(${table.keyHash})) > 0`),
     check(
       "api_keys_scopes",
-      sql`cardinality(${table.scopes}) > 0 AND ${table.scopes} <@ ARRAY['read', 'write', 'money']::text[]`,
+      sql`cardinality(${table.scopes}) > 0 AND ${table.scopes} <@ ARRAY['read', 'write', 'money', 'admin']::text[]`,
     ),
     check("api_keys_per_tx_positive", sql`${table.perTxCapUsdc} > 0`),
     check("api_keys_daily_positive", sql`${table.dailyCapUsdc} > 0`),
@@ -875,6 +884,43 @@ export const apiIdempotencyKeys = pgTable(
     check("api_idempotency_keys_key_present", sql`length(trim(${table.idempotencyKey})) > 0`),
     check("api_idempotency_keys_hash_present", sql`length(trim(${table.requestHash})) > 0`),
   ],
+);
+
+/** One row. `id` is constrained to true so a second row cannot be inserted. */
+export const platformSettings = pgTable(
+  "platform_settings",
+  {
+    id: boolean("id").primaryKey().default(true),
+    feeBps: integer("fee_bps").notNull().default(FEE_BPS),
+    poolBps: integer("pool_bps").notNull().default(POOL_BPS_OF_POST_FEE),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedBy: text("updated_by"),
+  },
+  (table) => [
+    check("platform_settings_singleton", sql`${table.id} = true`),
+    check("platform_settings_fee_bps_range", sql`${table.feeBps} >= 0 AND ${table.feeBps} <= 1000`),
+    check(
+      "platform_settings_pool_bps_range",
+      sql`${table.poolBps} >= 1000 AND ${table.poolBps} <= 2000`,
+    ),
+  ],
+);
+
+export const adminAuditLog = pgTable(
+  "admin_audit_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    actorEmail: text("actor_email").notNull(),
+    action: text("action").notNull(),
+    target: text("target"),
+    before: jsonb("before"),
+    after: jsonb("after"),
+    network: text("network"),
+    txHash: text("tx_hash"),
+    result: text("result").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [index("admin_audit_log_created_at_idx").on(table.createdAt)],
 );
 
 export const webhookDeliveries = pgTable("webhook_deliveries", {

@@ -7,7 +7,6 @@ import {
 } from "@/bounties";
 import type { PayoutClaimView } from "@/claims";
 import { GitHubAvatar } from "@/components/github-avatar";
-import { FEE_BPS } from "@/lib/constants";
 import Link from "next/link";
 
 export function ClaimPayoutPanel({
@@ -36,8 +35,9 @@ export function ClaimPayoutPanel({
   escrowFail?: { code: string; reason: string } | null;
   /** ADR 0003 winner share when a freeze/pool exists; otherwise V1 post-fee. */
   winnerUsdc?: string | null;
+  feeBps?: number;
 }) {
-  const split = payoutBreakdown(faceUsdc);
+  const split = payoutBreakdown(faceUsdc, feeBps);
   const paid = payout.status === "paid";
   const net = payout.payoutUsdc ?? winnerUsdc ?? split.hunterUsdc;
   const claimAmount = winnerUsdc ?? split.hunterUsdc;
@@ -83,7 +83,7 @@ export function ClaimPayoutPanel({
           </dd>
         </div>
         <div className="grid gap-1 px-3 py-2 sm:grid-cols-3">
-          <dt className="text-xs uppercase tracking-wide text-zinc-500">Fee ({FEE_BPS / 100}%)</dt>
+          <dt className="text-xs uppercase tracking-wide text-zinc-500">Fee ({split.feePercent}%)</dt>
           <dd className="sm:col-span-2">
             {formatUsdc(split.feeUsdc)} {currency}
           </dd>

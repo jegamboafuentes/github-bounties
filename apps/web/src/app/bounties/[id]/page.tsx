@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { getCurrentPublicUser } from "@/auth/protect";
 import {
   cancelBountyAction,
@@ -70,19 +71,7 @@ export default async function BountyDetailPage({
     : null;
 
   if (!bounty) {
-    return (
-      <div className="flex flex-1 flex-col bg-zinc-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
-        <AppHeader />
-        <main className="mx-auto w-full max-w-xl px-6 py-14">
-          <h1 className="text-2xl font-semibold">Bounty not found</h1>
-          <p className="mt-3 text-sm">
-            <Link href="/board" className="underline underline-offset-4">
-              Back to board
-            </Link>
-          </p>
-        </main>
-      </div>
-    );
+    notFound();
   }
 
   const mainnetExplorer = isFundMainnetEnabled();
@@ -252,6 +241,7 @@ export default async function BountyDetailPage({
             signInHref={signInHref}
             escrowFail={bounty.escrowFail}
             winnerUsdc={winnerUsdc}
+            feeBps={bounty.feeBps}
           />
         ) : null}
 

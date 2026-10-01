@@ -262,7 +262,7 @@ const meSchema = z
       name: z.string(),
       prefix: z.string(),
       env: z.enum(["test", "live"]),
-      scopes: z.array(z.enum(["read", "write", "money"])),
+      scopes: z.array(z.enum(["read", "write", "money", "admin"])),
       perTxCapUsdc: usdcDecimalOrNull.describe("Null when this key does not have the money scope. Cap enforcement is unchanged."),
       dailyCapUsdc: usdcDecimalOrNull.describe("Null when this key does not have the money scope. Cap enforcement is unchanged."),
     }),

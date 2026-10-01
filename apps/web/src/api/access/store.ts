@@ -266,6 +266,15 @@ export function createAccessDeps(
         github: Boolean(link?.githubLogin?.trim()),
       };
     },
+    db,
+    async loadAdminActor(userId) {
+      const [row] = await db
+        .select({ email: users.email, googleSub: users.googleSub })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      return row ?? null;
+    },
     async loadMe(userId) {
       const [row] = await db
         .select({

@@ -117,6 +117,7 @@ export async function freezeAfterWinner(
           eq(bounties.repoId, repo.id),
           eq(bounties.githubIssueNumber, issueNumber),
           inArray(bounties.status, [...FUNDED_BOUNTY_STATUSES]),
+          isNull(bounties.deletedAt),
         ),
       )
       .limit(1);
@@ -193,6 +194,8 @@ export async function freezeAfterWinner(
         repositoryFullName: fullName,
         status: bounty.status,
         poster,
+        feeBps: bounty.feeBps,
+        poolBpsOfPostFee: bounty.participationPoolBps ?? undefined,
       },
       winner,
       winningMerge: {
@@ -298,6 +301,7 @@ export async function ingestLiveRoster(
           eq(bounties.repoId, repo.id),
           eq(bounties.githubIssueNumber, issueNumber),
           inArray(bounties.status, [...FUNDED_BOUNTY_STATUSES]),
+          isNull(bounties.deletedAt),
         ),
       )
       .limit(1);

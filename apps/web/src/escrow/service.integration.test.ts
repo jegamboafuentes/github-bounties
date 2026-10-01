@@ -1044,5 +1044,51 @@ describe("V2-3 escrow multi-payee settle (mock rail)", () => {
       await sql.end({ timeout: 5 });
     }
   });
+
+  it("stores the pool payout hash on the pool row and leaves the winner hash off that table", async () => {
+    const { db, sql, posterId, hunterId, fullName, rail } = await fixture();
+    const aliceId = randomUUID();
+    await db.insert(users).values({
+      id: aliceId,
+      googleSub: `alice-hash-${randomUUID().slice(0, 8)}`,
+      email: `alice-hash-${randomUUID().slice(0, 8)}@example.com`,
+      displayName: "Alice",
+      walletAddress: ALICE_ADDRESS,
+    });
+    try {
+      const created = await postBounty(db, posterId, fullName, 71);
+      await fundBounty(created.id, posterId, db, new Date(), { rail });
+      await markEligibleClaim(db, created.id, hunterId);
+      await insertFreeze(db, {
+        bountyId: created.id,
+        winner: {
+          userId: hunterId,
+          login: "winner",
+          address: HUNTER_ADDRESS,
+          shareUsdc: "83.300000",
+        },
+        pool: [{ userId: aliceId, login: "alice", address: ALICE_ADDRESS, shareUsdc: "14.700000" }],
+      });
+      await settleEscrow(created.id, { actorUserId: posterId, scope: "all" }, { db, rail });
+      const people = await db
+        .select()
+        .from(poolParticipants)
+        .where(eq(poolParticipants.bountyId, created.id));
+      const winner = people.find((row) => row.role === "winner");
+      const pool = people.find((row) => row.role === "pool");
+      const [escrow] = await db.select().from(escrows).where(eq(escrows.bountyId, created.id));
+      const legs = await db
+        .select()
+        .from(allocationLedger)
+        .where(eq(allocationLedger.bountyId, created.id));
+      const poolLeg = legs.find((row) => row.kind === "POOL_PAYOUT");
+      assert.ok(escrow?.payoutTxHash);
+      assert.equal(winner?.payoutTxHash ?? null, null);
+      assert.equal(pool?.payoutTxHash, poolLeg?.txHash);
+      assert.notEqual(pool?.payoutTxHash, escrow?.payoutTxHash);
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
 });
 

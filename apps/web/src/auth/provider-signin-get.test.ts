@@ -220,6 +220,35 @@ describe("GET /api/auth/signin/<provider>", () => {
     }
   });
 
+  it("normalizes an absolute same-origin callbackUrl to its path", () => {
+    const same = providerSignInGetResponse(
+      new URL(
+        "http://0.0.0.0:8080/api/auth/signin/google?callbackUrl=" +
+          encodeURIComponent("https://dev.githubbounties.xyz/admin?tab=1"),
+      ),
+      { env: { PUBLIC_BASE_URL: "https://dev.githubbounties.xyz" } },
+    );
+    assert.equal(
+      same?.headers.get("location"),
+      "https://dev.githubbounties.xyz/signin?callbackUrl=%2Fadmin%3Ftab%3D1",
+    );
+
+    const admin = providerSignInGetResponse(
+      new URL(
+        "http://0.0.0.0:8080/api/auth/signin/google?callbackUrl=" +
+          encodeURIComponent("https://admin-dev.githubbounties.xyz/admin"),
+      ),
+      {
+        env: { AUTH_URL: "https://dev.githubbounties.xyz" },
+        host: "admin-dev.githubbounties.xyz",
+      },
+    );
+    assert.equal(
+      admin?.headers.get("location"),
+      "https://admin-dev.githubbounties.xyz/signin?callbackUrl=%2Fadmin",
+    );
+  });
+
   it("route GET carries a safe callbackUrl and ignores a spoofed host", async () => {
     const { GET } = await loadRoute();
     await withSiteEnv({ PUBLIC_BASE_URL: "https://dev.githubbounties.xyz" }, async () => {

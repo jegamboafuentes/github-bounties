@@ -8,6 +8,7 @@ import { WalletForm } from "@/components/wallet-form";
 import { signOutToHome } from "@/app/actions/auth";
 import { loadSettingsApiKeys } from "@/app/actions/api-keys";
 import { ApiKeysCard } from "@/components/api-keys-card";
+import { isAdminIdentity } from "@/admin/identity";
 import { PRODUCT_NAME } from "@/lib/constants";
 import { getRuntimeDb } from "@/db/runtime";
 import { findGithubLinkByUserId } from "@/github/persist";
@@ -189,6 +190,11 @@ export default async function SettingsPage({
           moneyEligible={apiKeys.moneyEligible}
           walletSet={Boolean(user.wallet_address?.trim())}
           githubLinked={Boolean(link)}
+          canGrantAdmin={isAdminIdentity({
+            email: user.email,
+            googleSub: user.google_sub,
+            sessionGoogleSub: user.google_sub,
+          })}
         />
 
         <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">

@@ -31,6 +31,8 @@ export type PayoutPieBreakdownInput = {
   emptyPool: boolean;
   winnerShareLabel: string;
   poolShareLabel: string;
+  feeBps?: number;
+  poolBpsOfPostFee?: number;
 };
 
 export type PayoutPieArc = {
@@ -83,7 +85,9 @@ export function payoutPiesFromBreakdown(breakdown: PayoutPieBreakdownInput): {
   face: PayoutPie;
   postFee: PayoutPie;
 } {
-  const feeLabel = `Fee (${FEE_BPS / 100}%)`;
+  const feeBps = breakdown.feeBps ?? FEE_BPS;
+  const poolBps = breakdown.poolBpsOfPostFee ?? POOL_BPS_OF_POST_FEE;
+  const feeLabel = `Fee (${feeBps / 100}%)`;
   const winnerLabel = `Winner (${breakdown.winnerShareLabel})`;
   const poolLabel = `Pool (${breakdown.poolShareLabel})`;
   const postFeeUsdc = atomicToUsdc(
@@ -91,8 +95,8 @@ export function payoutPiesFromBreakdown(breakdown: PayoutPieBreakdownInput): {
   );
   // Face labels are shares of face (≈83.3 / ≈14.7). Under "Of post-fee" the
   // same amounts are 85% and 15% of the post-fee pot (ADR 0003).
-  const postFeeWinnerPct = (10_000 - POOL_BPS_OF_POST_FEE) / 100;
-  const postFeePoolPct = POOL_BPS_OF_POST_FEE / 100;
+  const postFeeWinnerPct = (10_000 - poolBps) / 100;
+  const postFeePoolPct = poolBps / 100;
   const postWinnerLabel = breakdown.emptyPool
     ? "Winner (100% of post-fee)"
     : `Winner (${postFeeWinnerPct}%)`;
@@ -131,6 +135,8 @@ export function payoutPiesFromFace(faceUsdc: string, eligibleCount: number) {
     emptyPool: split.eligibleCount === 0,
     winnerShareLabel: labels.winnerShareLabel,
     poolShareLabel: labels.poolShareLabel,
+    feeBps: split.feeBps,
+    poolBpsOfPostFee: split.poolBpsOfPostFee,
   });
 }
 

@@ -12,6 +12,8 @@ import {
   PublicGitHubError,
   resolvePublicIssue,
 } from "../github/public-read";
+import { readPlatformSettings } from "../admin/settings";
+import type { Database } from "../db/client";
 import { DEFAULT_CHAIN, DEFAULT_CURRENCY } from "../lib/constants";
 import { normalizeBountyAmountUsdc } from "./amount";
 import { BountyError } from "./errors";
@@ -91,6 +93,8 @@ export async function createBountyFromIssueUrl(
 
   try {
     const created = await opts.db.transaction(async (tx) => {
+      const database = tx as unknown as Database;
+      const rates = await readPlatformSettings(database);
       const [row] = await tx
         .insert(bounties)
         .values({
@@ -105,6 +109,8 @@ export async function createBountyFromIssueUrl(
           title,
           descriptionSnapshot,
           issueBodySyncedAt: fetchedFromGitHub ? new Date() : null,
+          feeBps: rates.feeBps,
+          participationPoolBps: rates.poolBps,
         })
         .returning({
           id: bounties.id,

@@ -2,6 +2,7 @@ import { eq, inArray } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { allocationLedger, bounties, poolParticipants } from "../db/schema";
 import { CLAIM_SKIP } from "../webhooks/outcome";
+import { bountyFeeBps, bountyPoolBps } from "./rates";
 import { POOL_MAX_PAID } from "../lib/constants";
 import { splitPostFeePool, type PostFeePoolSplit } from "../lib/money";
 import { ELIGIBILITY_FREEZE_COPY, overflowNotPaidLabel } from "./display";
@@ -46,6 +47,8 @@ export type PayoutBreakdownView = {
   poolShareLabel: string;
   feeTxHash: string | null;
   winnerTxHash: string | null;
+  feeBps: number;
+  poolBpsOfPostFee: number;
 };
 
 export type PoolRosterView = {
@@ -155,6 +158,8 @@ export function toPoolRosterView(args: {
   faceUsdc: string;
   participants: ParticipantRow[];
   legs?: LedgerRow[];
+  feeBps?: number | null;
+  poolBps?: number | null;
 }): PoolRosterView {
   const legs = args.legs ?? [];
   const frozenRows = args.participants.filter((row) => row.frozenAt != null);
@@ -177,7 +182,12 @@ export function toPoolRosterView(args: {
   const eligibleCount = frozen
     ? poolRows.length + overflowRows.length
     : args.participants.filter((row) => row.role === "pool" || row.role === "overflow").length;
-  const split = splitPostFeePool(args.faceUsdc, eligibleCount);
+  const split = splitPostFeePool(
+    args.faceUsdc,
+    eligibleCount,
+    bountyFeeBps(args.feeBps),
+    bountyPoolBps(args.poolBps),
+  );
   const labels = payoutShareLabels(split);
 
   const feeTxHash =
@@ -221,6 +231,8 @@ export function toPoolRosterView(args: {
       poolShareLabel: labels.poolShareLabel,
       feeTxHash,
       winnerTxHash,
+      feeBps: split.feeBps,
+      poolBpsOfPostFee: split.poolBpsOfPostFee,
     },
     legs: legs.map((leg) => ({
       kind: leg.kind,
@@ -278,11 +290,16 @@ export async function getPoolRoster(
   db: Database,
 ): Promise<PoolRosterView | null> {
   const [bounty] = await db
-    .select({ amountUsdc: bounties.amountUsdc })
+    .select({
+      amountUsdc: bounties.amountUsdc,
+      feeBps: bounties.feeBps,
+      participationPoolBps: bounties.participationPoolBps,
+      deletedAt: bounties.deletedAt,
+    })
     .from(bounties)
     .where(eq(bounties.id, bountyId))
     .limit(1);
-  if (!bounty) return null;
+  if (!bounty || bounty.deletedAt) return null;
 
   const [participants, legs] = await Promise.all([
     db.select().from(poolParticipants).where(eq(poolParticipants.bountyId, bountyId)),
@@ -293,5 +310,7 @@ export async function getPoolRoster(
     faceUsdc: bounty.amountUsdc,
     participants,
     legs,
+    feeBps: bounty.feeBps,
+    poolBps: bounty.participationPoolBps,
   });
 }

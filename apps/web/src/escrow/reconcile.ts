@@ -1,3 +1,4 @@
+import { bountyFeeBps } from "../bounties/rates";
 import { splitFaceUsdc } from "../lib/money";
 import { attributedFromOutflows, type ConfirmedOutflows } from "./allocation";
 import { isMockTxHash } from "./idempotency";
@@ -15,6 +16,8 @@ export type EscrowReconRow = {
   confirmedWinnerAtomic?: bigint | null;
   confirmedPoolAtomic?: bigint | null;
   confirmedFeeAtomic?: bigint | null;
+  /** Bounty stamp. Omitted rows use the historical 200 bps default. */
+  feeBps?: number | null;
 };
 
 function confirmedOutflows(row: EscrowReconRow): ConfirmedOutflows | null {
@@ -41,7 +44,7 @@ function confirmedOutflows(row: EscrowReconRow): ConfirmedOutflows | null {
  * SettledPartial → remainder after confirmed legs only.
  */
 export function attributedAtomic(row: EscrowReconRow): bigint {
-  const split = splitFaceUsdc(row.faceUsdc);
+  const split = splitFaceUsdc(row.faceUsdc, bountyFeeBps(row.feeBps));
   if (row.escrowStatus === "pending" || row.escrowStatus === "failed") {
     return BigInt(0);
   }
@@ -67,7 +70,7 @@ export function attributedAtomic(row: EscrowReconRow): bigint {
 }
 
 export function reconcileBountyNotes(row: EscrowReconRow): string[] {
-  const split = splitFaceUsdc(row.faceUsdc);
+  const split = splitFaceUsdc(row.faceUsdc, bountyFeeBps(row.feeBps));
   const attributed = attributedAtomic(row);
   const out = confirmedOutflows(row);
   const notes: string[] = [

@@ -1,4 +1,4 @@
-import { CLAIM_LOCK_HOURS, FEE_BPS, POOL_MAX_PAID } from "../lib/constants";
+import { CLAIM_LOCK_HOURS, FEE_BPS, POOL_BPS_OF_POST_FEE, POOL_MAX_PAID } from "../lib/constants";
 import { splitFaceUsdc, splitPostFeePool } from "../lib/money";
 import type { bountyStatusValues } from "../db/schema";
 
@@ -161,8 +161,8 @@ export function formatUsdc(value: string): string {
   return value.replace(/\.?0+$/, "") || "0";
 }
 
-export function payoutBreakdown(faceUsdc: string) {
-  const split = splitFaceUsdc(faceUsdc);
+export function payoutBreakdown(faceUsdc: string, feeBps = FEE_BPS) {
+  const split = splitFaceUsdc(faceUsdc, feeBps);
   return {
     faceUsdc: split.faceUsdc,
     feeUsdc: split.feeUsdc,
@@ -173,8 +173,13 @@ export function payoutBreakdown(faceUsdc: string) {
 }
 
 /** ADR 0003 face / fee / winner / pool breakdown for the bounty page. */
-export function poolPayoutBreakdown(faceUsdc: string, eligibleCount: number) {
-  const split = splitPostFeePool(faceUsdc, eligibleCount);
+export function poolPayoutBreakdown(
+  faceUsdc: string,
+  eligibleCount: number,
+  feeBps = FEE_BPS,
+  poolBpsOfPostFee = POOL_BPS_OF_POST_FEE,
+) {
+  const split = splitPostFeePool(faceUsdc, eligibleCount, feeBps, poolBpsOfPostFee);
   return {
     faceUsdc: split.faceUsdc,
     feeUsdc: split.feeUsdc,

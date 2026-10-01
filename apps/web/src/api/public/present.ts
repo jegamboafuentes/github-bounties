@@ -10,7 +10,6 @@ import {
 import { normalizeFundTxHash } from "../../escrow/fund-hash";
 import type { BountyContributionView } from "../../escrow/top-up";
 import type { EscrowSnapshot } from "../../escrow/read";
-import { FEE_BPS, POOL_BPS_OF_POST_FEE } from "../../lib/constants";
 import { baseTxExplorerUrl } from "../../lib/explorer";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
 import type { CachedIntelligenceResult } from "../../intelligence/load";
@@ -47,8 +46,8 @@ export function rosterPayout(roster: PoolRosterView) {
   return {
     faceUsdc: breakdown.faceUsdc,
     feeUsdc: breakdown.feeUsdc,
-    feeBps: FEE_BPS,
-    poolBpsOfPostFee: POOL_BPS_OF_POST_FEE,
+    feeBps: breakdown.feeBps,
+    poolBpsOfPostFee: breakdown.poolBpsOfPostFee,
     winnerUsdc: breakdown.winnerUsdc,
     poolTotalUsdc: breakdown.poolTotalUsdc,
     eachUsdc: breakdown.eachUsdc,

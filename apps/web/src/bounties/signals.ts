@@ -43,7 +43,7 @@ export async function signalWorkingOnThis(
   }
 
   const [bounty] = await db.select().from(bounties).where(eq(bounties.id, bountyId)).limit(1);
-  if (!bounty) {
+  if (!bounty || bounty.deletedAt) {
     throw new BountyError("bounty_not_found", "Bounty not found.");
   }
   if (!SIGNALABLE_STATUSES.has(bounty.status)) {
@@ -99,8 +99,12 @@ export async function clearWorkSignal(
     throw new BountyError("unauthorized", "Sign in with Google to clear Working on this.");
   }
 
-  const [bounty] = await db.select({ id: bounties.id }).from(bounties).where(eq(bounties.id, bountyId)).limit(1);
-  if (!bounty) {
+  const [bounty] = await db
+    .select({ id: bounties.id, deletedAt: bounties.deletedAt })
+    .from(bounties)
+    .where(eq(bounties.id, bountyId))
+    .limit(1);
+  if (!bounty || bounty.deletedAt) {
     throw new BountyError("bounty_not_found", "Bounty not found.");
   }
 

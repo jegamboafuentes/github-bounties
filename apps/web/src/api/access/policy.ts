@@ -353,12 +353,16 @@ export function decideIdempotency(
   };
 }
 
-export function parseScopes(raw: unknown): ApiKeyScope[] {
+export function parseScopes(raw: unknown, opts?: { allowAdmin?: boolean }): ApiKeyScope[] {
   const values = Array.isArray(raw) ? raw : [];
-  const allowed = new Set<ApiKeyScope>(["read", "write", "money"]);
+  const allowAdmin = opts?.allowAdmin === true;
+  const allowed = new Set<string>(allowAdmin ? ["read", "write", "money", "admin"] : ["read", "write", "money"]);
   const scopes: ApiKeyScope[] = [];
   for (const value of values) {
-    if (typeof value !== "string" || !allowed.has(value as ApiKeyScope)) {
+    if (value === "admin" && !allowAdmin) {
+      throw new PublicApiError("validation_failed", "The admin scope cannot be granted.");
+    }
+    if (typeof value !== "string" || !allowed.has(value)) {
       throw new PublicApiError("validation_failed", "Scopes must be read, write, or money.");
     }
     const scope = value as ApiKeyScope;

@@ -37,7 +37,8 @@ export async function createApiKeyAction(formData: FormData): Promise<ApiKeyActi
     formData.get("scopeRead") ? "read" : null,
     formData.get("scopeWrite") ? "write" : null,
     formData.get("scopeMoney") ? "money" : null,
-  ].filter((scope): scope is "read" | "write" | "money" => scope !== null);
+    formData.get("scopeAdmin") ? "admin" : null,
+  ].filter((scope): scope is "read" | "write" | "money" | "admin" => scope !== null);
   try {
     const created = await createApiKey(
       {

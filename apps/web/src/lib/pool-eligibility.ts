@@ -72,6 +72,10 @@ export type PoolEligibilityInput = {
     repositoryFullName: string;
     status: string;
     poster: PoolActor;
+    /** Stamped fee. Omitted fixtures use the 200 bps default. */
+    feeBps?: number;
+    /** Stamped pool share of post-fee. Omitted fixtures use 1500. */
+    poolBpsOfPostFee?: number;
   };
   winner: PoolActor;
   winningMerge: {

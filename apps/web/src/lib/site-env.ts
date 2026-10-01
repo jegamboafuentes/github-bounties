@@ -24,7 +24,12 @@ function isProdHost(host: string): boolean {
   return host === PROD_SITE_HOST || host === `www.${PROD_SITE_HOST}`;
 }
 
+function isAdminConsoleHostname(host: string): boolean {
+  return host === "admin.githubbounties.xyz" || host === "admin-dev.githubbounties.xyz";
+}
+
 function isDevHost(host: string): boolean {
+  if (isAdminConsoleHostname(host)) return false;
   return host === DEV_SITE_HOST || host.endsWith(`.${DEV_SITE_HOST}`);
 }
 
@@ -90,7 +95,7 @@ export function readPublicSiteOrigin(
   const hostname = hostnameOf(host);
   const isLocal =
     !hostname || hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
-  if (!isLocal) {
+  if (!isLocal && !isAdminConsoleHostname(hostname)) {
     const protoRaw = firstHeaderValue(request?.proto).toLowerCase();
     const proto = protoRaw === "http" ? "http" : "https";
     const fromRequest = originFromSiteUrl(`${proto}://${host}`);

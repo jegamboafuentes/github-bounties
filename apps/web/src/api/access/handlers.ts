@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
+import { isAdminIdentity } from "../../admin/identity";
 import { isBountyError } from "../../bounties/errors";
 import { isClaimError } from "../../claims";
 import type { ApiKeyScope } from "../../db/schema";
@@ -160,7 +161,15 @@ export async function createApiKey(
   if (!name || name.length > 80) {
     throw new PublicApiError("validation_failed", "Key name must be 1–80 characters.");
   }
-  const scopes = parseScopes(input.scopes);
+  const actor = await deps.loadAdminActor?.(input.userId);
+  const allowAdmin = Boolean(
+    actor &&
+      isAdminIdentity(
+        { email: actor.email, googleSub: actor.googleSub, sessionGoogleSub: actor.googleSub },
+        deps.env,
+      ),
+  );
+  const scopes = parseScopes(input.scopes, { allowAdmin });
   if (scopes.includes("money")) {
     const gate = await deps.moneyGate(input.userId);
     if (!gate.wallet) {
