@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { handlers } from "@/auth";
+import { handleAuthRequest } from "@/auth";
 import { providerSignInGetResponse } from "@/auth/provider-signin-get";
 
 export const runtime = "nodejs";
@@ -9,7 +9,9 @@ export function GET(request: NextRequest) {
     host: request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
   });
   if (early) return early;
-  return handlers.GET(request);
+  return handleAuthRequest(request);
 }
 
-export const POST = handlers.POST;
+export function POST(request: NextRequest) {
+  return handleAuthRequest(request);
+}

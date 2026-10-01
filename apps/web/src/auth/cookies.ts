@@ -1,6 +1,8 @@
 /**
  * Auth.js session cookie flags (httpOnly always; Secure in production).
  * Matches @auth/core defaultCookies so proxy and Node handlers stay aligned.
+ * No Domain attribute: the cookie is host-only. A shared `.githubbounties.xyz`
+ * domain would collide with the production apex cookie names.
  */
 
 export type SessionCookieFlags = {

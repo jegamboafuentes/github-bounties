@@ -41,7 +41,7 @@ cp .env.example .env
 | `GOOGLE_OAUTH_CLIENT_SECRET` | `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth Web client secret |
 | `AUTH_SECRET` | `AUTH_SECRET` | Auth.js cookie encryption (random 32+ bytes) |
 | `DATABASE_URL` | `DATABASE_URL` | Persist `users.google_sub` (V1-1) |
-| `AUTH_URL` | — | Optional. Public origin, e.g. `http://localhost:3000` |
+| `AUTH_URL` | — | Public origin. Local: `http://localhost:3000`. DEV: `https://dev.githubbounties.xyz`. PROD: `https://githubbounties.xyz`. Do not unset it and do not point it at an admin host. |
 
 Generate `AUTH_SECRET` locally with `npx auth secret` or `openssl rand -base64 32`. **Never commit the value.**
 
@@ -79,6 +79,26 @@ Newer Cloud Run URLs look like `https://<service>-<project-number>.<region>.run.
 
 `PUBLIC_BASE_URL` in the repo-root `.env.example` is a docs placeholder (`https://github-bounties-staging.example.com`), not a live host. After V1-7 deploy, use the real `github-bounties-web` origin from `gcloud run services describe` ([staging-deploy.md](staging-deploy.md)).
 
+### Admin console hosts
+
+`admin-dev.githubbounties.xyz` and `admin.githubbounties.xyz` are the same Cloud Run service as the public site. next-auth `5.0.0-beta.32` uses `AUTH_URL` for every auth redirect (`reqWithEnvURL` and `createActionURL`). `trustHost: true` does not override that, so do not unset `AUTH_URL` and do not rely on `X-Forwarded-Host`.
+
+Keep both of these on the public origin:
+
+| Environment | `AUTH_URL` | `PUBLIC_BASE_URL` |
+| --- | --- | --- |
+| DEV | `https://dev.githubbounties.xyz` | `https://dev.githubbounties.xyz` |
+| PROD | `https://githubbounties.xyz` | `https://githubbounties.xyz` |
+
+There is no `ADMIN_BASE_URL`. The app builds the admin origin from those two pinned hostnames. A `Host` or `X-Forwarded-Host` that is not on that list is ignored. Session, PKCE, state, and CSRF cookies stay host-only (no `Domain`), so the admin host does not share the public host's session and does not collide with the production apex cookie names.
+
+Google redirect URIs, already registered:
+
+| Host | Redirect URI |
+| --- | --- |
+| DEV admin | `https://admin-dev.githubbounties.xyz/api/auth/callback/google` |
+| PROD admin | `https://admin.githubbounties.xyz/api/auth/callback/google` |
+
 4. Copy the client id and secret into local `.env` or Secret Manager. Ops sets Secret Manager versions out-of-band.
 
 ## Local run
@@ -111,6 +131,8 @@ Auth.js JWT cookie:
 | Production | `__Secure-authjs.session-token` | `HttpOnly; Path=/; SameSite=Lax; Secure` |
 
 `AUTH_SECRET` must be set in production (Cloud Run / Secret Manager) so cookies are not signed with the local fallback.
+
+The cookie has no `Domain` attribute. Each host (public DEV, admin-dev, apex, admin) stores its own session. Do not set `Domain=.githubbounties.xyz`.
 
 ## Out of scope
 

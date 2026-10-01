@@ -30,5 +30,7 @@ describe("session cookies", () => {
     assert.equal(prod.options.httpOnly, true);
     assert.equal(prod.options.secure, true);
     assert.equal(prod.name.startsWith("__Secure-"), true);
+    assert.equal("domain" in prod.options, false);
+    assert.equal("domain" in sessionCookieOptions("development").options, false);
   });
 });

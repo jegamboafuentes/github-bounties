@@ -9,6 +9,7 @@ import {
 import { authConfig } from "@/auth/config";
 import { hasSessionSecret } from "@/auth/env";
 import { isProtectedApiPath, isProtectedPagePath } from "@/auth/paths";
+import { providerSignInLocation } from "@/auth/provider-signin-get";
 
 const { auth } = NextAuth(authConfig);
 
@@ -57,8 +58,11 @@ const sessionProxy = auth((req) => {
   }
 
   if ((isProtectedPagePath(effective) || effective === "/admin" || effective.startsWith("/admin/")) && !signedIn) {
-    const signin = new URL("/signin", req.nextUrl.origin);
-    signin.searchParams.set("callbackUrl", effective);
+    // reqWithEnvURL rewrites nextUrl.origin to AUTH_URL before this callback.
+    // The Location is built from the allowlisted host, not from that origin
+    // and not from a Host header that failed the allowlist.
+    const location = providerSignInLocation(process.env, effective, host);
+    const signin = location.startsWith("/") ? new URL(location, req.nextUrl.origin) : new URL(location);
     return withRobots(NextResponse.redirect(signin), decision.robots);
   }
 
