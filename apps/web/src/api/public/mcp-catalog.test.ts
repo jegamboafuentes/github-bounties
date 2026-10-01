@@ -5,8 +5,8 @@ import { listRegisteredMcpTools } from "./mcp-catalog";
 describe("MCP tool catalog", () => {
   it("reads name and description from the live registry", async () => {
     const tools = await listRegisteredMcpTools();
-    assert.equal(tools.length, 24);
-    assert.equal(new Set(tools.map((tool) => tool.name)).size, 24);
+    assert.equal(tools.length, 25);
+    assert.equal(new Set(tools.map((tool) => tool.name)).size, 25);
     for (const tool of tools) {
       assert.equal(tool.name.length > 0, true);
       assert.equal(tool.description.length > 0, true);
@@ -22,6 +22,10 @@ describe("MCP tool catalog", () => {
     );
     assert.equal(
       tools.some((tool) => tool.name === "refund_bounty"),
+      true,
+    );
+    assert.equal(
+      tools.some((tool) => tool.name === "update_bounty_amount"),
       true,
     );
   });

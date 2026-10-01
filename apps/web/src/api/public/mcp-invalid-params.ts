@@ -12,6 +12,7 @@ export const MCP_TOOL_CLASS: Record<string, ApiClass> = {
   signal_working: "write",
   clear_work_signal: "write",
   cancel_bounty: "write",
+  update_bounty_amount: "write",
   fund_bounty: "money",
   top_up_bounty: "money",
   claim_winner: "money",

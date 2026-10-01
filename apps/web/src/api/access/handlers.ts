@@ -33,6 +33,7 @@ import {
   profilePatchSchema,
   refundBodySchema,
   topUpBodySchema,
+  updateBountyAmountBodySchema,
 } from "./openapi";
 import type { AccessDeps, ApiKeyRecord, ClaimKind, PerformedClaim, PublicApiKey } from "./deps";
 
@@ -615,6 +616,38 @@ export async function handleCancel(
       };
     },
   );
+}
+
+export async function handleUpdateBountyAmount(
+  principal: ApiPrincipal,
+  bountyId: string,
+  body: unknown,
+  source: "rest" | "mcp",
+  deps: AccessDeps,
+): Promise<ApiResult> {
+  requireScope(principal.scopes, "write");
+  assertNoAddress(body);
+  const parsed = updateBountyAmountBodySchema.safeParse(body);
+  if (!parsed.success) {
+    throw new PublicApiError("validation_failed", "amount_usdc is required.", zodErrorDetails(parsed.error));
+  }
+  const id = acceptBountyId(bountyId);
+  const updated = await deps.updateBountyAmount({
+    bountyId: id,
+    actorUserId: principal.userId,
+    amountUsdc: parsed.data.amount_usdc,
+    source,
+    apiKeyId: principal.keyId,
+  });
+  return {
+    status: 200,
+    body: {
+      id: updated.id,
+      status: updated.status,
+      amount_usdc: updated.newAmountUsdc,
+      previous_amount_usdc: updated.oldAmountUsdc,
+    },
+  };
 }
 
 export async function handleFund(

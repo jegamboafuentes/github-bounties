@@ -1,5 +1,6 @@
 import { and, desc, eq, gte, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { createBountyFromIssueUrl } from "../../bounties/create";
+import { updateBountyAmount as updateBountyAmountService } from "../../bounties/update-amount";
 import { clearWorkSignal, signalWorkingOnThis } from "../../bounties/signals";
 import { claimPoolPayout, claimPayout } from "../../claims/payout";
 import type { Database } from "../../db/client";
@@ -439,6 +440,17 @@ export function createAccessDeps(
         { db, requestId, now: now() },
       );
       return { status: result.bountyStatus, refundTxHash: result.refundTxHash };
+    },
+    async updateBountyAmount(input) {
+      return updateBountyAmountService({
+        bountyId: input.bountyId,
+        actorUserId: input.actorUserId,
+        amountUsdc: input.amountUsdc,
+        source: input.source,
+        apiKeyId: input.apiKeyId,
+        db,
+        now: now(),
+      });
     },
     async loadClaimAuthz(userId, bountyId, kind) {
       const bounty = await this.loadMoneyBounty(bountyId);

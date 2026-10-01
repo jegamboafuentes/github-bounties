@@ -6,6 +6,7 @@ import {
   apiRequestLog,
   apiSpendLedger,
   bounties,
+  bountyAmountChanges,
   bountyContributions,
   bountyIntelligence,
   claimLocks,
@@ -73,6 +74,7 @@ export const bountiesRelations = relations(bounties, ({ one, many }) => ({
   workSignals: many(workSignals),
   intelligence: one(bountyIntelligence),
   contributions: many(bountyContributions),
+  amountChanges: many(bountyAmountChanges),
   apiSpends: many(apiSpendLedger),
 }));
 
@@ -167,6 +169,21 @@ export const workSignalsRelations = relations(workSignals, ({ one }) => ({
   user: one(users, {
     fields: [workSignals.userId],
     references: [users.id],
+  }),
+}));
+
+export const bountyAmountChangesRelations = relations(bountyAmountChanges, ({ one }) => ({
+  bounty: one(bounties, {
+    fields: [bountyAmountChanges.bountyId],
+    references: [bounties.id],
+  }),
+  actor: one(users, {
+    fields: [bountyAmountChanges.actorUserId],
+    references: [users.id],
+  }),
+  apiKey: one(apiKeys, {
+    fields: [bountyAmountChanges.apiKeyId],
+    references: [apiKeys.id],
   }),
 }));
 

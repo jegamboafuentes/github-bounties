@@ -123,7 +123,7 @@ describe("MCP read tools", () => {
     const listed = await client.listTools();
     const toolNames = listed.tools.map((tool) => tool.name);
     assert.equal(new Set(toolNames).size, toolNames.length);
-    assert.equal(toolNames.length, 24);
+    assert.equal(toolNames.length, 25);
     assert.deepEqual(
       [...toolNames].sort(),
       [
@@ -149,6 +149,7 @@ describe("MCP read tools", () => {
         "refund_bounty",
         "signal_working",
         "top_up_bounty",
+        "update_bounty_amount",
         "update_notification_preferences",
         "update_profile",
       ],
@@ -189,6 +190,7 @@ describe("MCP read tools", () => {
       signal_working: /^Requires API key \(write scope\)/,
       clear_work_signal: /^Requires API key \(write scope\)/,
       cancel_bounty: /^Requires API key \(write scope\)/,
+      update_bounty_amount: /^Requires API key \(write scope\)/,
       fund_bounty: moneyLead,
       top_up_bounty: moneyLead,
       claim_winner: moneyLead,

@@ -15,6 +15,7 @@ const WRITE = [
   "/api/v1/bounties",
   "/api/v1/bounties/{id}/work-signal",
   "/api/v1/bounties/{id}/cancel",
+  "/api/v1/bounties/{id}/amount",
   "/api/v1/bounties/{id}/fund",
   "/api/v1/bounties/{id}/top-up",
   "/api/v1/bounties/{id}/claim",
@@ -88,7 +89,7 @@ describe("OpenAPI document", () => {
         operationIds.add(operation.operationId ?? "");
       }
     }
-    assert.equal(operationIds.size, 23);
+    assert.equal(operationIds.size, 24);
     assert.deepEqual(
       [...operationIds].sort(),
       [
@@ -113,6 +114,7 @@ describe("OpenAPI document", () => {
         "refundBounty",
         "signalWorking",
         "topUpBounty",
+        "updateBountyAmount",
         "updateNotificationPreferences",
         "updateProfile",
       ],

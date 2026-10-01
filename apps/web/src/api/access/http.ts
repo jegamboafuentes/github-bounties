@@ -22,6 +22,7 @@ import {
   handleMyClaims,
   handleMyBounties,
   handleRefund,
+  handleUpdateBountyAmount,
   handleUpdateNotificationPreferences,
   handleUpdateProfile,
   handleUsage,
@@ -48,6 +49,7 @@ export type V1Action =
   | { kind: "create" }
   | { kind: "signal"; bountyId: string; method: "POST" | "DELETE" }
   | { kind: "cancel"; bountyId: string }
+  | { kind: "amount"; bountyId: string }
   | { kind: "fund"; bountyId: string }
   | { kind: "top-up"; bountyId: string }
   | { kind: "claim"; bountyId: string }
@@ -95,6 +97,8 @@ function actionRoute(action: V1Action): string {
       return `${action.method} /api/v1/bounties/${action.bountyId}/work-signal`;
     case "cancel":
       return `POST /api/v1/bounties/${action.bountyId}/cancel`;
+    case "amount":
+      return `PATCH /api/v1/bounties/${action.bountyId}/amount`;
     case "fund":
       return `POST /api/v1/bounties/${action.bountyId}/fund`;
     case "top-up":
@@ -124,6 +128,7 @@ function actionBountyId(action: V1Action): string | null {
   if (
     action.kind === "signal" ||
     action.kind === "cancel" ||
+    action.kind === "amount" ||
     action.kind === "fund" ||
     action.kind === "top-up" ||
     action.kind === "claim" ||
@@ -218,6 +223,8 @@ async function perform(
       return handleWorkSignal(principal, action.bountyId, action.method, deps);
     case "cancel":
       return handleCancel(principal, action.bountyId, readIdempotencyKey(idempotency, true) as string, deps);
+    case "amount":
+      return handleUpdateBountyAmount(principal, action.bountyId, await readJsonBody(request), "rest", deps);
     case "fund":
       return handleFund(
         principal,

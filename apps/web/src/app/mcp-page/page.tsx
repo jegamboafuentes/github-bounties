@@ -157,8 +157,8 @@ export default async function McpPage() {
             </li>
             <li>
               <span className="font-medium text-zinc-950 dark:text-zinc-50">write</span> — create a
-              bounty, signal working, clear that signal, cancel an unfunded bounty, and update the
-              profile or notification preferences.
+              bounty, signal working, clear that signal, cancel an unfunded bounty, edit an unfunded
+              amount, and update the profile or notification preferences.
             </li>
             <li>
               <span className="font-medium text-zinc-950 dark:text-zinc-50">money</span> — fund, top
