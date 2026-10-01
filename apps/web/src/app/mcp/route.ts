@@ -2,7 +2,11 @@ import { handleMcpHttp } from "@/api/public/mcp-http";
 
 export const dynamic = "force-dynamic";
 
-/** Stateless MCP streamable HTTP. No session cookie. Bearer API keys only. */
+/**
+ * Stateless MCP streamable HTTP. No session cookie. Bearer API keys only.
+ * Browser and Next.js document requests are rewritten to `/mcp-page` before
+ * this handler (see `mcpDocumentRewrites`). Protocol clients stay here.
+ */
 export function GET(request: Request) {
   return handleMcpHttp(request);
 }

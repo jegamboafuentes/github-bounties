@@ -7,6 +7,8 @@ import { registerAccessOpenApi } from "../access/openapi";
 import { z } from "zod";
 import { PUBLIC_API_VERSION } from "./version";
 import { bountyStatusValues } from "../../db/schema";
+import { apiMoneyEnabled } from "../access/policy";
+import { applyInfoMoneyStatus, applyOpenApiMoneyStatus, MONEY_OPERATION_PATHS } from "../access/money-wording";
 import { DEV_SITE_HOST, PROD_SITE_HOST, originFromSiteUrl } from "../../lib/site-env";
 
 extendZodWithOpenApi(z);
@@ -465,7 +467,7 @@ publicApiRegistry.registerPath({
 });
 
 export const PUBLIC_API_DESCRIPTION = [
-  "GitHub Bounties pays USDC on a public GitHub issue when a pull request that closes it is merged. Hunters work in parallel. Anonymous reads of the board, one bounty, its funders, cached issue intelligence, and platform stats do not require an API key. V4-2 adds Bearer API keys for /me, posting, work signals, unfunded cancel, and headless x402 fund and top-up (money is DEV-only until API_MONEY_ENABLED is turned on for mainnet). V4-3 adds winner claim, pool claim, payout status, and funded refund on that same gate. Claims pay the saved wallet. Refunds pay the recorded payer. V4-4 adds profile, email notification preferences, and read-only linked accounts. Wallet changes stay on the signed-in Settings page.",
+  "GitHub Bounties pays USDC on a public GitHub issue when a pull request that closes it is merged. Hunters work in parallel. Anonymous reads of the board, one bounty, its funders, cached issue intelligence, and platform stats do not require an API key. V4-2 adds Bearer API keys for /me, posting, work signals, unfunded cancel, and headless x402 fund and top-up. V4-3 adds winner claim, pool claim, payout status, and funded refund on that same gate. Claims pay the saved wallet. Refunds pay the recorded payer. V4-4 adds profile, email notification preferences, and read-only linked accounts. Wallet changes stay on the signed-in Settings page.",
   "amountUsdc and payout.faceUsdc are the face (the posted amount, including top-ups). totalFundedUsdc is the verified original escrow fund (counted when escrows.fund_tx_hash is recorded) plus confirmed bounty_contributions, counting each fund transaction hash once. A Lock stores that hash on a contribution, and a top-up rewrites the escrow amount to the new face, so neither is added twice. It is 0.000000 when there is no verified inflow. It is not the face. status cancelled, expired, refunding, or refunded means that confirmed amount is not still locked.",
   "POST, PUT, PATCH, and DELETE on read-only /api/v1 routes return 405 with Allow: GET, OPTIONS (RFC 9110) and the JSON error envelope (code method_not_allowed). Profile and notification-preference routes also allow PATCH.",
   "Funder avatars and the funders route are newest contribution first, matching the board avatar stack. Avatars are distinct funders, capped at five. The funders route is one row per contribution.",
@@ -535,6 +537,31 @@ export function orderOpenApiServers(input: OpenApiServerContext = {}): Array<{
   return [OPENAPI_DEV_SERVER, OPENAPI_PROD_SERVER];
 }
 
+function moneyEnabledFor(input: OpenApiServerContext): boolean {
+  return apiMoneyEnabled((input.env ?? process.env) as NodeJS.ProcessEnv);
+}
+
+function withMoneyOperationStatus(
+  paths: NonNullable<ReturnType<OpenApiGeneratorV31["generateDocument"]>["paths"]>,
+  enabled: boolean,
+) {
+  if (enabled) return paths;
+  const next = { ...paths };
+  for (const path of MONEY_OPERATION_PATHS) {
+    const item = next[path];
+    const description = item?.post?.description;
+    if (!item?.post || typeof description !== "string") continue;
+    next[path] = {
+      ...item,
+      post: {
+        ...item.post,
+        description: applyOpenApiMoneyStatus(description, false),
+      },
+    };
+  }
+  return next;
+}
+
 export function buildOpenApiDocument(input: OpenApiServerContext = {}) {
   if (!cachedDocument) {
     const generator = new OpenApiGeneratorV31(publicApiRegistry.definitions);
@@ -548,8 +575,14 @@ export function buildOpenApiDocument(input: OpenApiServerContext = {}) {
       servers: [OPENAPI_DEV_SERVER, OPENAPI_PROD_SERVER],
     });
   }
+  const enabled = moneyEnabledFor(input);
   return {
     ...cachedDocument,
+    info: {
+      ...cachedDocument.info,
+      description: applyInfoMoneyStatus(cachedDocument.info?.description ?? PUBLIC_API_DESCRIPTION, enabled),
+    },
+    paths: cachedDocument.paths ? withMoneyOperationStatus(cachedDocument.paths, enabled) : cachedDocument.paths,
     servers: orderOpenApiServers(input),
   };
 }

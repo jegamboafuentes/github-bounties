@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { apiMoneyEnabled } from "../access/policy";
+import { moneyScopeRequirement } from "../access/money-wording";
 import { createBountiesMcpServer } from "./mcp";
 import type { PublicReadApi } from "./service";
 
@@ -151,9 +153,11 @@ describe("MCP read tools", () => {
         "update_profile",
       ],
     );
+    const moneyLead = new RegExp(`^${moneyScopeRequirement(apiMoneyEnabled()).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
     for (const name of ["claim_winner", "claim_pool", "refund_bounty", "fund_bounty", "top_up_bounty"]) {
       const tool = listed.tools.find((item) => item.name === name);
-      assert.match(tool?.description ?? "", /^Requires API key with money scope; DEV only/);
+      assert.match(tool?.description ?? "", moneyLead);
+      assert.doesNotMatch(tool?.description ?? "", /DEV only/);
     }
     for (const name of ["get_me", "list_my_bounties", "get_bounty_claims", "list_my_claims"]) {
       const tool = listed.tools.find((item) => item.name === name);
@@ -185,11 +189,11 @@ describe("MCP read tools", () => {
       signal_working: /^Requires API key \(write scope\)/,
       clear_work_signal: /^Requires API key \(write scope\)/,
       cancel_bounty: /^Requires API key \(write scope\)/,
-      fund_bounty: /^Requires API key with money scope; DEV only/,
-      top_up_bounty: /^Requires API key with money scope; DEV only/,
-      claim_winner: /^Requires API key with money scope; DEV only/,
-      claim_pool: /^Requires API key with money scope; DEV only/,
-      refund_bounty: /^Requires API key with money scope; DEV only/,
+      fund_bounty: moneyLead,
+      top_up_bounty: moneyLead,
+      claim_winner: moneyLead,
+      claim_pool: moneyLead,
+      refund_bounty: moneyLead,
     };
     for (const tool of listed.tools) {
       const prefix = keyedPrefix[tool.name];

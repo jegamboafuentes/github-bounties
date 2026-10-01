@@ -447,7 +447,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
   });
 
   const moneyDescription =
-    "Scope money. DEV only unless API_MONEY_ENABLED is set. The first call returns 402 with payment requirements (amount is the face or the top-up, payTo is escrow) and approval_url. Retry with PAYMENT-SIGNATURE or X-PAYMENT and the same Idempotency-Key. The server settles through the facilitator and then locks or tops up. No pasted transaction hash. The body cannot include an address. Caps are checked before the 402 and again before the spend is recorded.";
+    "Scope money. The first call returns 402 with payment requirements (amount is the face or the top-up, payTo is escrow) and approval_url. Retry with PAYMENT-SIGNATURE or X-PAYMENT and the same Idempotency-Key. The server settles through the facilitator and then locks or tops up. No pasted transaction hash. The body cannot include an address. Caps are checked before the 402 and again before the spend is recorded.";
 
   registry.registerPath({
     method: "post",
@@ -501,7 +501,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
   });
 
   const claimDescription =
-    "Scope money. DEV only unless API_MONEY_ENABLED is set. Pays the wallet saved for the key owner. The body cannot include an address, destination, or user id. Linked GitHub login must match the winner or the caller's own pool member. Idempotency-Key is required. A replay returns the stored response and does not pay again.";
+    "Scope money. Pays the wallet saved for the key owner. The body cannot include an address, destination, or user id. Linked GitHub login must match the winner or the caller's own pool member. Idempotency-Key is required. A replay returns the stored response and does not pay again.";
 
   registry.registerPath({
     method: "post",
@@ -563,7 +563,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     operationId: "refundBounty",
     summary: "Refund a funded bounty to the recorded payer",
     description:
-      "Scope money. DEV only unless API_MONEY_ENABLED is set. Poster only. The refund goes to the recorded on-chain payer, never a caller-supplied address. Idempotency-Key is required. Unfunded drafts use POST /cancel.",
+      "Scope money. Poster only. The refund goes to the recorded on-chain payer, never a caller-supplied address. Idempotency-Key is required. Unfunded drafts use POST /cancel.",
     security: bearer,
     request: {
       params: z.object({ id: idSchema }),

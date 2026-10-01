@@ -43,8 +43,8 @@ export async function AppHeader() {
           <Link href="/about" className="underline-offset-4 hover:underline">
             About
           </Link>
-          <Link href="/developers" className="underline-offset-4 hover:underline">
-            Developers
+          <Link href="/mcp" className="underline-offset-4 hover:underline">
+            MCP
           </Link>
           <Link href="/api/health" className="underline-offset-4 hover:underline">
             Health

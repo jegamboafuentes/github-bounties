@@ -1,6 +1,6 @@
 # Public API and MCP
 
-Anonymous reads (V4-1) need no API key. V4-2 adds Bearer API keys for `/me`, posting, work signals, unfunded cancel, and headless x402 fund / top-up. V4-3 adds winner claim, pool claim, payout status, and funded refund. V4-4 adds profile, email notification preferences, and read-only linked accounts. Money over the API is DEV-only until `API_MONEY_ENABLED` is turned on for mainnet. The handlers call the same server functions as the website, so the 2% fee (`FEE_BPS` 200), the 15% pool (`POOL_BPS_OF_POST_FEE` 1500), and the retired claim-lock are unchanged.
+Anonymous reads (V4-1) need no API key. V4-2 adds Bearer API keys for `/me`, posting, work signals, unfunded cancel, and headless x402 fund / top-up. V4-3 adds winner claim, pool claim, payout status, and funded refund. V4-4 adds profile, email notification preferences, and read-only linked accounts. Money actions follow `API_MONEY_ENABLED` (on for Base Sepolia when unset, off for Base mainnet when unset). When the flag is off, the money tools and OpenAPI money operations say that money actions are currently disabled on that deployment. The handlers call the same server functions as the website, so the 2% fee (`FEE_BPS` 200), the 15% pool (`POOL_BPS_OF_POST_FEE` 1500), and the retired claim-lock are unchanged.
 
 V4-2 migration: `0011_api_access` (`api_keys`, `api_request_log`, `api_spend_ledger`, `api_idempotency_keys`). Apply it on DEV before creating keys. `0010` is reserved for a parallel security migration and is not part of this change.
 
@@ -127,7 +127,7 @@ claude mcp add --transport http github-bounties https://dev.githubbounties.xyz/m
 
 Authorization is `Authorization: Bearer <key>` on `/api/v1` and `/mcp`. Cookies are ignored. `src/proxy.ts` does not session-gate those paths.
 
-MCP lists 24 tools to anonymous callers. OpenAPI publishes 23 operations, each with its own `operationId`. Keyed tools stay in that list. Each one starts its description with `Requires API key (read scope)`, `Requires API key (write scope)`, or `Requires API key with money scope; DEV only`. Calling a keyed tool without a Bearer key returns `isError: true` and the `unauthorized` envelope (`error.code`, `error.message`, `error.details.scope`). The handler does not run.
+MCP lists 24 tools to anonymous callers. OpenAPI publishes 23 operations, each with its own `operationId`. Keyed tools stay in that list. Each one starts its description with `Requires API key (read scope)`, `Requires API key (write scope)`, or `Requires API key with money scope`. When money is disabled on that deployment, money tools also say `Money actions are currently disabled on this deployment`. Calling a keyed tool without a Bearer key returns `isError: true` and the `unauthorized` envelope (`error.code`, `error.message`, `error.details.scope`). The handler does not run.
 
 Create a key on Settings → API keys. The plaintext is shown once. DEV keys start with `gb_test_`. Mainnet keys start with `gb_live_`. The server stores HMAC-SHA256 (`API_KEY_HMAC_SECRET`) plus a display prefix. Any signed-in user can create a key. The `money` scope stays disabled until that user has a saved payout wallet and a linked GitHub account. There are no agent-owned accounts.
 
@@ -241,7 +241,7 @@ claude mcp add --transport http github-bounties-dev https://dev.githubbounties.x
   --header "Authorization: Bearer ${GB_API_KEY}"
 ```
 
-Keyed MCP tools start with the scope they require. Money tools start with `Requires API key with money scope; DEV only`. Claim and refund tools are `claim_winner`, `claim_pool`, and `refund_bounty`. Their results include the same `legs` array as the REST 200 body. `refund_bounty` on a bounty already in `refunding` resumes the unpaid legs. An unknown tool argument is `validation_failed` on that tool's rate class (read 120/minute, write 20/minute, money 10/hour), not a generic JSON-RPC invalid-params error. Status tools are `get_bounty_claims` and `list_my_claims`. OpenAPI `info.version` and the MCP server version are both `4.4.0`.
+Keyed MCP tools start with the scope they require. Money tools start with `Requires API key with money scope`. A browser request for `/mcp` (`Accept: text/html`) shows the setup page. MCP clients use the same path as streamable HTTP. Claim and refund tools are `claim_winner`, `claim_pool`, and `refund_bounty`. Their results include the same `legs` array as the REST 200 body. `refund_bounty` on a bounty already in `refunding` resumes the unpaid legs. An unknown tool argument is `validation_failed` on that tool's rate class (read 120/minute, write 20/minute, money 10/hour), not a generic JSON-RPC invalid-params error. Status tools are `get_bounty_claims` and `list_my_claims`. OpenAPI `info.version` and the MCP server version are both `4.4.0`.
 
 An agent with a Base Sepolia CDP server wallet can post and fund a DEV bounty end to end with `apps/web/scripts/dev-agent-fund.ts` (not run in CI). After a winning merge, `apps/web/scripts/dev-agent-claim.ts` claims to the saved wallet or refunds a funded bounty to the recorded payer:
 

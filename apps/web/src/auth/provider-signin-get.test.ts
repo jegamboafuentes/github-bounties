@@ -172,6 +172,86 @@ describe("GET /api/auth/signin/<provider>", () => {
     }
   });
 
+  it("keeps a relative callbackUrl and drops open redirects", () => {
+    const kept = providerSignInGetResponse(
+      new URL("http://0.0.0.0:8080/api/auth/signin/google?callbackUrl=/settings"),
+      { env: { PUBLIC_BASE_URL: "https://dev.githubbounties.xyz" } },
+    );
+    assert.ok(kept);
+    assert.equal(kept.status, 303);
+    assert.equal(
+      kept.headers.get("location"),
+      "https://dev.githubbounties.xyz/signin?callbackUrl=%2Fsettings",
+    );
+
+    const nested = providerSignInGetResponse(
+      new URL("https://githubbounties.xyz/api/auth/signin/google?callbackUrl=/bounties/abc%3Ftab%3D1"),
+      { env: { AUTH_URL: "https://githubbounties.xyz" } },
+    );
+    assert.equal(
+      nested?.headers.get("location"),
+      "https://githubbounties.xyz/signin?callbackUrl=%2Fbounties%2Fabc%3Ftab%3D1",
+    );
+
+    const relativeBase = providerSignInGetResponse(
+      new URL("http://0.0.0.0:8080/api/auth/signin/google?callbackUrl=/mcp"),
+      { env: EMPTY_ENV },
+    );
+    assert.equal(relativeBase?.headers.get("location"), "/signin?callbackUrl=%2Fmcp");
+
+    const attacks = [
+      "https://evil.example/phish",
+      "http://evil.example",
+      "//evil.example",
+      "//evil.example/signin",
+      "/\\evil.example",
+      "javascript:alert(1)",
+      "https:evil",
+    ];
+    for (const callbackUrl of attacks) {
+      const response = providerSignInGetResponse(
+        new URL(
+          `http://0.0.0.0:8080/api/auth/signin/google?callbackUrl=${encodeURIComponent(callbackUrl)}`,
+        ),
+        { env: { PUBLIC_BASE_URL: "https://dev.githubbounties.xyz" } },
+      );
+      assert.equal(response?.headers.get("location"), "https://dev.githubbounties.xyz/signin", callbackUrl);
+      assert.doesNotMatch(response?.headers.get("location") ?? "", /evil|javascript/i, callbackUrl);
+    }
+  });
+
+  it("route GET carries a safe callbackUrl and ignores a spoofed host", async () => {
+    const { GET } = await loadRoute();
+    await withSiteEnv({ PUBLIC_BASE_URL: "https://dev.githubbounties.xyz" }, async () => {
+      const kept = await GET(
+        new Request("http://0.0.0.0:8080/api/auth/signin/google?callbackUrl=/settings", {
+          headers: {
+            "x-forwarded-host": "evil.example",
+            "x-forwarded-proto": "https",
+            host: "evil.example",
+          },
+        }) as never,
+      );
+      assert.equal(kept.status, 303);
+      assert.equal(
+        kept.headers.get("location"),
+        "https://dev.githubbounties.xyz/signin?callbackUrl=%2Fsettings",
+      );
+      assertSafeLocation(kept.headers.get("location"));
+
+      const attack = await GET(
+        new Request(
+          "http://0.0.0.0:8080/api/auth/signin/google?callbackUrl=https%3A%2F%2Fevil.example%2Fphish",
+          {
+            headers: { "x-forwarded-host": "evil.example", "x-forwarded-proto": "https" },
+          },
+        ) as never,
+      );
+      assert.equal(attack.headers.get("location"), "https://dev.githubbounties.xyz/signin");
+      assertSafeLocation(attack.headers.get("location"));
+    });
+  });
+
   it("leaves the real Auth.js GET routes to the handler", () => {
     const passthrough = [
       "/api/auth/signin",

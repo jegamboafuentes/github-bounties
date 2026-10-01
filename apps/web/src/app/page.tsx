@@ -24,17 +24,17 @@ export default async function Home() {
         <HomeReveal className="flex flex-col gap-12">
           <HomeHero signedIn={signedIn} chainName={fund.chainName} />
           <HomeStats source={stats} />
+          <HomeAgent />
           <HomeCompare />
           <HomeStory chainName={fund.chainName} />
-          <HomeAgent />
           <p className="home-footer-note home-reveal-item text-sm text-zinc-500">
           {NOT_LIGHTNING_BOUNTIES} Sign in with Google.{" "}
           <Link href="/about" className="underline underline-offset-4">
             About
           </Link>
           {" · "}
-          <Link href="/developers" className="underline underline-offset-4">
-            Developers
+          <Link href="/mcp" className="underline underline-offset-4">
+            MCP
           </Link>
           {" · "}
           <Link href="/roadmap" className="underline underline-offset-4">
