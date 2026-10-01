@@ -5,6 +5,8 @@ import type { McpAccess } from "../api/access/http";
 import { balanceReportJson, readBalanceReport, readOnChainUsdcBalance } from "./balances";
 import { listAdminBounties } from "./bounties";
 import { softDeleteBounty } from "./delete";
+import { redactDatabaseText, redactPublicValue } from "../http/redact-error";
+import { isUuid } from "../ids";
 import { isAdminError } from "./errors";
 import { cdpNamedAccountClient } from "./fee-account";
 import { isAdminIdentity } from "./identity";
@@ -23,8 +25,8 @@ function fromError(err: unknown): CallToolResult {
     return toolJson(
       {
         error: err.status === 404 ? "not_found" : err.code,
-        message: err.message,
-        ...(err.details ? { details: err.details } : {}),
+        message: redactDatabaseText(err.message),
+        ...(err.details ? { details: redactPublicValue(err.details) } : {}),
       },
       true,
     );
@@ -130,10 +132,11 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
     {
       title: "Admin: soft-delete a bounty",
       description: `${adminLead} Soft-delete a paid, cancelled, refunded, or never-funded bounty. Blocks with bounty_has_funds_refund_first only while escrow still holds an unrefunded unpaid remainder, an active claim lock, or an in-flight allocation. details.reasons names the block.`,
-      inputSchema: { bountyId: z.string().uuid() },
+      inputSchema: { bountyId: z.string() },
       annotations: { destructiveHint: true },
     },
     async (args) => {
+      if (!isUuid(args.bountyId)) return toolJson({ error: "not_found", message: "Not found." }, true);
       const email = await adminEmail(access);
       if (!email || !db) return toolJson({ error: "not_found" }, true);
       try {
@@ -180,10 +183,11 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
     {
       title: "Admin: refund a bounty",
       description: `${adminLead} Runs the existing refund flow for a funded bounty. The money flag applies. Funds return to the recorded payer. No caller-supplied destination.`,
-      inputSchema: { bountyId: z.string().uuid() },
+      inputSchema: { bountyId: z.string() },
       annotations: { destructiveHint: true },
     },
     async (args) => {
+      if (!isUuid(args.bountyId)) return toolJson({ error: "not_found", message: "Not found." }, true);
       const email = await adminEmail(access);
       if (!email || !db) return toolJson({ error: "not_found" }, true);
       try {

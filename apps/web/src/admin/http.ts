@@ -1,3 +1,4 @@
+import { redactDatabaseText, redactPublicValue } from "../http/redact-error";
 import { getRuntimeDb } from "../db/runtime";
 import { balanceReportJson, readBalanceReport } from "./balances";
 import { listAdminBounties } from "./bounties";
@@ -16,9 +17,10 @@ function json(body: unknown, status = 200): Response {
 function fromError(err: unknown): Response {
   if (isAdminError(err)) {
     if (err.status === 404) return adminNotFoundResponse();
+    const message = redactDatabaseText(err.message);
     const body = err.details
-      ? { error: err.code, message: err.message, details: err.details }
-      : { error: err.code, message: err.message };
+      ? { error: err.code, message, details: redactPublicValue(err.details) }
+      : { error: err.code, message };
     return json(body, err.status);
   }
   console.error(

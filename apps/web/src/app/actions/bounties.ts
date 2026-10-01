@@ -22,8 +22,11 @@ import {
   isEscrowError,
   probeCdpEnv,
   refundEscrow,
+  rejectIfBountyDeleted,
   takeRequestId,
 } from "@/escrow";
+import { redactDatabaseText } from "@/http/redact-error";
+import { isUuid } from "@/ids";
 import { INVALID_BASE_ADDRESS_MESSAGE, normalizeBaseAddress } from "@/lib/address";
 import { setUserWalletAddress } from "@/auth/users";
 
@@ -34,14 +37,20 @@ export type BountyActionState = {
 };
 
 function fail(err: unknown): BountyActionState {
-  if (isBountyError(err) || isClaimError(err)) {
-    return { ok: false, error: err.code, message: err.message };
+  if (isBountyError(err) || isClaimError(err) || isEscrowError(err)) {
+    return { ok: false, error: err.code, message: redactDatabaseText(err.message) };
   }
+  const raw = err instanceof Error ? err.message : "Something went wrong.";
+  const message = redactDatabaseText(raw, "Something went wrong.");
   return {
     ok: false,
-    error: "unknown",
-    message: err instanceof Error ? err.message : "Something went wrong.",
+    error: message === raw ? "unknown" : "internal",
+    message,
   };
+}
+
+function rejectMalformedBountyId(bountyId: string): void {
+  if (!isUuid(bountyId)) redirect("/board");
 }
 
 function refreshBounty(id: string) {
@@ -80,6 +89,7 @@ export async function updateBountyAmountAction(
   formData: FormData,
 ): Promise<BountyActionState> {
   const bountyId = String(formData.get("bountyId") ?? "");
+  rejectMalformedBountyId(bountyId);
   const user = await getCurrentPublicUser();
   if (!user) {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
@@ -103,6 +113,7 @@ export async function updateBountyAmountAction(
 
 export async function fundBountyAction(formData: FormData): Promise<void> {
   const bountyId = String(formData.get("bountyId") ?? "");
+  rejectMalformedBountyId(bountyId);
   const fundTxHash = String(formData.get("fundTxHash") ?? "").trim() || undefined;
   const user = await getCurrentPublicUser();
   if (!user) {
@@ -110,8 +121,10 @@ export async function fundBountyAction(formData: FormData): Promise<void> {
   }
   try {
     const requestId = takeRequestId(null);
-    await assertCallerLockHash(getRuntimeDb(), bountyId, fundTxHash, probeCdpEnv().mode);
-    const funded = await fundBounty(bountyId, user.id, getRuntimeDb(), new Date(), {
+    const db = getRuntimeDb();
+    await rejectIfBountyDeleted(db, bountyId);
+    await assertCallerLockHash(db, bountyId, fundTxHash, probeCdpEnv().mode);
+    const funded = await fundBounty(bountyId, user.id, db, new Date(), {
       fundTxHash,
       requestId,
     });
@@ -131,6 +144,7 @@ export async function fundBountyAction(formData: FormData): Promise<void> {
 
 export async function topUpBountyAction(formData: FormData): Promise<void> {
   const bountyId = String(formData.get("bountyId") ?? "");
+  rejectMalformedBountyId(bountyId);
   const amountUsdc = String(formData.get("amountUsdc") ?? "");
   const fundTxHash = String(formData.get("fundTxHash") ?? "").trim() || undefined;
   const user = await getCurrentPublicUser();
@@ -157,6 +171,7 @@ export async function topUpBountyAction(formData: FormData): Promise<void> {
 
 export async function cancelBountyAction(formData: FormData): Promise<void> {
   const bountyId = String(formData.get("bountyId") ?? "");
+  rejectMalformedBountyId(bountyId);
   const user = await getCurrentPublicUser();
   if (!user) {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
@@ -175,6 +190,7 @@ export async function cancelBountyAction(formData: FormData): Promise<void> {
 
 export async function acquireClaimLockAction(formData: FormData): Promise<void> {
   const bountyId = String(formData.get("bountyId") ?? "");
+  rejectMalformedBountyId(bountyId);
   const user = await getCurrentPublicUser();
   if (!user) {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
@@ -189,6 +205,7 @@ export async function acquireClaimLockAction(formData: FormData): Promise<void> 
 
 export async function claimPayoutAction(formData: FormData): Promise<void> {
   const bountyId = String(formData.get("bountyId") ?? "");
+  rejectMalformedBountyId(bountyId);
   const user = await getCurrentPublicUser();
   if (!user) {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
@@ -255,6 +272,7 @@ export async function saveWalletAddressAction(
 
 export async function releaseClaimLockAction(formData: FormData): Promise<void> {
   const bountyId = String(formData.get("bountyId") ?? "");
+  rejectMalformedBountyId(bountyId);
   const user = await getCurrentPublicUser();
   if (!user) {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
@@ -269,6 +287,7 @@ export async function releaseClaimLockAction(formData: FormData): Promise<void> 
 
 export async function signalWorkingOnThisAction(formData: FormData): Promise<void> {
   const bountyId = String(formData.get("bountyId") ?? "");
+  rejectMalformedBountyId(bountyId);
   const user = await getCurrentPublicUser();
   if (!user) {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
@@ -283,6 +302,7 @@ export async function signalWorkingOnThisAction(formData: FormData): Promise<voi
 
 export async function clearWorkSignalAction(formData: FormData): Promise<void> {
   const bountyId = String(formData.get("bountyId") ?? "");
+  rejectMalformedBountyId(bountyId);
   const user = await getCurrentPublicUser();
   if (!user) {
     redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
@@ -303,7 +323,7 @@ function redirectBountyError(bountyId: string, err: unknown): never {
       : isEscrowError(err)
         ? err.code
         : "unknown";
-  const message = isBountyError(err)
+  const raw = isBountyError(err)
     ? err.message
     : isClaimError(err)
       ? err.message
@@ -312,6 +332,7 @@ function redirectBountyError(bountyId: string, err: unknown): never {
         : err instanceof Error
           ? err.message
           : "Something went wrong.";
+  const message = redactDatabaseText(raw, "Something went wrong.");
   refreshBounty(bountyId);
   redirect(`/bounties/${bountyId}?error=${encodeURIComponent(`${code}: ${message}`)}`);
 }

@@ -33,17 +33,20 @@ export class EscrowError extends Error {
   readonly code: EscrowErrorCode;
   readonly missing?: string[];
   readonly details?: EscrowErrorDetails;
+  /** Overrides the code's default HTTP status. Deleted bounties use 410. */
+  readonly httpStatus?: number;
 
   constructor(
     code: EscrowErrorCode,
     message: string,
-    extras?: { missing?: string[]; details?: EscrowErrorDetails },
+    extras?: { missing?: string[]; details?: EscrowErrorDetails; httpStatus?: number },
   ) {
     super(message);
     this.name = "EscrowError";
     this.code = code;
     this.missing = extras?.missing;
     this.details = extras?.details;
+    this.httpStatus = extras?.httpStatus;
   }
 }
 

@@ -5,12 +5,14 @@ import {
   assertCallerLockHash,
   escrowErrorJson,
   getEscrowSnapshot,
-  httpStatusForEscrowCode,
+  httpStatusForEscrowError,
   isEscrowError,
   jsonForUnknown,
   probeCdpEnv,
+  rejectIfBountyDeleted,
   takeRequestId,
 } from "@/escrow";
+import { isUuid, platformNotFoundResponse } from "@/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +25,8 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await ctx.params;
+  if (!isUuid(id)) return platformNotFoundResponse();
   const user = await getCurrentPublicUser();
   if (!user) {
     return Response.json(
@@ -36,7 +40,6 @@ export async function POST(
       { status: 401 },
     );
   }
-  const { id } = await ctx.params;
   let fundTxHash: string | undefined;
   try {
     const body = (await req.json()) as { fundTxHash?: string };
@@ -46,7 +49,9 @@ export async function POST(
   }
 
   try {
-    await assertCallerLockHash(getRuntimeDb(), id, fundTxHash, probeCdpEnv().mode);
+    const db = getRuntimeDb();
+    await rejectIfBountyDeleted(db, id);
+    await assertCallerLockHash(db, id, fundTxHash, probeCdpEnv().mode);
     const funded = await fundBounty(id, user.id, getRuntimeDb(), new Date(), {
       fundTxHash,
       requestId: takeRequestId(req.headers.get("x-request-id")),
@@ -61,7 +66,7 @@ export async function POST(
     if (isEscrowError(err)) {
       return Response.json(
         { ...escrowErrorJson(err), escrow },
-        { status: httpStatusForEscrowCode(err.code) },
+        { status: httpStatusForEscrowError(err) },
       );
     }
     if (isBountyError(err)) {

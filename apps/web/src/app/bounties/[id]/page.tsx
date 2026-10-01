@@ -39,6 +39,7 @@ import { classifyIntelligenceFailure } from "@/intelligence/errors";
 import { INTELLIGENCE_ESTIMATE_LABEL } from "@/intelligence/prompt";
 import { baseTxExplorerUrl } from "@/lib/explorer";
 import { isFundMainnetEnabled, walletConnectConfigured } from "@/wallet/env";
+import { isUuid } from "@/ids";
 import { eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +52,7 @@ export default async function BountyDetailPage({
   searchParams: Promise<{ error?: string; notice?: string; refreshIntelligence?: string }>;
 }) {
   const { id } = await params;
+  if (!isUuid(id)) notFound();
   const query = await searchParams;
   const db = getRuntimeDb();
   const [user, bounty, escrow, roster, contributions] = await Promise.all([

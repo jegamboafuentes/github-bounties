@@ -1,6 +1,7 @@
 import { getCurrentPublicUser } from "@/auth/protect";
 import { getRuntimeDb } from "@/db/runtime";
 import { handleX402Fund, jsonForUnknown } from "@/escrow";
+import { isUuid, platformNotFoundResponse } from "@/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
  */
 async function handle(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
+  if (!isUuid(id)) return platformNotFoundResponse();
   const topUp = new URL(req.url).searchParams.get("topUpUsdc")?.trim();
   const user = topUp ? await getCurrentPublicUser() : null;
   try {

@@ -1,4 +1,5 @@
 import { ZodError } from "zod";
+import { redactDatabaseText, redactPublicValue } from "../../http/redact-error";
 
 /** Error codes the V4-1 read API and MCP tools return. */
 export const PUBLIC_API_ERROR_CODES = [
@@ -80,7 +81,13 @@ export function publicApiErrorBody(
   message: string,
   details: unknown = null,
 ): PublicApiErrorBody {
-  return { error: { code, message, details } };
+  return {
+    error: {
+      code,
+      message: redactDatabaseText(message, "Request failed."),
+      details: details == null ? null : redactPublicValue(details),
+    },
+  };
 }
 
 export function zodErrorDetails(error: ZodError): { path: string; message: string }[] {

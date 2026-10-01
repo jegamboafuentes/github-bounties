@@ -105,7 +105,8 @@ export const paymentSignatureSchema = z
   .optional()
   .describe("x402 PAYMENT-SIGNATURE. Omit on the first call to receive 402.");
 
-const idSchema = z.string().uuid();
+/** Tool argument. The handler rejects a non-uuid as not_found, not validation_failed. */
+const idSchema = z.string().describe("Bounty id.");
 
 const usdcDecimal = z
   .string()

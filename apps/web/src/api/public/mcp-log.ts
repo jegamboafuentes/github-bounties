@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { runAuthed, type ApiPrincipal } from "../access/handlers";
 import type { McpAccess } from "../access/http";
 import type { ApiClass } from "../access/policy";
+import { isUuid } from "../../ids";
 import { PublicApiError, publicApiErrorBody } from "./errors";
 
 /** Fields written for one MCP tool call. Arguments and bodies are never included. */
@@ -43,11 +44,9 @@ export function mcpOutcomeFromBody(body: unknown): string {
   return "error";
 }
 
-const BOUNTY_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** Store a bounty id on the request-log row only when it is a uuid. Invalid input stays null. */
 export function mcpBountyId(value: unknown): string | null {
-  return typeof value === "string" && BOUNTY_ID.test(value) ? value : null;
+  return typeof value === "string" && isUuid(value) ? value : null;
 }
 
 function toolJson(value: unknown, isError = false): CallToolResult {

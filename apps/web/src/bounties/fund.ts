@@ -6,6 +6,7 @@ import {
   EscrowError,
   lockEscrowFunds,
   probeCdpEnv,
+  rejectIfBountyDeleted,
   topUpFundedBounty,
   type CdpRail,
   type TopUpResult,
@@ -33,6 +34,7 @@ export async function fundBounty(
   opts?: { rail?: CdpRail; fundTxHash?: string | null; email?: DomainEmailDeps; requestId?: string | null },
 ): Promise<FundedBounty> {
   try {
+    await rejectIfBountyDeleted(db, bountyId);
     const railMode = opts?.rail?.mode ?? probeCdpEnv().mode;
     await assertCallerLockHash(db, bountyId, opts?.fundTxHash, railMode);
     const locked = await lockEscrowFunds(bountyId, actorUserId, {

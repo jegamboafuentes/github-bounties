@@ -14,6 +14,7 @@ import {
   VOIDED_UNFUNDED_REASON,
 } from "./fail";
 import { hostedCheckoutStatus } from "./hosted";
+import { bountyGoneError, rejectIfBountyDeleted } from "./deleted";
 import { assertCallerLockHash, assertFundTxHashAvailable, normalizeFundTxHash } from "./fund-hash";
 import { resolveLockFundTxHash } from "./inbound";
 import { logMoneyAction, moneyResultCode, takeRequestId, type MoneyAction } from "./actor-log";
@@ -171,6 +172,7 @@ export async function lockEscrowFunds(
     throw new EscrowError("unauthorized", "Sign in with Google to fund a bounty.");
   }
   const now = opts.now ?? new Date();
+  await rejectIfBountyDeleted(opts.db, bountyId);
   const bounty = await loadBounty(opts.db, bountyId);
   if (bounty.posterUserId !== actorUserId) {
     throw new EscrowError("not_poster", "Only the poster can lock escrow for this bounty.");
@@ -283,7 +285,7 @@ export async function lockEscrowFunds(
         .where(eq(bounties.id, bountyId))
         .limit(1);
       if (!current || current.deletedAt) {
-        throw new EscrowError("bounty_not_found", "Bounty not found.");
+        throw current?.deletedAt ? bountyGoneError() : new EscrowError("bounty_not_found", "Bounty not found.");
       }
       if (current.amountUsdc !== bounty.amountUsdc) {
         throw new EscrowError("not_fundable", LOCK_FACE_CHANGED_MESSAGE);
