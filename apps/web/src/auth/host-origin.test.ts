@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { NextRequest } from "next/server";
-import proxy, { malformedSignInPostStatus } from "../proxy";
+import proxy, { malformedSignInPostStatus, spoofedForwardedHostStatus } from "../proxy";
 import { allowlistedAuthOrigin, allowlistedCallbackUrl, prepareAuthRequest } from "./host-origin";
 import { handleAuthRequest, performAuthAction } from "./index";
 
@@ -291,6 +291,73 @@ describe("malformed sign-in posts", () => {
       nextUrl: { pathname: "/signin" },
       headers: new Headers(),
     }), null);
+  });
+
+  it("returns 403 when X-Forwarded-Host does not match Host or Origin", async () => {
+    const spoofed = await proxy(
+      new NextRequest("https://dev.githubbounties.xyz/signin", {
+        method: "POST",
+        headers: {
+          host: "dev.githubbounties.xyz",
+          origin: PUBLIC_ORIGIN,
+          "x-forwarded-host": "evil.example",
+          "content-type": "multipart/form-data; boundary=abc",
+          "content-length": "12",
+        },
+      }),
+      undefined as never,
+    );
+    assert.equal(spoofed.status, 403);
+    assert.equal(spoofed.headers.get("content-type")?.includes("text/plain"), true);
+
+    const action = await proxy(
+      new NextRequest("https://admin-dev.githubbounties.xyz/admin", {
+        method: "POST",
+        headers: {
+          host: "admin-dev.githubbounties.xyz",
+          origin: ADMIN_ORIGIN,
+          "x-forwarded-host": "evil.example",
+          "next-action": "abc",
+          "content-type": "text/plain;charset=UTF-8",
+        },
+        body: "[]",
+      }),
+      undefined as never,
+    );
+    assert.equal(action.status, 403);
+    assert.equal(
+      spoofedForwardedHostStatus({
+        method: "POST",
+        nextUrl: { pathname: "/signin" },
+        headers: new Headers({
+          host: "dev.githubbounties.xyz",
+          origin: PUBLIC_ORIGIN,
+          "x-forwarded-host": "dev.githubbounties.xyz",
+        }),
+      }),
+      null,
+    );
+    assert.equal(
+      spoofedForwardedHostStatus({
+        method: "POST",
+        nextUrl: { pathname: "/signin" },
+        headers: new Headers({ host: "dev.githubbounties.xyz", origin: PUBLIC_ORIGIN }),
+      }),
+      null,
+    );
+    const api = await proxy(
+      new NextRequest("https://dev.githubbounties.xyz/api/v1/bounties", {
+        method: "POST",
+        headers: {
+          host: "dev.githubbounties.xyz",
+          "x-forwarded-host": "evil.example",
+          "content-type": "application/json",
+        },
+        body: "{}",
+      }),
+      undefined as never,
+    );
+    assert.notEqual(api.status, 403);
   });
 });
 

@@ -1,4 +1,4 @@
-import { and, eq, inArray, lte } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { bounties, claimLocks, claims, escrows, feeLedger, githubLinks, users } from "../db/schema";
 import { bountyFeeBps, bountyPoolBps } from "../bounties/rates";
@@ -272,16 +272,20 @@ export async function lockEscrowFunds(
           eq(bounties.id, bountyId),
           eq(bounties.status, "pending_fund"),
           eq(bounties.amountUsdc, bounty.amountUsdc),
+          isNull(bounties.deletedAt),
         ),
       )
       .returning({ id: bounties.id, amountUsdc: bounties.amountUsdc });
     if (!updated) {
       const [current] = await tx
-        .select({ amountUsdc: bounties.amountUsdc })
+        .select({ amountUsdc: bounties.amountUsdc, deletedAt: bounties.deletedAt })
         .from(bounties)
         .where(eq(bounties.id, bountyId))
         .limit(1);
-      if (current && current.amountUsdc !== bounty.amountUsdc) {
+      if (!current || current.deletedAt) {
+        throw new EscrowError("bounty_not_found", "Bounty not found.");
+      }
+      if (current.amountUsdc !== bounty.amountUsdc) {
         throw new EscrowError("not_fundable", LOCK_FACE_CHANGED_MESSAGE);
       }
       throw new EscrowError("not_fundable", "Bounty is no longer pending_fund.");
@@ -605,7 +609,11 @@ export async function settleEscrow(
         updatedAt: now,
       })
       .where(
-        and(eq(bounties.id, bountyId), inArray(bounties.status, ["funded", "claim_locked"])),
+        and(
+          eq(bounties.id, bountyId),
+          inArray(bounties.status, ["funded", "claim_locked"]),
+          isNull(bounties.deletedAt),
+        ),
       );
     await opts.db
       .update(escrows)

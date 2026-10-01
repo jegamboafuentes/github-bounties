@@ -6,22 +6,37 @@ import { readOnChainUsdcBalance } from "@/admin/balances";
 import { softDeleteBounty } from "@/admin/delete";
 import { isAdminError } from "@/admin/errors";
 import { cdpNamedAccountClient } from "@/admin/fee-account";
-import { setPlatformFeeBps, setPlatformPoolBps } from "@/admin/settings";
+import { adminRefundBounty } from "@/admin/refund";
+import { bpsToPercent, setPlatformFee, setPlatformPool } from "@/admin/settings";
 import { executeFeeWithdraw, previewFeeWithdraw } from "@/admin/withdraw";
 import { getRuntimeDb } from "@/db/runtime";
 
 function fail(err: unknown): { ok: false; error: string; message: string } {
   if (isAdminError(err)) return { ok: false, error: err.code, message: err.message };
-  return { ok: false, error: "admin_failed", message: err instanceof Error ? err.message : "Failed." };
+  console.error(
+    JSON.stringify({
+      severity: "ERROR",
+      event: "admin_action_failed",
+      reason: err instanceof Error ? err.message : "Failed.",
+    }),
+  );
+  return { ok: false, error: "admin_failed", message: "Admin request failed." };
 }
 
 export async function setFeeBpsAction(formData: FormData) {
   const admin = await requireAdminPageUser();
-  const feeBps = Number(formData.get("feeBps"));
   try {
-    const settings = await setPlatformFeeBps(getRuntimeDb(), admin.email, feeBps);
+    const settings = await setPlatformFee(getRuntimeDb(), admin.email, {
+      feePercent: String(formData.get("feePercent") ?? ""),
+    });
     revalidatePath("/admin");
-    return { ok: true as const, feeBps: settings.feeBps, poolBps: settings.poolBps };
+    return {
+      ok: true as const,
+      feeBps: settings.feeBps,
+      feePercent: bpsToPercent(settings.feeBps),
+      poolBps: settings.poolBps,
+      poolPercent: bpsToPercent(settings.poolBps),
+    };
   } catch (err) {
     return fail(err);
   }
@@ -29,11 +44,18 @@ export async function setFeeBpsAction(formData: FormData) {
 
 export async function setPoolBpsAction(formData: FormData) {
   const admin = await requireAdminPageUser();
-  const poolBps = Number(formData.get("poolBps"));
   try {
-    const settings = await setPlatformPoolBps(getRuntimeDb(), admin.email, poolBps);
+    const settings = await setPlatformPool(getRuntimeDb(), admin.email, {
+      poolPercent: String(formData.get("poolPercent") ?? ""),
+    });
     revalidatePath("/admin");
-    return { ok: true as const, feeBps: settings.feeBps, poolBps: settings.poolBps };
+    return {
+      ok: true as const,
+      feeBps: settings.feeBps,
+      feePercent: bpsToPercent(settings.feeBps),
+      poolBps: settings.poolBps,
+      poolPercent: bpsToPercent(settings.poolBps),
+    };
   } catch (err) {
     return fail(err);
   }
@@ -46,6 +68,23 @@ export async function deleteBountyAction(formData: FormData) {
     const deleted = await softDeleteBounty({ bountyId, actorEmail: admin.email, db: getRuntimeDb() });
     revalidatePath("/admin");
     return { ok: true as const, id: deleted.id };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function refundBountyAction(formData: FormData) {
+  const admin = await requireAdminPageUser();
+  const bountyId = String(formData.get("bountyId") ?? "");
+  try {
+    const refunded = await adminRefundBounty({
+      bountyId,
+      actorEmail: admin.email,
+      db: getRuntimeDb(),
+      env: process.env,
+    });
+    revalidatePath("/admin");
+    return { ok: true as const, id: refunded.id, status: refunded.status, refundTxHash: refunded.refundTxHash };
   } catch (err) {
     return fail(err);
   }

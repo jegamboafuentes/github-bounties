@@ -353,6 +353,7 @@ export function createAccessDeps(
           amountUsdc: bounties.amountUsdc,
           title: bounties.title,
           issueUrl: bounties.url,
+          deletedAt: bounties.deletedAt,
         })
         .from(bounties)
         .where(eq(bounties.id, bountyId))

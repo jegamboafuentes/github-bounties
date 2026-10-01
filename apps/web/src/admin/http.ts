@@ -1,10 +1,12 @@
 import { getRuntimeDb } from "../db/runtime";
-import { readBalanceSnapshot, balanceSnapshotJson } from "./balances";
+import { balanceReportJson, readBalanceReport } from "./balances";
+import { listAdminBounties } from "./bounties";
 import { softDeleteBounty } from "./delete";
 import { isAdminError } from "./errors";
 import { cdpNamedAccountClient } from "./fee-account";
 import { adminNotFoundResponse, requireAdminApiActor } from "./gate";
-import { readPlatformSettings, setPlatformFeeBps, setPlatformPoolBps } from "./settings";
+import { adminRefundBounty } from "./refund";
+import { platformRatesJson, readPlatformSettings, setPlatformFee, setPlatformPool } from "./settings";
 import { executeFeeWithdraw, previewFeeWithdraw } from "./withdraw";
 
 function json(body: unknown, status = 200): Response {
@@ -14,10 +16,19 @@ function json(body: unknown, status = 200): Response {
 function fromError(err: unknown): Response {
   if (isAdminError(err)) {
     if (err.status === 404) return adminNotFoundResponse();
-    return json({ error: err.code, message: err.message }, err.status);
+    const body = err.details
+      ? { error: err.code, message: err.message, details: err.details }
+      : { error: err.code, message: err.message };
+    return json(body, err.status);
   }
-  const message = err instanceof Error ? err.message : "Admin request failed.";
-  return json({ error: "admin_failed", message }, 500);
+  console.error(
+    JSON.stringify({
+      severity: "ERROR",
+      event: "admin_action_failed",
+      reason: err instanceof Error ? err.message : "Admin request failed.",
+    }),
+  );
+  return json({ error: "admin_failed", message: "Admin request failed." }, 500);
 }
 
 async function actorOr404(request: Request) {
@@ -31,12 +42,7 @@ export async function handleAdminGetSettings(request: Request): Promise<Response
   if (actor instanceof Response) return actor;
   try {
     const settings = await readPlatformSettings(getRuntimeDb());
-    return json({
-      feeBps: settings.feeBps,
-      poolBps: settings.poolBps,
-      updatedAt: settings.updatedAt?.toISOString() ?? null,
-      updatedBy: settings.updatedBy,
-    });
+    return json(platformRatesJson(settings, { includeAudit: true }));
   } catch (err) {
     return fromError(err);
   }
@@ -45,10 +51,13 @@ export async function handleAdminGetSettings(request: Request): Promise<Response
 export async function handleAdminSetFee(request: Request): Promise<Response> {
   const actor = await actorOr404(request);
   if (actor instanceof Response) return actor;
-  const body = (await request.json().catch(() => null)) as { feeBps?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { feeBps?: unknown; feePercent?: unknown } | null;
   try {
-    const settings = await setPlatformFeeBps(getRuntimeDb(), actor.email, body?.feeBps);
-    return json({ feeBps: settings.feeBps, poolBps: settings.poolBps });
+    const settings = await setPlatformFee(getRuntimeDb(), actor.email, {
+      feeBps: body?.feeBps,
+      feePercent: body?.feePercent,
+    });
+    return json(platformRatesJson(settings));
   } catch (err) {
     return fromError(err);
   }
@@ -57,10 +66,13 @@ export async function handleAdminSetFee(request: Request): Promise<Response> {
 export async function handleAdminSetPool(request: Request): Promise<Response> {
   const actor = await actorOr404(request);
   if (actor instanceof Response) return actor;
-  const body = (await request.json().catch(() => null)) as { poolBps?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { poolBps?: unknown; poolPercent?: unknown } | null;
   try {
-    const settings = await setPlatformPoolBps(getRuntimeDb(), actor.email, body?.poolBps);
-    return json({ feeBps: settings.feeBps, poolBps: settings.poolBps });
+    const settings = await setPlatformPool(getRuntimeDb(), actor.email, {
+      poolBps: body?.poolBps,
+      poolPercent: body?.poolPercent,
+    });
+    return json(platformRatesJson(settings));
   } catch (err) {
     return fromError(err);
   }
@@ -81,12 +93,47 @@ export async function handleAdminDeleteBounty(request: Request, bountyId: string
   }
 }
 
+export async function handleAdminListBounties(request: Request): Promise<Response> {
+  const actor = await actorOr404(request);
+  if (actor instanceof Response) return actor;
+  const url = new URL(request.url);
+  const limit = Number(url.searchParams.get("limit") ?? "");
+  const offset = Number(url.searchParams.get("offset") ?? "");
+  try {
+    const page = await listAdminBounties(getRuntimeDb(), {
+      search: url.searchParams.get("search") ?? url.searchParams.get("q") ?? "",
+      status: url.searchParams.get("status"),
+      limit: Number.isFinite(limit) && url.searchParams.has("limit") ? limit : undefined,
+      offset: Number.isFinite(offset) && url.searchParams.has("offset") ? offset : undefined,
+    });
+    return json(page);
+  } catch (err) {
+    return fromError(err);
+  }
+}
+
+export async function handleAdminRefundBounty(request: Request, bountyId: string): Promise<Response> {
+  const actor = await actorOr404(request);
+  if (actor instanceof Response) return actor;
+  try {
+    const refunded = await adminRefundBounty({
+      bountyId,
+      actorEmail: actor.email,
+      db: getRuntimeDb(),
+      env: process.env,
+    });
+    return json(refunded);
+  } catch (err) {
+    return fromError(err);
+  }
+}
+
 export async function handleAdminBalances(request: Request): Promise<Response> {
   const actor = await actorOr404(request);
   if (actor instanceof Response) return actor;
   try {
-    const snapshot = await readBalanceSnapshot(getRuntimeDb(), await cdpNamedAccountClient(), process.env);
-    return json(balanceSnapshotJson(snapshot));
+    const report = await readBalanceReport(getRuntimeDb(), process.env);
+    return json(balanceReportJson(report));
   } catch (err) {
     return fromError(err);
   }

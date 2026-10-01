@@ -64,6 +64,82 @@ function challengeResult(
   };
 }
 
+function goneResult(): X402HttpResult {
+  return {
+    status: 410,
+    headers: jsonHeaders(),
+    body: { ok: false, error: "bounty_not_found", message: "Bounty not found." },
+  };
+}
+
+/**
+ * A deleted bounty never returns 402. A settled payment is recorded for review
+ * and is not applied as a fund.
+ */
+async function deletedBountyFundResult(input: {
+  req: Request;
+  bountyId: string;
+  deps: X402HandlerDeps;
+  paymentHeader: string | undefined;
+  origin: string;
+  faceUsdc: string;
+}): Promise<X402HttpResult> {
+  if (!input.paymentHeader) return goneResult();
+  const env = input.deps.env ?? process.env;
+  try {
+    const rail = input.deps.rail ?? resolveRail(env);
+    if (rail.mode !== "cdp") {
+      console.error(
+        JSON.stringify({
+          severity: "ERROR",
+          event: "deleted_bounty_inbound",
+          bountyId: input.bountyId,
+          txHash: null,
+          escrowStatus: "unsettled",
+        }),
+      );
+      return goneResult();
+    }
+    const wallets = await rail.ensureWallets();
+    const liveSeller = input.deps.liveSeller ?? processLiveX402Exact;
+    const live = await liveSeller({
+      req: input.req,
+      bountyId: input.bountyId,
+      faceUsdc: input.faceUsdc,
+      payTo: wallets.escrowAddress,
+      network: rail.network,
+      paymentHeader: input.paymentHeader,
+      actorUserId: input.deps.actorUserId,
+      moneyAction: "lock",
+      env,
+    });
+    if (live.kind !== "challenge" && live.kind !== "error") {
+      await recordExactInbound(input.deps.db, {
+        bountyId: input.bountyId,
+        txHash: live.settled.txHash,
+        x402PaymentId: live.settled.txHash.startsWith("0x")
+          ? `x402:${live.settled.txHash}`
+          : live.settled.txHash,
+        escrowAddress: wallets.escrowAddress,
+        resourceUrl: x402ResourceUrl(input.bountyId, input.origin),
+        funderAddress: live.settled.payer,
+        now: input.deps.now,
+      });
+    }
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        severity: "ERROR",
+        event: "deleted_bounty_inbound",
+        bountyId: input.bountyId,
+        txHash: null,
+        reason: err instanceof Error ? err.name : "record failed",
+      }),
+    );
+  }
+  return goneResult();
+}
+
 /**
  * GET|POST /api/bounties/:id/x402
  *
@@ -92,6 +168,16 @@ export async function handleX402Fund(
   }
 
   const [escrow] = await deps.db.select().from(escrows).where(eq(escrows.bountyId, bountyId)).limit(1);
+  if (bounty.deletedAt) {
+    return deletedBountyFundResult({
+      req,
+      bountyId,
+      deps,
+      paymentHeader,
+      origin,
+      faceUsdc: bounty.amountUsdc,
+    });
+  }
 
   const topUpRaw = new URL(req.url).searchParams.get("topUpUsdc")?.trim() ?? "";
   if (bounty.status === "funded" && topUpRaw) {

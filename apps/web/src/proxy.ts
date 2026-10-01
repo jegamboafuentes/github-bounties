@@ -24,6 +24,54 @@ function requestHost(req: { headers: Headers; nextUrl: URL }): string {
  * A real browser submit sends Origin plus multipart (with a boundary) or
  * text/plain.
  */
+function headerHostname(value: string | null): string | null {
+  const first = value?.split(",")[0]?.trim() ?? "";
+  if (!first || first.toLowerCase() === "null") return null;
+  try {
+    if (first.includes("://")) return new URL(first).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  const bare = first.replace(/:\d+$/, "");
+  return bare.toLowerCase() || null;
+}
+
+function isServerActionPost(req: {
+  method: string;
+  nextUrl: { pathname: string };
+  headers: { get(name: string): string | null };
+}): boolean {
+  if (req.method !== "POST") return false;
+  const pathname = req.nextUrl.pathname.replace(/\/+$/, "") || "/";
+  if (pathname === "/signin") return true;
+  if (req.headers.get("next-action")) return true;
+  if (pathname.startsWith("/api/") || pathname.startsWith("/webhooks") || pathname === "/mcp" || pathname.startsWith("/mcp/")) {
+    return false;
+  }
+  const media = req.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
+  return media === "text/plain";
+}
+
+/**
+ * Cloud Run sets Host to the mapped domain and forwards the client
+ * X-Forwarded-Host unchanged. Next.js turns a mismatch into a 500 on server
+ * actions. Reject it here.
+ */
+export function spoofedForwardedHostStatus(req: {
+  method: string;
+  nextUrl: { pathname: string };
+  headers: { get(name: string): string | null };
+}): 403 | null {
+  if (!isServerActionPost(req)) return null;
+  const forwarded = headerHostname(req.headers.get("x-forwarded-host"));
+  if (!forwarded) return null;
+  const host = headerHostname(req.headers.get("host"));
+  const origin = headerHostname(req.headers.get("origin"));
+  if (host && forwarded !== host) return 403;
+  if (origin && forwarded !== origin) return 403;
+  return null;
+}
+
 export function malformedSignInPostStatus(req: {
   method: string;
   nextUrl: { pathname: string };
@@ -116,6 +164,12 @@ export default function proxy(
   req: Parameters<typeof sessionProxy>[0],
   event: Parameters<typeof sessionProxy>[1],
 ) {
+  if (spoofedForwardedHostStatus(req) === 403) {
+    return new NextResponse("Forbidden", {
+      status: 403,
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
   if (malformedSignInPostStatus(req) === 400) {
     return new NextResponse("Bad Request", {
       status: 400,

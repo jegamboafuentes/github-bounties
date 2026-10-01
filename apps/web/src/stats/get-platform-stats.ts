@@ -64,9 +64,11 @@ export async function getPlatformStats(
       group by status
     `),
     db.execute(sql`
-      select coalesce(sum(amount_usdc), 0)::text as "transactedUsdc"
-      from escrows
-      where status in ${transactedList}
+      select coalesce(sum(e.amount_usdc), 0)::text as "transactedUsdc"
+      from escrows e
+      inner join bounties b on b.id = e.bounty_id
+      where e.status in ${transactedList}
+        and b.deleted_at is null
     `),
     db.execute(sql`
       select

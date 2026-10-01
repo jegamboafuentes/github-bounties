@@ -594,7 +594,7 @@ export async function handleCancel(
     deps,
     async () => {
       const bounty = await deps.loadMoneyBounty(id);
-      if (!bounty) throw new PublicApiError("not_found", "Bounty not found.");
+      if (!bounty || bounty.deletedAt) throw new PublicApiError("not_found", "Bounty not found.", null, bounty?.deletedAt ? 410 : 404);
       if (bounty.posterUserId !== principal.userId) {
         throw new PublicApiError("not_poster", "Only the poster can cancel this bounty.", null, 403);
       }
@@ -757,9 +757,14 @@ async function settleAndLock(input: {
   const { principal, bountyId, deps } = input;
   const bounty = await deps.loadMoneyBounty(bountyId);
   if (!bounty) throw new PublicApiError("not_found", "Bounty not found.");
+  if (bounty.deletedAt && !input.paymentSignature) {
+    throw new PublicApiError("not_found", "Bounty not found.", null, 410);
+  }
 
   let amountUsdc = bounty.amountUsdc;
-  if (input.kind === "fund") {
+  if (bounty.deletedAt) {
+    if (input.kind === "top_up") amountUsdc = normalizeCapUsdc(input.amountRaw ?? "", "Top-up amount");
+  } else if (input.kind === "fund") {
     if (bounty.posterUserId !== principal.userId) {
       throw new PublicApiError("not_poster", "Only the poster can fund this bounty.", null, 403);
     }
@@ -855,6 +860,17 @@ async function settleAndLock(input: {
   }
 
   try {
+    if (bounty.deletedAt) {
+      await deps.recordInbound({
+        bountyId,
+        txHash: settled.txHash,
+        payer: settled.payer ?? null,
+        payTo: escrow.payTo,
+        resourceUrl,
+      });
+      await deps.updateSpend(reservedId, { status: "failed", txHash: settled.txHash });
+      throw new PublicApiError("not_found", "Bounty not found.", null, 410);
+    }
     if (input.kind === "fund") {
       await deps.recordInbound({
         bountyId,

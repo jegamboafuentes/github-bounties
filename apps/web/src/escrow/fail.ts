@@ -8,6 +8,11 @@ export const VOIDED_UNFUNDED_CODE = "voided_unfunded";
 export const VOIDED_UNFUNDED_REASON =
   "No FUND_IN confirmed — cancel/expiry voids the draft. No USDC movement.";
 
+/** On-chain payment for a bounty that was already soft-deleted. Not a fund. */
+export const DELETED_BOUNTY_INBOUND_CODE = "inbound_deleted_review";
+export const DELETED_BOUNTY_INBOUND_REASON =
+  "Payment arrived for a deleted bounty. Hold the USDC for refund or ops review. Do not apply it as a fund.";
+
 export type PersistedLockFailure = {
   code: string;
   reason: string;

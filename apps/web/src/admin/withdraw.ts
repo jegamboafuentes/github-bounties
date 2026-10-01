@@ -5,7 +5,7 @@ import { isMainnetNetwork } from "../escrow/env";
 import { USDC_BASE_MAINNET, USDC_BASE_SEPOLIA } from "../lib/constants";
 import { atomicToUsdc } from "../lib/money";
 import { finishAdminAudit, insertAdminAudit } from "./audit";
-import { AdminError } from "./errors";
+import { AdminError, isAdminError } from "./errors";
 import { loadFeeAndEscrowAccounts, type NamedAccountClient } from "./fee-account";
 import {
   assertWithdrawDestination,
@@ -37,7 +37,41 @@ function transferNetwork(network: string): "base" | "base-sepolia" {
   return isMainnetNetwork(network) ? "base" : "base-sepolia";
 }
 
+async function auditWithdrawRefusal(
+  input: { db: Database; actorEmail: string; destination?: string | null; now?: Date },
+  action: string,
+  err: AdminError,
+): Promise<void> {
+  await insertAdminAudit(input.db, {
+    actorEmail: input.actorEmail,
+    action,
+    target: input.destination?.trim() || null,
+    after: { reason: err.code },
+    result: "refused",
+    now: input.now,
+  });
+}
+
 export async function previewFeeWithdraw(input: {
+  db: Database;
+  env: EnvMap;
+  actorEmail: string;
+  amountUsdc: string;
+  destination: string;
+  callerNetwork?: string | null;
+  client: NamedAccountClient;
+  readBalance: (address: string) => Promise<bigint>;
+  now?: Date;
+}): Promise<WithdrawPreview> {
+  try {
+    return await previewFeeWithdrawInner(input);
+  } catch (err) {
+    if (isAdminError(err)) await auditWithdrawRefusal(input, "withdraw_fees_preview", err);
+    throw err;
+  }
+}
+
+async function previewFeeWithdrawInner(input: {
   db: Database;
   env: EnvMap;
   actorEmail: string;
@@ -90,6 +124,27 @@ export async function previewFeeWithdraw(input: {
 }
 
 export async function executeFeeWithdraw(input: {
+  db: Database;
+  env: EnvMap;
+  actorEmail: string;
+  confirmToken: string;
+  confirmation: string;
+  callerNetwork?: string | null;
+  client: NamedAccountClient;
+  readBalance: (address: string) => Promise<bigint>;
+  now?: Date;
+}): Promise<{ txHash: string; amountUsdc: string; destination: string; network: string }> {
+  try {
+    return await executeFeeWithdrawInner(input);
+  } catch (err) {
+    if (isAdminError(err) && err.code !== "fee_transfer_failed") {
+      await auditWithdrawRefusal(input, "withdraw_fees", err);
+    }
+    throw err;
+  }
+}
+
+async function executeFeeWithdrawInner(input: {
   db: Database;
   env: EnvMap;
   actorEmail: string;
