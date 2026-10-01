@@ -489,7 +489,7 @@ const OPENAPI_PROD_SERVER = {
 };
 
 export type OpenApiServerContext = {
-  /** `X-Forwarded-Host` or `Host`. Untrusted hosts are ignored. */
+  /** `Host` only. Client `X-Forwarded-Host` is ignored. Untrusted hosts are ignored. */
   host?: string | null;
   /**
    * Used when `host` is missing or not a public site host.

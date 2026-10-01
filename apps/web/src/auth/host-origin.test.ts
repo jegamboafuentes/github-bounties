@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { NextRequest } from "next/server";
-import proxy from "../proxy";
+import proxy, { malformedSignInPostStatus } from "../proxy";
 import { allowlistedAuthOrigin, allowlistedCallbackUrl, prepareAuthRequest } from "./host-origin";
 import { handleAuthRequest, performAuthAction } from "./index";
 
@@ -27,17 +27,18 @@ async function withAuthEnv(run: () => Promise<void>) {
   }
 }
 
-function authHeaders(host: string): Headers {
-  return new Headers({
+function authHeaders(host: string, forwardedHost?: string): Headers {
+  const headers = new Headers({
     host,
-    "x-forwarded-host": host,
     "x-forwarded-proto": "https",
   });
+  if (forwardedHost !== undefined) headers.set("x-forwarded-host", forwardedHost);
+  return headers;
 }
 
-async function proxyResponse(pathname: string, host: string): Promise<Response> {
+async function proxyResponse(pathname: string, host: string, forwardedHost?: string): Promise<Response> {
   const request = new NextRequest(`http://0.0.0.0:8080${pathname}`, {
-    headers: authHeaders(host),
+    headers: authHeaders(host, forwardedHost),
   });
   return proxy(request, undefined as never);
 }
@@ -103,6 +104,24 @@ describe("auth host allowlist", () => {
     );
     assert.equal(spoofed.url, `${PUBLIC_ORIGIN}/api/auth/signin/google`);
     assert.doesNotMatch(spoofed.url, /evil\.example/);
+    assert.equal(spoofed.headers.get("x-forwarded-host"), null);
+
+    const publicHost = prepareAuthRequest(
+      new Request("http://0.0.0.0:8080/api/auth/signin/google", {
+        headers: authHeaders("dev.githubbounties.xyz", "admin-dev.githubbounties.xyz"),
+      }),
+      env,
+    );
+    assert.equal(publicHost.url, `${PUBLIC_ORIGIN}/api/auth/signin/google`);
+    assert.equal(publicHost.headers.get("x-forwarded-host"), null);
+
+    const adminDespitePublicForward = prepareAuthRequest(
+      new Request("http://0.0.0.0:8080/api/auth/signin/google", {
+        headers: authHeaders("admin-dev.githubbounties.xyz", "dev.githubbounties.xyz"),
+      }),
+      env,
+    );
+    assert.equal(adminDespitePublicForward.url, `${ADMIN_ORIGIN}/api/auth/signin/google`);
   });
 
   it("redirects unsigned / and /admin on admin-dev to that host's sign-in", async () => {
@@ -143,6 +162,136 @@ describe("auth host allowlist", () => {
       assert.equal(response.headers.get("location"), `${PUBLIC_ORIGIN}/signin?callbackUrl=%2Fsettings`);
     });
   });
+
+  it("ignores an admin X-Forwarded-Host on the public host", async () => {
+    await withAuthEnv(async () => {
+      for (const pathname of ["/admin", "/api/v1/admin/settings", "/api/v1/admin", "/api/v1/admin/fees"]) {
+        const response = await proxyResponse(pathname, "dev.githubbounties.xyz", "admin-dev.githubbounties.xyz");
+        assert.equal(response.status, 404, pathname);
+        assert.equal(response.headers.get("location"), null, pathname);
+      }
+      const signin = await proxyResponse("/settings", "dev.githubbounties.xyz", "admin-dev.githubbounties.xyz");
+      assert.equal(signin.status, 307);
+      assert.equal(signin.headers.get("location"), `${PUBLIC_ORIGIN}/signin?callbackUrl=%2Fsettings`);
+      assert.doesNotMatch(signin.headers.get("location") ?? "", /admin-dev/);
+    });
+  });
+
+  it("stays on the admin host when X-Forwarded-Host is the public host", async () => {
+    await withAuthEnv(async () => {
+      for (const pathname of ["/", "/admin"]) {
+        const response = await proxyResponse(pathname, "admin-dev.githubbounties.xyz", "dev.githubbounties.xyz");
+        assert.equal(response.status, 307, pathname);
+        assert.equal(
+          response.headers.get("location"),
+          `${ADMIN_ORIGIN}/signin?callbackUrl=%2Fadmin`,
+          pathname,
+        );
+      }
+      const api = await proxyResponse("/api/v1/admin/settings", "admin-dev.githubbounties.xyz", "dev.githubbounties.xyz");
+      assert.equal(api.status, 200);
+      assert.equal(api.headers.get("location"), null);
+    });
+  });
+
+  it("serves the admin host when X-Forwarded-Host is absent", async () => {
+    await withAuthEnv(async () => {
+      for (const pathname of ["/", "/admin"]) {
+        const response = await proxyResponse(pathname, "admin-dev.githubbounties.xyz");
+        assert.equal(response.status, 307, pathname);
+        assert.equal(response.headers.get("location"), `${ADMIN_ORIGIN}/signin?callbackUrl=%2Fadmin`);
+      }
+      const api = await proxyResponse("/api/v1/admin/settings", "admin-dev.githubbounties.xyz");
+      assert.equal(api.status, 200);
+    });
+  });
+});
+
+describe("malformed sign-in posts", () => {
+  it("returns 400 instead of letting Next.js turn them into 500", async () => {
+    const missingOrigin = await proxy(
+      new NextRequest("https://dev.githubbounties.xyz/signin", {
+        method: "POST",
+        headers: { host: "dev.githubbounties.xyz", "content-type": "multipart/form-data; boundary=abc" },
+      }),
+      undefined as never,
+    );
+    assert.equal(missingOrigin.status, 400);
+    assert.equal(missingOrigin.headers.get("content-type")?.includes("text/plain"), true);
+
+    const nullOrigin = await proxy(
+      new NextRequest("https://dev.githubbounties.xyz/signin", {
+        method: "POST",
+        headers: {
+          host: "dev.githubbounties.xyz",
+          origin: "null",
+          "content-type": "text/plain",
+        },
+      }),
+      undefined as never,
+    );
+    assert.equal(nullOrigin.status, 400);
+
+    const jsonBody = await proxy(
+      new NextRequest("https://dev.githubbounties.xyz/signin", {
+        method: "POST",
+        headers: {
+          host: "dev.githubbounties.xyz",
+          origin: PUBLIC_ORIGIN,
+          "content-type": "application/json",
+        },
+        body: "{}",
+      }),
+      undefined as never,
+    );
+    assert.equal(jsonBody.status, 400);
+
+    const noBoundary = await proxy(
+      new NextRequest("https://dev.githubbounties.xyz/signin", {
+        method: "POST",
+        headers: {
+          host: "admin-dev.githubbounties.xyz",
+          origin: ADMIN_ORIGIN,
+          "content-type": "multipart/form-data",
+        },
+      }),
+      undefined as never,
+    );
+    assert.equal(noBoundary.status, 400);
+
+    const emptyBody = await proxy(
+      new NextRequest("https://dev.githubbounties.xyz/signin", {
+        method: "POST",
+        headers: {
+          host: "dev.githubbounties.xyz",
+          origin: PUBLIC_ORIGIN,
+          "content-type": "text/plain",
+          "content-length": "0",
+        },
+      }),
+      undefined as never,
+    );
+    assert.equal(emptyBody.status, 400);
+
+    const ok = await proxy(
+      new NextRequest("https://dev.githubbounties.xyz/signin", {
+        method: "POST",
+        headers: {
+          host: "dev.githubbounties.xyz",
+          origin: PUBLIC_ORIGIN,
+          "content-type": "multipart/form-data; boundary=abc",
+          "content-length": "12",
+        },
+      }),
+      undefined as never,
+    );
+    assert.equal(ok.status, 200);
+    assert.equal(malformedSignInPostStatus({
+      method: "GET",
+      nextUrl: { pathname: "/signin" },
+      headers: new Headers(),
+    }), null);
+  });
 });
 
 describe("Google redirect_uri on the allowlisted host", () => {
@@ -180,6 +329,20 @@ describe("Google redirect_uri on the allowlisted host", () => {
       assert.doesNotMatch(result.redirect, /evil\.example/);
       const callback = result.cookies.find((cookie) => cookie.name.includes("callback-url"));
       assert.equal(callback?.value, `${PUBLIC_ORIGIN}/settings`);
+
+      const publicHost = await performAuthAction(
+        "signin/google",
+        "/settings",
+        authHeaders("dev.githubbounties.xyz", "admin-dev.githubbounties.xyz"),
+      );
+      assert.equal(redirectUri(publicHost.redirect), `${PUBLIC_ORIGIN}/api/auth/callback/google`);
+
+      const adminHost = await performAuthAction(
+        "signin/google",
+        "/admin",
+        authHeaders("admin-dev.githubbounties.xyz", "dev.githubbounties.xyz"),
+      );
+      assert.equal(redirectUri(adminHost.redirect), `${ADMIN_ORIGIN}/api/auth/callback/google`);
     });
   });
 

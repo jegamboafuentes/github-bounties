@@ -90,7 +90,7 @@ Keep both of these on the public origin:
 | DEV | `https://dev.githubbounties.xyz` | `https://dev.githubbounties.xyz` |
 | PROD | `https://githubbounties.xyz` | `https://githubbounties.xyz` |
 
-There is no `ADMIN_BASE_URL`. The app builds the admin origin from those two pinned hostnames. A `Host` or `X-Forwarded-Host` that is not on that list is ignored. Session, PKCE, state, and CSRF cookies stay host-only (no `Domain`), so the admin host does not share the public host's session and does not collide with the production apex cookie names.
+There is no `ADMIN_BASE_URL`. The app builds the admin origin from those two pinned hostnames. The check reads the `Host` header only. Cloud Run sets that to the mapped domain and passes a client `X-Forwarded-Host` through, so that header is ignored. A `Host` value that is not one of the pinned admin hostnames stays on the public origin. Session, PKCE, state, and CSRF cookies stay host-only (no `Domain`), so the admin host does not share the public host's session and does not collide with the production apex cookie names.
 
 Google redirect URIs, already registered:
 

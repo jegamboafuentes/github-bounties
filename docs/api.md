@@ -12,7 +12,7 @@ V4-2 migration: `0011_api_access` (`api_keys`, `api_request_log`, `api_spend_led
 | Swagger UI | `GET /api/docs` |
 | MCP | `POST /mcp` (streamable HTTP, stateless) |
 
-Swagger UI is served from this app (`swagger-ui-dist` on the same origin). Its content security policy allows that bundle and Try it out against DEV and PROD. `servers[0]` in `GET /api/v1/openapi.json` is the public origin that served the document (`X-Forwarded-Host` or `Host` when that host is DEV or PROD). A missing or untrusted host uses `NEXT_PUBLIC_APP_URL`, then `APP_BASE_URL`, then `PUBLIC_BASE_URL`, then `AUTH_URL`. The other public origin is `servers[1]`, so Try it out hits the current environment and the other one stays selectable.
+Swagger UI is served from this app (`swagger-ui-dist` on the same origin). Its content security policy allows that bundle and Try it out against DEV and PROD. `servers[0]` in `GET /api/v1/openapi.json` is the public origin that served the document (`Host` when that host is DEV or PROD; client `X-Forwarded-Host` is ignored). A missing or untrusted host uses `NEXT_PUBLIC_APP_URL`, then `APP_BASE_URL`, then `PUBLIC_BASE_URL`, then `AUTH_URL`. The other public origin is `servers[1]`, so Try it out hits the current environment and the other one stays selectable.
 
 ## Rate limit
 

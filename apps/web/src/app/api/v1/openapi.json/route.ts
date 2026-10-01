@@ -2,11 +2,12 @@ import { handleV1Get } from "@/api/access/http";
 import { publicCorsPreflight } from "@/api/public/cors";
 import { methodNotAllowed } from "@/api/public/methods";
 import { buildOpenApiDocument } from "@/api/public/schemas";
+import { mappedHostHeader } from "@/lib/site-env";
 
 export const dynamic = "force-dynamic";
 
 export function GET(request: Request) {
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const host = mappedHostHeader(request.headers);
   return handleV1Get(request, async () => Response.json(buildOpenApiDocument({ host })));
 }
 

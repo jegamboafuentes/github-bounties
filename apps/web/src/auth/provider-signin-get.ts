@@ -60,10 +60,11 @@ export function safeRelativeCallbackUrl(
 
 /**
  * Cloud Run's `request.url` is the container bind address (`http://0.0.0.0:8080`).
- * An absolute Location uses only the configured public origin (`PUBLIC_BASE_URL`,
- * then `AUTH_URL`). Request host headers are ignored: `x-forwarded-host` is
- * caller-controlled and would be an open redirect. A missing, loopback, or bind
- * origin becomes a relative `Location: /signin`.
+ * An absolute Location uses the pinned admin origin when `hostHeader` is an
+ * admin hostname, otherwise the configured public origin (`PUBLIC_BASE_URL`,
+ * then `AUTH_URL`). Callers pass the Host header, not `X-Forwarded-Host`.
+ * The header is an allowlist key, not the Location string. A missing,
+ * loopback, or bind origin becomes a relative `Location: /signin`.
  */
 export function providerSignInLocation(
   env: EnvMap = process.env,

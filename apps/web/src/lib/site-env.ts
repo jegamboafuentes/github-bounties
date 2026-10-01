@@ -77,6 +77,15 @@ function firstHeaderValue(value: string | null | undefined): string {
 }
 
 /**
+ * Host for routing, auth, and origin decisions.
+ * Cloud Run sets `Host` to the mapped domain and forwards the client
+ * `X-Forwarded-Host` unchanged. That client value is ignored.
+ */
+export function mappedHostHeader(headers: { get(name: string): string | null }): string | null {
+  return headers.get("host");
+}
+
+/**
  * Public site origin for absolute URLs (Open Graph, Twitter, share images).
  * Preference matches WalletConnect / x402 / email: `PUBLIC_BASE_URL`, then
  * `AUTH_URL`. When neither is set, use the incoming https host so a crawler
