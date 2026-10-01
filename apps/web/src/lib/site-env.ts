@@ -31,6 +31,25 @@ function isDevHost(host: string): boolean {
 /** Local fallback when no public origin is configured. Crawlers cannot fetch this. */
 export const LOCAL_SITE_ORIGIN = "http://localhost:3000";
 
+const NON_PUBLIC_HOSTS = new Set(["0.0.0.0", "localhost", "127.0.0.1", "::1"]);
+
+/**
+ * Absolute public origin from `PUBLIC_BASE_URL`, then `AUTH_URL`.
+ * Loopback and bind addresses are omitted (same gate as the sign-in redirect).
+ * Request host headers are never read.
+ */
+export function configuredPublicOrigin(env: EnvMap = process.env): string | null {
+  const origin = originFromSiteUrl(env.PUBLIC_BASE_URL) || originFromSiteUrl(env.AUTH_URL);
+  if (!origin) return null;
+  try {
+    const hostname = new URL(origin).hostname.toLowerCase();
+    if (NON_PUBLIC_HOSTS.has(hostname)) return null;
+    return origin;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Absolute origin (no path) from a URL or bare host.
  * `https://dev.githubbounties.xyz/path/` → `https://dev.githubbounties.xyz`.

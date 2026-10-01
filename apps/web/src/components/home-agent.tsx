@@ -14,10 +14,10 @@ export function HomeAgent() {
       </div>
       <p className="home-agent-card home-reveal-item">
         <Link
-          href="/developers"
+          href="/mcp"
           className="inline-flex items-center rounded-lg border border-zinc-300 bg-white/70 px-4 py-2.5 text-sm font-medium text-zinc-900 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-50 dark:hover:bg-zinc-800"
         >
-          Developers
+          MCP
         </Link>
       </p>
     </section>

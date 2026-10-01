@@ -73,7 +73,7 @@ export const PUBLIC_ROADMAP = [
     title: "API + MCP",
     summary: `DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version ${PUBLIC_API_VERSION}, 23 operations, 24 tools (#76 #79 #80 #81 #78). API money is OFF on PROD.`,
     status: "shipped",
-    href: "/developers",
+    href: "/mcp",
   },
   {
     id: "v5",

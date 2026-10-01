@@ -34,7 +34,7 @@ As of **2026-09-25**. No invented ship dates. `/roadmap`, About, and [docs/roadm
 - **FE epic** — LIVE on PROD 2026-09-20. Homepage stats, public roadmap, and vs-Lightning differentiators. Same aggregates as GET /api/stats. Bounty pages include the payout split charts.
 - **V3 wave** — LIVE on PROD 2026-09-21. Full GitHub issue + Gemini about/stack/complexity (AI estimates, cached). Related polish: board badges/filters, Settings/Post connected-only, homepage motion/roadmap refresh.
 - **Funding wave** — LIVE on PROD 2026-09-24. Crowdfunding (#61): USDC top-ups on already-funded bounties. Fund any public issue (#64) without installing the GitHub App, with Claim running through the public merge poller. Funder avatars (#65 to #67) on the board cards and on the bounty page Funders list.
-- **V4 — API + MCP.** DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version 4.4.0, 23 operations, 24 tools (#76 #79 #80 #81 #78). API money is OFF on PROD. [Developers](https://githubbounties.xyz/developers).
+- **V4 — API + MCP.** DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version 4.4.0, 23 operations, 24 tools (#76 #79 #80 #81 #78). API money is OFF on PROD. [MCP](https://githubbounties.xyz/mcp).
 
 ### Next
 
@@ -82,7 +82,7 @@ Decisions, sequences, and failure modes:
 | Issue body + Gemini intelligence | [docs/bounty-intelligence.md](docs/bounty-intelligence.md) |
 | Sign-in identity + DEV transactional email (welcome and domain events, not remounted) | [docs/email.md](docs/email.md) |
 | Public stats (`GET /api/stats`) | [docs/stats.md](docs/stats.md) |
-| Public API + MCP (V4, live on PROD) | [docs/api.md](docs/api.md), [Developers](https://githubbounties.xyz/developers) |
+| Public API + MCP (V4, live on PROD) | [docs/api.md](docs/api.md), [MCP](https://githubbounties.xyz/mcp) |
 | Google sign-in | [docs/google-signin.md](docs/google-signin.md) |
 | GitHub App + webhooks | [docs/github-app.md](docs/github-app.md), [docs/webhooks.md](docs/webhooks.md) |
 | Schema | [docs/v1-schema.md](docs/v1-schema.md) |

@@ -10,7 +10,12 @@ describe("MCP tool catalog", () => {
     for (const tool of tools) {
       assert.equal(tool.name.length > 0, true);
       assert.equal(tool.description.length > 0, true);
+      assert.equal(tool.summary.length > 0, true);
+      assert.equal(["public", "read", "write", "money"].includes(tool.scope), true);
     }
+    assert.equal(tools.find((tool) => tool.name === "list_bounties")?.scope, "public");
+    assert.equal(tools.find((tool) => tool.name === "get_me")?.scope, "read");
+    assert.equal(tools.find((tool) => tool.name === "refund_bounty")?.scope, "money");
     assert.equal(
       tools.some((tool) => tool.name === "list_bounties"),
       true,

@@ -6,12 +6,27 @@
  * the Auth.js handlers.
  */
 import type { EnvMap } from "./env";
-import { originFromSiteUrl } from "@/lib/site-env";
+import { configuredPublicOrigin } from "@/lib/site-env";
 
 const PROVIDER_SIGNIN_GET = /^\/api\/auth\/signin\/[^/]+\/?$/;
 
 export function isProviderSignInGet(pathname: string): boolean {
   return PROVIDER_SIGNIN_GET.test(pathname);
+}
+
+/**
+ * A callbackUrl is carried only when it is a relative path: one leading `/`,
+ * not `//`, and not a scheme. Anything else is dropped so Location cannot be
+ * an open redirect.
+ */
+export function safeRelativeCallbackUrl(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const raw = value.trim();
+  if (!raw.startsWith("/") || raw.startsWith("//")) return null;
+  if (raw.includes("\\")) return null;
+  if (/[\u0000-\u001F\u007F]/.test(raw)) return null;
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) return null;
+  return raw;
 }
 
 /**
@@ -21,24 +36,15 @@ export function isProviderSignInGet(pathname: string): boolean {
  * caller-controlled and would be an open redirect. A missing, loopback, or bind
  * origin becomes a relative `Location: /signin`.
  */
-export function providerSignInLocation(env: EnvMap = process.env): string {
-  const origin = originFromSiteUrl(env.PUBLIC_BASE_URL) || originFromSiteUrl(env.AUTH_URL);
-  if (!origin) return "/signin";
-  let hostname = "";
-  try {
-    hostname = new URL(origin).hostname.toLowerCase();
-  } catch {
-    return "/signin";
-  }
-  if (
-    hostname === "0.0.0.0" ||
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "::1"
-  ) {
-    return "/signin";
-  }
-  return `${origin}/signin`;
+export function providerSignInLocation(
+  env: EnvMap = process.env,
+  callbackUrl?: string | null,
+): string {
+  const origin = configuredPublicOrigin(env);
+  const base = origin ? `${origin}/signin` : "/signin";
+  const safe = safeRelativeCallbackUrl(callbackUrl);
+  if (!safe) return base;
+  return `${base}?callbackUrl=${encodeURIComponent(safe)}`;
 }
 
 /** 303 to the site sign-in page. Null means the Auth.js GET handler should run. */
@@ -49,6 +55,8 @@ export function providerSignInGetResponse(
   if (!isProviderSignInGet(url.pathname)) return null;
   return new Response(null, {
     status: 303,
-    headers: { location: providerSignInLocation(options?.env) },
+    headers: {
+      location: providerSignInLocation(options?.env, url.searchParams.get("callbackUrl")),
+    },
   });
 }

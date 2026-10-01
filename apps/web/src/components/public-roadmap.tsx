@@ -36,7 +36,7 @@ export function PublicRoadmap() {
             {"href" in item && item.href ? (
               <p className="mt-2 text-sm">
                 <Link href={item.href} className="font-medium underline underline-offset-4">
-                  Developers
+                  MCP
                 </Link>
               </p>
             ) : null}

@@ -170,20 +170,20 @@ export function HomeReveal({
             );
           }
 
-          const compare = select(host, ".home-section-compare")[0];
-          if (compare) {
-            playOnEnter(
-              compare,
-              [...select(compare, ".home-section-heading"), ...select(compare, ".home-diff-card")],
-              90,
-            );
-          }
-
           const agent = select(host, ".home-section-agent")[0];
           if (agent) {
             playOnEnter(
               agent,
               [...select(agent, ".home-section-heading"), ...select(agent, ".home-agent-card")],
+              90,
+            );
+          }
+
+          const compare = select(host, ".home-section-compare")[0];
+          if (compare) {
+            playOnEnter(
+              compare,
+              [...select(compare, ".home-section-heading"), ...select(compare, ".home-diff-card")],
               90,
             );
           }

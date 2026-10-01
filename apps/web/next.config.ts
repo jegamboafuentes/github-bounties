@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import path from "node:path";
+import { mcpDocumentRewrites } from "./src/mcp/page-rewrites";
 
 /**
  * App root (`apps/web`). A parent `package-lock.json` makes Next infer the
@@ -29,6 +30,9 @@ const nextConfig: NextConfig = {
   },
   turbopack: {
     root: appDir,
+  },
+  async rewrites() {
+    return { beforeFiles: mcpDocumentRewrites() };
   },
   async headers() {
     return [

@@ -78,7 +78,7 @@ describe("public roadmap", () => {
     assert.match(byId["funding-wave"]?.summary ?? "", /Funders list/);
     assert.equal(byId.v4?.status, "shipped");
     assert.equal(byId.v4?.title, "API + MCP");
-    assert.equal(byId.v4?.href, "/developers");
+    assert.equal(byId.v4?.href, "/mcp");
     assert.match(byId.v4?.summary ?? "", /DONE, LIVE on PROD 2026-09-25/);
     assert.match(byId.v4?.summary ?? "", new RegExp(PUBLIC_API_VERSION.replace(/\./g, "\\.")));
     assert.match(byId.v4?.summary ?? "", /23 operations, 24 tools/);
@@ -119,11 +119,13 @@ describe("public roadmap", () => {
     assert.match(docsRoadmap, /## Next/);
     assert.match(docsRoadmap, /## Then/);
     assert.match(docsRoadmap, /## Parked/);
-    assert.match(docsRoadmap, /\/developers/);
+    assert.match(docsRoadmap, /githubbounties\.xyz\/mcp/);
+    assert.doesNotMatch(docsRoadmap, /\/developers/);
     assert.match(readme, /As of \*\*2026-09-25\*\*/);
     assert.match(readme, /LIVE on PROD 2026-09-25/);
     assert.match(readme, /LIVE on PROD 2026-09-24/);
-    assert.match(readme, /githubbounties\.xyz\/developers/);
+    assert.match(readme, /githubbounties\.xyz\/mcp/);
+    assert.doesNotMatch(readme, /\/developers/);
     assert.doesNotMatch(readme, /V3-0 is \*\*DEV only\*\*/);
     assert.doesNotMatch(readme, /V3 is not on PROD/);
     assert.doesNotMatch(readme, /V5 agent economy/);

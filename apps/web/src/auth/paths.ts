@@ -1,4 +1,4 @@
-/** Protected surface. Public: /, /about, /roadmap, /developers, /signin, /board, /bounties/[id], /api/health, /api/stats, /api/v1/*, /api/docs, /mcp, /api/auth/*, POST /webhooks/github. */
+/** Protected surface. Public: /, /about, /roadmap, /mcp (setup page + protocol), /signin, /board, /bounties/[id], /api/health, /api/stats, /api/v1/*, /api/docs, /api/auth/*, POST /webhooks/github. /developers is a 308 to /mcp. */
 
 export const PROTECTED_PAGE_PREFIXES = [
   "/settings",

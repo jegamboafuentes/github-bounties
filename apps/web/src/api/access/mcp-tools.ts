@@ -28,7 +28,8 @@ import {
 } from "./handlers";
 import { PublicApiError } from "../public/errors";
 import { logMcpToolCall, mcpOutcomeCode, mcpOutcomeFromBody } from "../public/mcp-log";
-import { assertNoAddress, assertNoUserOverride } from "./policy";
+import { apiMoneyEnabled, assertNoAddress, assertNoUserOverride } from "./policy";
+import { apiKeyRequiredMessage, moneyScopeRequirement } from "./money-wording";
 import {
   bountyClaimsToolSchema,
   cancelToolSchema,
@@ -72,13 +73,9 @@ function fromResult(result: ApiResult): CallToolResult {
 }
 
 function missingKeyBody(klass: "read" | "write" | "money"): PublicApiErrorBody {
-  const lead =
-    klass === "money"
-      ? "Requires API key with money scope; DEV only."
-      : `Requires API key (${klass} scope).`;
   return publicApiErrorBody(
     "unauthorized",
-    `${lead} Send Authorization: Bearer <api key>. Cookies are not accepted.`,
+    apiKeyRequiredMessage(klass, apiMoneyEnabled()),
     { scope: klass },
   );
 }
@@ -243,7 +240,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Fund a bounty with x402",
       description:
-        "Requires API key with money scope; DEV only. Omit paymentSignature to get payment requirements and approval_url. Retry with the same idempotencyKey and the x402 payment signature. Poster only. No address in the arguments. Settles then calls the same lock as the website. Stays off on mainnet until API_MONEY_ENABLED is turned on.",
+        `${moneyScopeRequirement(apiMoneyEnabled())} Omit paymentSignature to get payment requirements and approval_url. Retry with the same idempotencyKey and the x402 payment signature. Poster only. No address in the arguments. Settles then calls the same lock as the website.`,
       inputSchema: looseFund,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
@@ -268,7 +265,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Top up a funded bounty with x402",
       description:
-        "Requires API key with money scope; DEV only. amountUsdc is the added face. Same 402 then settle flow as fund. Uses the same top-up service as the website. No address in the arguments. Stays off on mainnet until API_MONEY_ENABLED is turned on.",
+        `${moneyScopeRequirement(apiMoneyEnabled())} amountUsdc is the added face. Same 402 then settle flow as fund. Uses the same top-up service as the website. No address in the arguments.`,
       inputSchema: looseTopUp,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
@@ -293,7 +290,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Claim the winner share",
       description:
-        "Requires API key with money scope; DEV only. Pays the winner share to the wallet saved for this key's user. The linked GitHub login must match the merged pull request author. idempotencyKey is required. Do not send an address, destination, or user id. The result lists every leg in scope (winner, fee, and pool when included) with status paid, failed, or pending.",
+        `${moneyScopeRequirement(apiMoneyEnabled())} Pays the winner share to the wallet saved for this key's user. The linked GitHub login must match the merged pull request author. idempotencyKey is required. Do not send an address, destination, or user id. The result lists every leg in scope (winner, fee, and pool when included) with status paid, failed, or pending.`,
       inputSchema: looseClaim,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
@@ -317,7 +314,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Claim the caller's pool share",
       description:
-        "Requires API key with money scope; DEV only. Pays this key owner's frozen pool share to their saved wallet. It does not pay any other member. idempotencyKey is required. Do not send an address, destination, or user id. The result lists that pool leg with status paid, failed, or pending.",
+        `${moneyScopeRequirement(apiMoneyEnabled())} Pays this key owner's frozen pool share to their saved wallet. It does not pay any other member. idempotencyKey is required. Do not send an address, destination, or user id. The result lists that pool leg with status paid, failed, or pending.`,
       inputSchema: looseClaim,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
@@ -341,7 +338,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Refund a funded bounty",
       description:
-        "Requires API key with money scope; DEV only. Poster only. The refund goes to the recorded on-chain payer, never a caller-supplied address. idempotencyKey is required. A bounty already refunding resumes: legs that already have a refund tx are skipped and only the remaining recorded payers are paid. The result includes a legs array for every destination. A single payer also sets destination and refundTxHash to that leg. More than one payer sets both to null; read legs. Unfunded drafts use cancel_bounty.",
+        `${moneyScopeRequirement(apiMoneyEnabled())} Poster only. The refund goes to the recorded on-chain payer, never a caller-supplied address. idempotencyKey is required. A bounty already refunding resumes: legs that already have a refund tx are skipped and only the remaining recorded payers are paid. The result includes a legs array for every destination. A single payer also sets destination and refundTxHash to that leg. More than one payer sets both to null; read legs. Unfunded drafts use cancel_bounty.`,
       inputSchema: looseClaim,
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
