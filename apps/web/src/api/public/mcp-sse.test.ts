@@ -60,6 +60,8 @@ describe("MCP admin visibility and SSE", () => {
       "admin_set_fee_bps",
       "admin_set_pool_bps",
       "admin_delete_bounty",
+      "admin_list_bounties",
+      "admin_refund_bounty",
       "admin_get_balances",
       "admin_withdraw_fees_preview",
       "admin_withdraw_fees",

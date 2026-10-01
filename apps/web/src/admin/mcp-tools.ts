@@ -2,12 +2,14 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import type { McpAccess } from "../api/access/http";
-import { balanceSnapshotJson, readBalanceSnapshot, readOnChainUsdcBalance } from "./balances";
+import { balanceReportJson, readBalanceReport, readOnChainUsdcBalance } from "./balances";
+import { listAdminBounties } from "./bounties";
 import { softDeleteBounty } from "./delete";
 import { isAdminError } from "./errors";
 import { cdpNamedAccountClient } from "./fee-account";
 import { isAdminIdentity } from "./identity";
-import { readPlatformSettings, setPlatformFeeBps, setPlatformPoolBps } from "./settings";
+import { adminRefundBounty } from "./refund";
+import { platformRatesJson, readPlatformSettings, setPlatformFee, setPlatformPool } from "./settings";
 import { executeFeeWithdraw, previewFeeWithdraw } from "./withdraw";
 
 const adminLead = "Requires API key (admin scope). Hidden unless the key owner is an admin.";
@@ -18,9 +20,23 @@ function toolJson(value: unknown, isError = false): CallToolResult {
 
 function fromError(err: unknown): CallToolResult {
   if (isAdminError(err)) {
-    return toolJson({ error: err.status === 404 ? "not_found" : err.code, message: err.message }, true);
+    return toolJson(
+      {
+        error: err.status === 404 ? "not_found" : err.code,
+        message: err.message,
+        ...(err.details ? { details: err.details } : {}),
+      },
+      true,
+    );
   }
-  return toolJson({ error: "admin_failed", message: err instanceof Error ? err.message : "failed" }, true);
+  console.error(
+    JSON.stringify({
+      severity: "ERROR",
+      event: "admin_action_failed",
+      reason: err instanceof Error ? err.message : "failed",
+    }),
+  );
+  return toolJson({ error: "admin_failed", message: "Admin request failed." }, true);
 }
 
 async function adminEmail(access: McpAccess | null | undefined): Promise<string | null> {
@@ -47,7 +63,7 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
     "admin_get_settings",
     {
       title: "Admin: get fee and pool settings",
-      description: `${adminLead} Read the platform fee_bps and pool_bps used to stamp new bounties.`,
+      description: `${adminLead} Read the platform fee and pool used to stamp new bounties. Responses include basis points and percent (2.00 means 2.00%).`,
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -56,7 +72,7 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
       if (!email || !db) return toolJson({ error: "not_found" }, true);
       try {
         const settings = await readPlatformSettings(db);
-        return toolJson({ feeBps: settings.feeBps, poolBps: settings.poolBps });
+        return toolJson(platformRatesJson(settings, { includeAudit: true }));
       } catch (err) {
         return fromError(err);
       }
@@ -67,16 +83,19 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
     "admin_set_fee_bps",
     {
       title: "Admin: set fee bps",
-      description: `${adminLead} Set the platform fee in basis points (0–1000). Existing bounties keep their stamp.`,
-      inputSchema: { feeBps: z.number().int() },
+      description: `${adminLead} Set the platform fee. Accept feeBps (0–1000) or feePercent (0.00–10.00). Existing bounties keep their stamp. Fee must be from 0.00% to 10.00%.`,
+      inputSchema: {
+        feeBps: z.number().int().optional(),
+        feePercent: z.union([z.string(), z.number()]).optional(),
+      },
       annotations: { destructiveHint: true },
     },
     async (args) => {
       const email = await adminEmail(access);
       if (!email || !db) return toolJson({ error: "not_found" }, true);
       try {
-        const settings = await setPlatformFeeBps(db, email, args.feeBps);
-        return toolJson({ feeBps: settings.feeBps, poolBps: settings.poolBps });
+        const settings = await setPlatformFee(db, email, { feeBps: args.feeBps, feePercent: args.feePercent });
+        return toolJson(platformRatesJson(settings));
       } catch (err) {
         return fromError(err);
       }
@@ -87,16 +106,19 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
     "admin_set_pool_bps",
     {
       title: "Admin: set pool bps",
-      description: `${adminLead} Set the platform pool share of post-fee in basis points (1000–2000). Existing bounties keep their stamp.`,
-      inputSchema: { poolBps: z.number().int() },
+      description: `${adminLead} Set the platform pool share of post-fee. Accept poolBps (1000–2000) or poolPercent (10.00–20.00). Existing bounties keep their stamp. Pool must be from 10.00% to 20.00%.`,
+      inputSchema: {
+        poolBps: z.number().int().optional(),
+        poolPercent: z.union([z.string(), z.number()]).optional(),
+      },
       annotations: { destructiveHint: true },
     },
     async (args) => {
       const email = await adminEmail(access);
       if (!email || !db) return toolJson({ error: "not_found" }, true);
       try {
-        const settings = await setPlatformPoolBps(db, email, args.poolBps);
-        return toolJson({ feeBps: settings.feeBps, poolBps: settings.poolBps });
+        const settings = await setPlatformPool(db, email, { poolBps: args.poolBps, poolPercent: args.poolPercent });
+        return toolJson(platformRatesJson(settings));
       } catch (err) {
         return fromError(err);
       }
@@ -106,8 +128,8 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
   server.registerTool(
     "admin_delete_bounty",
     {
-      title: "Admin: soft-delete an unfunded bounty",
-      description: `${adminLead} Soft-delete a bounty only when nothing is funded. Funded bounties return bounty_has_funds_refund_first.`,
+      title: "Admin: soft-delete a bounty",
+      description: `${adminLead} Soft-delete a paid, cancelled, refunded, or never-funded bounty. Blocks with bounty_has_funds_refund_first only while escrow still holds an unrefunded unpaid remainder, an active claim lock, or an in-flight allocation. details.reasons names the block.`,
       inputSchema: { bountyId: z.string().uuid() },
       annotations: { destructiveHint: true },
     },
@@ -124,10 +146,65 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
   );
 
   server.registerTool(
+    "admin_list_bounties",
+    {
+      title: "Admin: list bounties",
+      description: `${adminLead} Paginated bounty list. search matches title, repo, issue number, or id. status is a bounty status. Deleted rows are omitted.`,
+      inputSchema: {
+        search: z.string().optional(),
+        status: z.string().optional(),
+        limit: z.number().int().optional(),
+        offset: z.number().int().optional(),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => {
+      const email = await adminEmail(access);
+      if (!email || !db) return toolJson({ error: "not_found" }, true);
+      try {
+        const page = await listAdminBounties(db, {
+          search: args.search,
+          status: args.status,
+          limit: args.limit,
+          offset: args.offset,
+        });
+        return toolJson(page);
+      } catch (err) {
+        return fromError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "admin_refund_bounty",
+    {
+      title: "Admin: refund a bounty",
+      description: `${adminLead} Runs the existing refund flow for a funded bounty. The money flag applies. Funds return to the recorded payer. No caller-supplied destination.`,
+      inputSchema: { bountyId: z.string().uuid() },
+      annotations: { destructiveHint: true },
+    },
+    async (args) => {
+      const email = await adminEmail(access);
+      if (!email || !db) return toolJson({ error: "not_found" }, true);
+      try {
+        const refunded = await adminRefundBounty({
+          bountyId: args.bountyId,
+          actorEmail: email,
+          db,
+          env,
+        });
+        return toolJson(refunded);
+      } catch (err) {
+        return fromError(err);
+      }
+    },
+  );
+
+  server.registerTool(
     "admin_get_balances",
     {
       title: "Admin: read escrow and fee balances",
-      description: `${adminLead} Read-only on-chain USDC balances plus database liabilities and earned fees. Escrow cannot be transferred.`,
+      description: `${adminLead} Read escrow and fee balances. Each tile is independent: a failing tile returns its error and the others still return values. Escrow cannot be transferred.`,
       inputSchema: {},
       annotations: { readOnlyHint: true },
     },
@@ -135,10 +212,10 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
       const email = await adminEmail(access);
       if (!email || !db) return toolJson({ error: "not_found" }, true);
       try {
-        const snapshot = await readBalanceSnapshot(db, await cdpNamedAccountClient(), env, (address) =>
-          readOnChainUsdcBalance(address, env),
-        );
-        return toolJson(balanceSnapshotJson(snapshot));
+        const report = await readBalanceReport(db, env, {
+          readBalance: (address) => readOnChainUsdcBalance(address, env),
+        });
+        return toolJson(balanceReportJson(report));
       } catch (err) {
         return fromError(err);
       }

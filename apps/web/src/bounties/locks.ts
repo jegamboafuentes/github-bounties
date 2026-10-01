@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { bounties, claimLocks } from "../db/schema";
 import type { GitHubHttp } from "../github/api";
@@ -64,7 +64,7 @@ export async function releaseClaimLock(
   }
 
   const [bounty] = await db.select().from(bounties).where(eq(bounties.id, bountyId)).limit(1);
-  if (!bounty) {
+  if (!bounty || bounty.deletedAt) {
     throw new BountyError("bounty_not_found", "Bounty not found.");
   }
 
@@ -101,7 +101,7 @@ export async function releaseClaimLock(
     const [restored] = await tx
       .update(bounties)
       .set({ status: "funded", updatedAt: now })
-      .where(and(eq(bounties.id, bountyId), eq(bounties.status, "claim_locked")))
+      .where(and(eq(bounties.id, bountyId), eq(bounties.status, "claim_locked"), isNull(bounties.deletedAt)))
       .returning({ id: bounties.id });
     restoredFunded = Boolean(restored);
   });

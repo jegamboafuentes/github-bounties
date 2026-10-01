@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { escrows } from "../db/schema";
+import { bounties, escrows } from "../db/schema";
 import { payerDistinctFromEscrow } from "./destination-guard";
 import { EscrowError } from "./errors";
+import { DELETED_BOUNTY_INBOUND_CODE, DELETED_BOUNTY_INBOUND_REASON } from "./fail";
 import { requireBasePayoutAddress } from "./payout-address";
 
 /**
@@ -42,6 +43,62 @@ export function inboundIsRecorded(row: {
   return Boolean(row.fundTxHash?.trim() || row.x402PaymentId?.trim());
 }
 
+type EscrowInboundRow = typeof escrows.$inferSelect;
+
+/**
+ * Keep the transaction on the escrow and mark it for ops review.
+ * Never clears the review marker and never leaves a pending (fundable) row.
+ */
+export async function persistDeletedBountyInbound(
+  db: Database,
+  existing: EscrowInboundRow,
+  input: {
+    bountyId: string;
+    txHash: string;
+    paymentId: string;
+    escrowAddress: string;
+    resourceUrl: string;
+    funderAddress?: string | null;
+    now: Date;
+  },
+): Promise<{ alreadyRecorded: boolean; txHash: string; review: true }> {
+  const txHash = input.txHash.trim().toLowerCase();
+  const previous = existing.fundTxHash?.trim().toLowerCase() || "";
+  const keepPrevious = Boolean(previous) && previous !== txHash;
+  const payer = input.funderAddress?.trim() || "";
+  const funderAddress =
+    payer && payerDistinctFromEscrow(payer, input.escrowAddress)
+      ? requireBasePayoutAddress(payer, "missing_funder_address")
+      : existing.funderAddress;
+  await db
+    .update(escrows)
+    .set({
+      fundTxHash: keepPrevious ? existing.fundTxHash : txHash,
+      x402PaymentId: existing.x402PaymentId?.trim() || input.paymentId || `x402:${txHash}`,
+      x402Url: input.resourceUrl,
+      escrowAddress: input.escrowAddress || existing.escrowAddress,
+      funderAddress,
+      failCode: DELETED_BOUNTY_INBOUND_CODE,
+      failReason: keepPrevious
+        ? `${DELETED_BOUNTY_INBOUND_REASON} Additional tx ${txHash}.`
+        : DELETED_BOUNTY_INBOUND_REASON,
+      status: existing.status === "pending" ? "failed" : existing.status,
+      updatedAt: input.now,
+    })
+    .where(eq(escrows.id, existing.id));
+  console.error(
+    JSON.stringify({
+      severity: "ERROR",
+      event: "deleted_bounty_inbound",
+      bountyId: input.bountyId,
+      txHash,
+      escrowStatus: existing.status === "pending" ? "failed" : existing.status,
+      keptPreviousHash: keepPrevious,
+    }),
+  );
+  return { alreadyRecorded: previous === txHash, txHash, review: true };
+}
+
 /**
  * Persist an x402 `exact` settlement on a still-pending escrow row.
  * Does not flip status to funded — poster Lock confirms FUND_IN.
@@ -58,7 +115,7 @@ export async function recordExactInbound(
     funderAddress?: string | null;
     now?: Date;
   },
-): Promise<{ alreadyRecorded: boolean; txHash: string }> {
+): Promise<{ alreadyRecorded: boolean; txHash: string; review?: boolean }> {
   const txHash = input.txHash.trim().toLowerCase();
   const paymentId = input.x402PaymentId.trim();
   if (!txHash) {
@@ -69,8 +126,27 @@ export async function recordExactInbound(
   }
   const now = input.now ?? new Date();
   const [existing] = await db.select().from(escrows).where(eq(escrows.bountyId, input.bountyId)).limit(1);
+  const [bounty] = await db
+    .select({ deletedAt: bounties.deletedAt })
+    .from(bounties)
+    .where(eq(bounties.id, input.bountyId))
+    .limit(1);
   if (!existing) {
+    if (bounty?.deletedAt) {
+      console.error(
+        JSON.stringify({
+          severity: "ERROR",
+          event: "deleted_bounty_inbound",
+          bountyId: input.bountyId,
+          txHash,
+          escrowStatus: "missing",
+        }),
+      );
+    }
     throw new EscrowError("bounty_not_found", "Escrow row missing — cannot record inbound.");
+  }
+  if (bounty?.deletedAt) {
+    return persistDeletedBountyInbound(db, existing, { ...input, txHash, paymentId, now });
   }
   if (existing.status !== "pending") {
     if (existing.fundTxHash?.trim().toLowerCase() === txHash) {

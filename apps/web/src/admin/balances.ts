@@ -1,13 +1,12 @@
 import { sql } from "drizzle-orm";
-import { createPublicClient, http, type Address } from "viem";
+import { createPublicClient, getAddress, http, type Address } from "viem";
 import { base, baseSepolia } from "viem/chains";
 import type { EnvMap } from "../auth/env";
 import type { Database } from "../db/client";
 import { isMainnetNetwork, readCdpNetwork } from "../escrow/env";
 import { USDC_BASE_MAINNET, USDC_BASE_SEPOLIA } from "../lib/constants";
 import { atomicToUsdc } from "../lib/money";
-import type { NamedAccountClient } from "./fee-account";
-import { loadFeeAndEscrowAccounts } from "./fee-account";
+import { cdpNamedAccountClient, loadFeeAndEscrowAccounts, type NamedAccountClient } from "./fee-account";
 
 const BALANCE_OF = [
   {
@@ -19,20 +18,29 @@ const BALANCE_OF = [
   },
 ] as const;
 
-export type BalanceSnapshot = {
+export type BalanceTile = { usdc: string | null; error: string | null };
+export type AddressTile = { address: string | null; error: string | null };
+
+export type BalanceReport = {
   network: string;
-  escrowAddress: string;
-  feeAddress: string;
-  escrowOnChainAtomic: bigint;
-  feeOnChainAtomic: bigint;
-  escrowLiabilitiesAtomic: bigint;
-  feesEarnedAtomic: bigint;
-  feesWithdrawnAtomic: bigint;
-  escrowOnChainUsdc: string;
-  feeOnChainUsdc: string;
-  escrowLiabilitiesUsdc: string;
-  feesEarnedUsdc: string;
-  feesWithdrawnUsdc: string;
+  escrowAddress: AddressTile;
+  feeAddress: AddressTile;
+  escrowOnChain: BalanceTile;
+  liabilities: BalanceTile;
+  feeOnChain: BalanceTile;
+  feesEarned: BalanceTile;
+  feesWithdrawn: BalanceTile;
+};
+
+export type BalanceReaders = {
+  network: string;
+  loadAccounts: () => Promise<{ escrowAddress: string; feeAddress: string }>;
+  feeAddressFallback?: () => string | null;
+  readOnChain: (address: string) => Promise<bigint>;
+  liabilities: () => Promise<bigint>;
+  feesEarned: () => Promise<bigint>;
+  feesWithdrawn: () => Promise<bigint>;
+  log?: (tile: string, reason: string) => void;
 };
 
 function usdcFor(network: string): Address {
@@ -43,6 +51,104 @@ export function rpcUrlFor(env: EnvMap, network: string): string {
   const configured = env.BASE_RPC_URL?.trim();
   if (configured) return configured;
   return isMainnetNetwork(network) ? "https://mainnet.base.org" : "https://sepolia.base.org";
+}
+
+export function feeAddressFromEnv(env: EnvMap): string | null {
+  const raw = env.FEE_WALLET_ADDRESS?.trim() ?? "";
+  if (!raw) return null;
+  try {
+    return getAddress(raw);
+  } catch {
+    return null;
+  }
+}
+
+/** Short operator-facing reason. Strips secret assignments. Never includes a stack. */
+export function balanceFailureReason(err: unknown): string {
+  const raw = err instanceof Error ? err.message : "Balance read failed.";
+  const cleaned = raw
+    .replace(/-----BEGIN[\s\S]*?-----END[^\n-]*-----/g, "[redacted]")
+    .replace(/(?:api[_-]?key[_-]?secret|api[_-]?key|secret|token|password|bearer)\s*[:=]\s*\S+/gi, "[redacted]")
+    .replace(/\s+/g, " ")
+    .trim();
+  return (cleaned || "Balance read failed.").slice(0, 240);
+}
+
+function logTile(log: BalanceReaders["log"], tile: string, reason: string): void {
+  if (log) {
+    log(tile, reason);
+    return;
+  }
+  console.error(
+    JSON.stringify({
+      severity: "ERROR",
+      event: "admin_balance_tile_failed",
+      tile,
+      reason,
+    }),
+  );
+}
+
+async function settle<T>(
+  tile: string,
+  run: () => Promise<T>,
+  log: BalanceReaders["log"],
+): Promise<{ ok: true; value: T } | { ok: false; reason: string }> {
+  try {
+    return { ok: true, value: await run() };
+  } catch (err) {
+    const reason = balanceFailureReason(err);
+    logTile(log, tile, reason);
+    return { ok: false, reason };
+  }
+}
+
+function usdcTile(result: { ok: true; value: bigint } | { ok: false; reason: string }): BalanceTile {
+  if (!result.ok) return { usdc: null, error: result.reason };
+  return { usdc: atomicToUsdc(result.value), error: null };
+}
+
+/**
+ * Each tile is its own try. A CDP, RPC, or SQL failure on one tile does not blank the others.
+ * On-chain reads are USDC `balanceOf` over the public Base RPC, not a CDP transfer.
+ */
+export async function readBalanceTiles(readers: BalanceReaders): Promise<BalanceReport> {
+  const accounts = await settle("cdp_accounts", readers.loadAccounts, readers.log);
+  let escrowAddress: AddressTile;
+  let feeAddress: AddressTile;
+  if (accounts.ok) {
+    escrowAddress = { address: accounts.value.escrowAddress, error: null };
+    feeAddress = { address: accounts.value.feeAddress, error: null };
+  } else {
+    escrowAddress = { address: null, error: accounts.reason };
+    const fallback = readers.feeAddressFallback?.() ?? null;
+    feeAddress = fallback
+      ? { address: fallback, error: null }
+      : { address: null, error: accounts.reason };
+  }
+
+  const [escrowOnChain, feeOnChain, liabilities, feesEarned, feesWithdrawn] = await Promise.all([
+    escrowAddress.address
+      ? settle("escrow_on_chain", () => readers.readOnChain(escrowAddress.address as string), readers.log)
+      : Promise.resolve({ ok: false as const, reason: escrowAddress.error ?? "Escrow address is unavailable." }),
+    feeAddress.address
+      ? settle("fee_on_chain", () => readers.readOnChain(feeAddress.address as string), readers.log)
+      : Promise.resolve({ ok: false as const, reason: feeAddress.error ?? "Fee address is unavailable." }),
+    settle("liabilities", readers.liabilities, readers.log),
+    settle("fees_earned", readers.feesEarned, readers.log),
+    settle("fees_withdrawn", readers.feesWithdrawn, readers.log),
+  ]);
+
+  return {
+    network: readers.network,
+    escrowAddress,
+    feeAddress,
+    escrowOnChain: usdcTile(escrowOnChain),
+    liabilities: usdcTile(liabilities),
+    feeOnChain: usdcTile(feeOnChain),
+    feesEarned: usdcTile(feesEarned),
+    feesWithdrawn: usdcTile(feesWithdrawn),
+  };
 }
 
 export async function readOnChainUsdcBalance(
@@ -77,7 +183,12 @@ function scalar(result: unknown): bigint {
   return BigInt(0);
 }
 
-/** Face still owed from open escrows, minus confirmed outbound legs. Deleted bounties are excluded. */
+/**
+ * Face still owed from open escrows, minus confirmed payout legs and recorded refunds.
+ * Refunds live on `escrows.refund_tx_hash` and `bounty_contributions.refund_tx_hash`.
+ * `allocation_ledger_kind` is only FEE_OUT, WINNER_PAYOUT, and POOL_PAYOUT.
+ * Deleted bounties are excluded.
+ */
 export async function expectedEscrowLiabilitiesAtomic(db: Database): Promise<bigint> {
   const result = await db.execute(sql`
     select coalesce(sum(
@@ -94,7 +205,9 @@ export async function expectedEscrowLiabilitiesAtomic(db: Database): Promise<big
         when e.status in ('pending', 'failed') then 0
         else greatest(
           0,
-          (e.amount_usdc * 1000000)::bigint - coalesce(paid.atomic, 0)
+          (e.amount_usdc * 1000000)::bigint
+            - coalesce(paid.atomic, 0)
+            - coalesce(refunded.atomic, 0)
         )
       end
     ), 0)::text as n
@@ -106,8 +219,21 @@ export async function expectedEscrowLiabilitiesAtomic(db: Database): Promise<big
       where l.bounty_id = e.bounty_id
         and l.tx_hash is not null
         and length(trim(l.tx_hash)) > 0
-        and l.kind in ('WINNER_PAYOUT', 'POOL_PAYOUT', 'FEE_OUT', 'REFUND_OUT')
+        and l.kind in ('WINNER_PAYOUT', 'POOL_PAYOUT', 'FEE_OUT')
     ) paid on true
+    left join lateral (
+      select case
+        when e.refund_tx_hash is not null and btrim(e.refund_tx_hash) <> ''
+          then (e.amount_usdc * 1000000)::bigint
+        else coalesce((
+          select sum((c.amount_usdc * 1000000)::bigint)
+          from bounty_contributions c
+          where c.bounty_id = e.bounty_id
+            and c.refund_tx_hash is not null
+            and btrim(c.refund_tx_hash) <> ''
+        ), 0)
+      end as atomic
+    ) refunded on true
     where b.deleted_at is null
       and (
         e.status in ('funded', 'settling', 'settled_partial')
@@ -152,53 +278,53 @@ export async function feesWithdrawnAtomic(db: Database): Promise<bigint> {
   return scalar(result);
 }
 
-export async function readBalanceSnapshot(
+export async function readBalanceReport(
   db: Database,
-  client: NamedAccountClient,
   env: EnvMap,
-  readBalance: (address: string) => Promise<bigint> = (address) => readOnChainUsdcBalance(address, env),
-): Promise<BalanceSnapshot> {
-  const network = readCdpNetwork(env);
-  const accounts = await loadFeeAndEscrowAccounts(client, env);
-  const [escrowOnChainAtomic, feeOnChainAtomic, escrowLiabilitiesAtomic, earned, withdrawn] =
-    await Promise.all([
-      readBalance(accounts.escrowAddress),
-      readBalance(accounts.feeAddress),
-      expectedEscrowLiabilitiesAtomic(db),
-      feesEarnedAtomic(db),
-      feesWithdrawnAtomic(db),
-    ]);
-  return {
-    network,
-    escrowAddress: accounts.escrowAddress,
-    feeAddress: accounts.feeAddress,
-    escrowOnChainAtomic,
-    feeOnChainAtomic,
-    escrowLiabilitiesAtomic,
-    feesEarnedAtomic: earned,
-    feesWithdrawnAtomic: withdrawn,
-    escrowOnChainUsdc: atomicToUsdc(escrowOnChainAtomic),
-    feeOnChainUsdc: atomicToUsdc(feeOnChainAtomic),
-    escrowLiabilitiesUsdc: atomicToUsdc(escrowLiabilitiesAtomic),
-    feesEarnedUsdc: atomicToUsdc(earned),
-    feesWithdrawnUsdc: atomicToUsdc(withdrawn),
-  };
+  opts?: {
+    client?: NamedAccountClient;
+    readBalance?: (address: string) => Promise<bigint>;
+    log?: (tile: string, reason: string) => void;
+  },
+): Promise<BalanceReport> {
+  const readBalance = opts?.readBalance ?? ((address: string) => readOnChainUsdcBalance(address, env));
+  return readBalanceTiles({
+    network: readCdpNetwork(env),
+    loadAccounts: async () => {
+      const client = opts?.client ?? (await cdpNamedAccountClient());
+      const accounts = await loadFeeAndEscrowAccounts(client, env);
+      return { escrowAddress: accounts.escrowAddress, feeAddress: accounts.feeAddress };
+    },
+    feeAddressFallback: () => feeAddressFromEnv(env),
+    readOnChain: readBalance,
+    liabilities: () => expectedEscrowLiabilitiesAtomic(db),
+    feesEarned: () => feesEarnedAtomic(db),
+    feesWithdrawn: () => feesWithdrawnAtomic(db),
+    log: opts?.log,
+  });
 }
 
-export function balanceSnapshotJson(snapshot: BalanceSnapshot) {
+export function balanceReportJson(report: BalanceReport) {
   return {
-    network: snapshot.network,
+    network: report.network,
     escrow: {
-      address: snapshot.escrowAddress,
-      onChainUsdc: snapshot.escrowOnChainUsdc,
-      liabilitiesUsdc: snapshot.escrowLiabilitiesUsdc,
+      address: report.escrowAddress.address,
+      addressError: report.escrowAddress.error,
+      onChainUsdc: report.escrowOnChain.usdc,
+      onChainError: report.escrowOnChain.error,
+      liabilitiesUsdc: report.liabilities.usdc,
+      liabilitiesError: report.liabilities.error,
       viewOnly: true,
     },
     fee: {
-      address: snapshot.feeAddress,
-      onChainUsdc: snapshot.feeOnChainUsdc,
-      earnedUsdc: snapshot.feesEarnedUsdc,
-      withdrawnUsdc: snapshot.feesWithdrawnUsdc,
+      address: report.feeAddress.address,
+      addressError: report.feeAddress.error,
+      onChainUsdc: report.feeOnChain.usdc,
+      onChainError: report.feeOnChain.error,
+      earnedUsdc: report.feesEarned.usdc,
+      earnedError: report.feesEarned.error,
+      withdrawnUsdc: report.feesWithdrawn.usdc,
+      withdrawnError: report.feesWithdrawn.error,
     },
   };
 }

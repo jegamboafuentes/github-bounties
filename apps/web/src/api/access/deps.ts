@@ -82,6 +82,7 @@ export type MoneyBounty = {
   amountUsdc: string;
   title: string;
   issueUrl: string;
+  deletedAt?: Date | null;
 };
 
 export type MoneyGate = { wallet: boolean; github: boolean };

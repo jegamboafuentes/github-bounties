@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { bounties, claimLocks } from "../db/schema";
 
@@ -65,7 +65,7 @@ export async function drainExclusiveClaimLocks(
       const [restored] = await tx
         .update(bounties)
         .set({ status: "funded", updatedAt: now })
-        .where(and(eq(bounties.id, lock.bountyId), eq(bounties.status, "claim_locked")))
+        .where(and(eq(bounties.id, lock.bountyId), eq(bounties.status, "claim_locked"), isNull(bounties.deletedAt)))
         .returning({ id: bounties.id });
       if (restored) restoredBountyIds.push(restored.id);
     }

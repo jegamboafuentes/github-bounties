@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { normalizeBountyAmountUsdc } from "../bounties/amount";
 import { resolveFunderAvatarUrl } from "../bounties/funders";
 import type { Database } from "../db/client";
@@ -217,7 +217,7 @@ export async function assertFundedTopUpOpen(
   escrow: typeof escrows.$inferSelect;
 }> {
   const [bounty] = await db.select().from(bounties).where(eq(bounties.id, bountyId)).limit(1);
-  if (!bounty) {
+  if (!bounty || bounty.deletedAt) {
     throw new EscrowError("bounty_not_found", "Bounty not found.");
   }
   if (bounty.status !== "funded") {
@@ -416,10 +416,14 @@ export async function topUpFundedBounty(
         .where(eq(escrows.bountyId, bountyId));
     }
     const faceUsdc = atomicToUsdc(usdcToAtomic(bounty.amountUsdc) + usdcToAtomic(amountUsdc));
-    await database
+    const [saved] = await database
       .update(bounties)
       .set({ amountUsdc: faceUsdc, updatedAt: now })
-      .where(eq(bounties.id, bountyId));
+      .where(and(eq(bounties.id, bountyId), isNull(bounties.deletedAt)))
+      .returning({ id: bounties.id });
+    if (!saved) {
+      throw new EscrowError("bounty_not_found", "Bounty not found.");
+    }
     await database
       .update(escrows)
       .set({ amountUsdc: faceUsdc, updatedAt: now })

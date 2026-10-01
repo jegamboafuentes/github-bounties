@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { BountyAmountChangeSource } from "../db/schema";
 import type { Database } from "../db/client";
 import { bountyAmountChanges, bountyContributions, bounties, escrows } from "../db/schema";
@@ -172,7 +172,7 @@ export async function updateBountyAmount(input: UpdateBountyAmountInput): Promis
     await database.execute(sql`select id from escrows where bounty_id = ${input.bountyId} for update`);
 
     const [bounty] = await database.select().from(bounties).where(eq(bounties.id, input.bountyId)).limit(1);
-    if (!bounty) {
+    if (!bounty || bounty.deletedAt) {
       throw new BountyError("bounty_not_found", "Bounty not found.");
     }
     if (bounty.posterUserId !== input.actorUserId) {
@@ -214,10 +214,20 @@ export async function updateBountyAmount(input: UpdateBountyAmountInput): Promis
     const [saved] = await database
       .update(bounties)
       .set({ amountUsdc: next, updatedAt: now })
-      .where(eq(bounties.id, bounty.id))
+      .where(and(eq(bounties.id, bounty.id), eq(bounties.status, "pending_fund"), isNull(bounties.deletedAt)))
       .returning({ id: bounties.id, status: bounties.status, amountUsdc: bounties.amountUsdc });
     if (!saved || saved.status !== "pending_fund") {
-      throwAmountEditRefusal(saved && ["cancelled", "expired", "void", "settled"].includes(saved.status) ? "not_editable" : "has_funds");
+      const [current] = await database
+        .select({ deletedAt: bounties.deletedAt, status: bounties.status })
+        .from(bounties)
+        .where(eq(bounties.id, bounty.id))
+        .limit(1);
+      if (!current || current.deletedAt) {
+        throw new BountyError("bounty_not_found", "Bounty not found.");
+      }
+      throwAmountEditRefusal(
+        ["cancelled", "expired", "void", "settled"].includes(current.status) ? "not_editable" : "has_funds",
+      );
     }
     if (escrow) {
       await database
