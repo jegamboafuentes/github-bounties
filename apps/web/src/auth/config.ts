@@ -17,6 +17,13 @@ export const authConfig = {
     Google({
       clientId: google.clientId,
       clientSecret: google.clientSecret,
+      // Pin the authorization endpoint so sign-in does not discover it, and
+      // require state as well as PKCE. Both cookies are host-only.
+      authorization: {
+        url: "https://accounts.google.com/o/oauth2/v2/auth",
+        params: { scope: "openid email profile" },
+      },
+      checks: ["pkce", "state"],
     }),
   ],
   session: {

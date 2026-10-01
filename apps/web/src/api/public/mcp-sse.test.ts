@@ -12,7 +12,12 @@ describe("MCP admin visibility and SSE", () => {
     );
     assert.equal(response.status, 405);
     assert.equal(response.headers.get("allow"), "POST, DELETE, OPTIONS");
-    assert.equal(await response.text(), "");
+    assert.equal(response.headers.get("content-type")?.includes("application/json"), true);
+    assert.equal(response.headers.get("content-type")?.includes("text/html"), false);
+    assert.deepEqual(await response.json(), {
+      error: "method_not_allowed",
+      message: "Server-sent events are not supported.",
+    });
   });
 
   it("hides admin tools unless the caller is an admin", async () => {

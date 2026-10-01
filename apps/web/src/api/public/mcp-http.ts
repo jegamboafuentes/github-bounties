@@ -98,11 +98,19 @@ function sseStreamRefused(request: Request): Response | null {
   if (request.method !== "GET" && request.method !== "HEAD") return null;
   const accept = request.headers.get("accept") ?? "";
   if (!accept.toLowerCase().includes("text/event-stream")) return null;
-  return new Response(null, {
+  const body =
+    request.method === "HEAD"
+      ? null
+      : JSON.stringify({
+          error: "method_not_allowed",
+          message: "Server-sent events are not supported.",
+        });
+  return new Response(body, {
     status: 405,
     headers: {
       allow: "POST, DELETE, OPTIONS",
       "cache-control": "no-store",
+      "content-type": "application/json; charset=utf-8",
     },
   });
 }

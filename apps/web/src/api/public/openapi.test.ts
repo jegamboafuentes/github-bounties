@@ -75,6 +75,19 @@ describe("OpenAPI document", () => {
     }
     assert.match(json, /at most 1,000,000/);
     assert.match(json, /bearer/);
+    const adminEnums: unknown[] = [];
+    const visit = (value: unknown) => {
+      if (!value || typeof value !== "object") return;
+      if (Array.isArray(value)) {
+        for (const item of value) visit(item);
+        return;
+      }
+      const record = value as Record<string, unknown>;
+      if (Array.isArray(record.enum) && record.enum.includes("admin")) adminEnums.push(record.enum);
+      for (const child of Object.values(record)) visit(child);
+    };
+    visit(document);
+    assert.deepEqual(adminEnums, []);
     assert.match(json, /payment_required/);
     assert.match(json, /spend_cap_exceeded/);
     assert.match(json, /idempotency_conflict/);
