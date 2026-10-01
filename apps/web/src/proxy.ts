@@ -71,7 +71,13 @@ const sessionProxy = auth((req) => {
   return withRobots(NextResponse.next(), decision.robots);
 });
 
-function needsSession(pathname: string, host: string): boolean {
+/**
+ * Auth.js runs only for session-gated paths and unsigned admin pages.
+ * `/api/v1`, `/api/docs`, and `/mcp` stay off this wrapper even though the
+ * matcher is broad enough to 404 them on an admin host. A fake session cookie
+ * is not decoded there, and those responses do not set Auth.js cookies.
+ */
+export function needsSession(pathname: string, host: string): boolean {
   if (isProtectedApiPath(pathname) || isProtectedPagePath(pathname)) return true;
   if (!isAdminConsoleHost(host)) return false;
   return pathname === "/" || pathname === "/admin" || pathname.startsWith("/admin/");
