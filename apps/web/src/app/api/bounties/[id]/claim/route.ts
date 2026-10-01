@@ -1,7 +1,9 @@
 import { getCurrentPublicUser } from "@/auth/protect";
 import { claimPoolPayout, claimPayout, isClaimError } from "@/claims";
 import { getRuntimeDb } from "@/db/runtime";
-import { escrowErrorJson, httpStatusForEscrowCode, isEscrowError, jsonForUnknown } from "@/escrow";
+import { escrowErrorJson, httpStatusForEscrowError, isEscrowError, jsonForUnknown } from "@/escrow";
+import { redactDatabaseText } from "@/http/redact-error";
+import { isUuid, platformNotFoundResponse } from "@/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +15,12 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await ctx.params;
+  if (!isUuid(id)) return platformNotFoundResponse();
   const user = await getCurrentPublicUser();
   if (!user) {
     return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
-  const { id } = await ctx.params;
   let body: {
     payoutAddress?: string;
     persistWallet?: boolean;
@@ -72,10 +75,13 @@ export async function POST(
             : err.code === "bounty_not_found" || err.code === "claim_not_found"
               ? 404
               : 400;
-      return Response.json({ ok: false, error: err.code, message: err.message }, { status });
+      return Response.json(
+        { ok: false, error: err.code, message: redactDatabaseText(err.message) },
+        { status },
+      );
     }
     if (isEscrowError(err)) {
-      return Response.json(escrowErrorJson(err), { status: httpStatusForEscrowCode(err.code) });
+      return Response.json(escrowErrorJson(err), { status: httpStatusForEscrowError(err) });
     }
     return Response.json(jsonForUnknown(err instanceof Error ? err.message : "claim failed"), {
       status: 500,

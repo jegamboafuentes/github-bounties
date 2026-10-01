@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { escrows } from "../db/schema";
+import { redactDatabaseText } from "../http/redact-error";
 import { EscrowError } from "./errors";
 
 /** Unfunded cancel/expiry — `escrows.status=failed`, no USDC movement. */
@@ -30,12 +31,8 @@ export function toPersistedRailFailure(
   if (err instanceof EscrowError) {
     return { code: err.code, reason: err.message, error: err };
   }
-  const error = new EscrowError(
-    "rail_failed",
-    err instanceof Error && err.message.trim()
-      ? err.message
-      : fallbackMessage,
-  );
+  const raw = err instanceof Error && err.message.trim() ? err.message : fallbackMessage;
+  const error = new EscrowError("rail_failed", redactDatabaseText(raw, fallbackMessage));
   return { code: error.code, reason: error.message, error };
 }
 

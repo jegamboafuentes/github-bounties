@@ -4,7 +4,8 @@ import { normalizeBountyAmountUsdc } from "../bounties/amount";
 import type { Database } from "../db/client";
 import { bounties, escrows } from "../db/schema";
 import { EscrowError } from "./errors";
-import { escrowErrorJson, httpStatusForEscrowCode } from "./http";
+import { escrowErrorJson, httpStatusForEscrowError } from "./http";
+import { redactDatabaseText } from "../http/redact-error";
 import { inboundIsRecorded, recordExactInbound } from "./inbound";
 import { assertFundedTopUpOpen, topUpFundedBounty } from "./top-up";
 import { hostedCheckoutStatus } from "./hosted";
@@ -401,7 +402,7 @@ async function handleFundedTopUp(input: {
       return {
         status: 400,
         headers: jsonHeaders(),
-        body: { ok: false, error: err.code, message: err.message },
+        body: { ok: false, error: err.code, message: redactDatabaseText(err.message) },
       };
     }
     throw err;
@@ -412,7 +413,7 @@ async function handleFundedTopUp(input: {
   } catch (err) {
     if (err instanceof EscrowError) {
       return {
-        status: httpStatusForEscrowCode(err.code),
+        status: httpStatusForEscrowError(err),
         headers: jsonHeaders(),
         body: escrowErrorJson(err),
       };
@@ -565,7 +566,7 @@ async function handleFundedTopUp(input: {
   } catch (err) {
     if (err instanceof EscrowError) {
       return {
-        status: httpStatusForEscrowCode(err.code),
+        status: httpStatusForEscrowError(err),
         headers: jsonHeaders(),
         body: escrowErrorJson(err),
       };
@@ -574,7 +575,7 @@ async function handleFundedTopUp(input: {
       return {
         status: 400,
         headers: jsonHeaders(),
-        body: { ok: false, error: err.code, message: err.message },
+        body: { ok: false, error: err.code, message: redactDatabaseText(err.message) },
       };
     }
     throw err;

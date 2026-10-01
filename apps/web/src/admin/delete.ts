@@ -16,11 +16,10 @@ import {
   type DeleteBlockReason,
   type DeleteGuardInput,
 } from "./delete-guard";
+import { isUuid } from "../ids";
 import { AdminError } from "./errors";
 
 export const BOUNTY_HAS_FUNDS_REFUND_FIRST = "bounty_has_funds_refund_first";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 class DeleteBlocked extends Error {
   constructor(readonly reasons: DeleteBlockReason[]) {
@@ -113,7 +112,7 @@ export async function softDeleteBounty(input: {
 }): Promise<{ id: string; deletedAt: Date }> {
   const now = input.now ?? new Date();
   const actorEmail = input.actorEmail.trim().toLowerCase();
-  if (!UUID.test(input.bountyId)) throw notFound();
+  if (!isUuid(input.bountyId)) throw notFound();
 
   const preview = await loadDeleteFacts(input.db, input.bountyId, false);
   if (!preview || preview.bounty.deletedAt) throw notFound();

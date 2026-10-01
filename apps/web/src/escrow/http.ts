@@ -1,3 +1,4 @@
+import { redactDatabaseText, redactPublicValue } from "../http/redact-error";
 import { EscrowError, type EscrowErrorCode } from "./errors";
 
 /**
@@ -12,6 +13,10 @@ export function httpStatusForEscrowCode(code: EscrowErrorCode): number {
   return 400;
 }
 
+export function httpStatusForEscrowError(err: EscrowError): number {
+  return err.httpStatus ?? httpStatusForEscrowCode(err.code);
+}
+
 export type EscrowErrorJson = {
   ok: false;
   error: string;
@@ -23,24 +28,28 @@ export type EscrowErrorJson = {
 };
 
 export function escrowErrorJson(err: EscrowError): EscrowErrorJson {
+  const message = redactDatabaseText(err.message);
+  const details = err.details ? (redactPublicValue(err.details) as Record<string, unknown>) : undefined;
   return {
     ok: false,
     error: err.code,
-    message: err.message,
+    message,
     fail_code: err.code,
-    fail_reason: err.message,
+    fail_reason: message,
     ...(err.missing ? { missing: err.missing } : {}),
-    ...(err.details ? { details: err.details } : {}),
+    ...(details ? { details } : {}),
   };
 }
 
 export function jsonForUnknown(message: string) {
+  const safe = redactDatabaseText(message, "Request failed.");
+  const leaked = safe !== message;
   return {
     ok: false as const,
-    error: "unknown",
-    message,
-    fail_code: "unknown",
-    fail_reason: message,
+    error: leaked ? "internal" : "unknown",
+    message: safe,
+    fail_code: leaked ? "internal" : "unknown",
+    fail_reason: safe,
   };
 }
 

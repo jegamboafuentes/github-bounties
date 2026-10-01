@@ -68,6 +68,7 @@ function memory(options?: {
   face?: string;
   status?: string;
   poster?: string;
+  deletedAt?: Date | null;
   now?: Date;
   rosterFrozen?: boolean;
   hasFunds?: boolean;
@@ -251,6 +252,7 @@ function memory(options?: {
         amountUsdc: options?.face ?? "10.000000",
         title: "Seed",
         issueUrl: "https://github.com/octo/hello/issues/42",
+        deletedAt: options?.deletedAt ?? null,
       };
     },
     async assertTopUpOpen() {},
@@ -745,14 +747,28 @@ describe("spend caps, idempotency, and headless x402", () => {
     const { principal: key } = await principal(bag.deps, ["write", "money"]);
     await assert.rejects(
       () => handleFund(key, "not-a-uuid", {}, "bad-id", null, "https://dev.githubbounties.xyz", bag.deps),
-      (err: unknown) => err instanceof Error && "code" in err && err.code === "validation_failed",
+      (err: unknown) =>
+        err instanceof Error && "code" in err && err.code === "not_found" && "status" in err && err.status === 404,
     );
     await assert.rejects(
       () => handleCancel(key, "not-a-uuid", "bad-cancel", bag.deps),
-      (err: unknown) => err instanceof Error && "code" in err && err.code === "validation_failed",
+      (err: unknown) =>
+        err instanceof Error && "code" in err && err.code === "not_found" && "status" in err && err.status === 404,
     );
     assert.equal(bag.calls.seller, 0);
     assert.equal(bag.calls.lock, 0);
+  });
+
+  it("returns 410 not_found for fund on a deleted bounty before payment or lock", async () => {
+    const bag = memory({ deletedAt: new Date("2026-10-01T20:00:00Z") });
+    const { principal: key } = await principal(bag.deps, ["money"]);
+    await assert.rejects(
+      () => handleFund(key, BOUNTY, {}, "deleted-fund", null, "https://dev.githubbounties.xyz", bag.deps),
+      (err: unknown) => err instanceof PublicApiError && err.code === "not_found" && err.status === 410,
+    );
+    assert.equal(bag.calls.seller, 0);
+    assert.equal(bag.calls.lock, 0);
+    assert.equal(bag.calls.inbound, 0);
   });
 
   it("requires the read scope for /me", async () => {

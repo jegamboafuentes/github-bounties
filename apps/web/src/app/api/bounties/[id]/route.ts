@@ -1,6 +1,7 @@
 import { getBoardBounty, getPoolRoster } from "@/bounties";
 import { getRuntimeDb } from "@/db/runtime";
 import { getEscrowSnapshot, listBountyContributions } from "@/escrow";
+import { isUuid, platformNotFoundResponse } from "@/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,7 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> },
 ) {
   const { id } = await ctx.params;
+  if (!isUuid(id)) return platformNotFoundResponse();
   const db = getRuntimeDb();
   const [bounty, escrow, roster, contributions] = await Promise.all([
     getBoardBounty(id, db).catch(() => null),

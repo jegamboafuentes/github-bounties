@@ -7,9 +7,8 @@ import { bounties } from "../db/schema";
 import { isEscrowError } from "../escrow/errors";
 import { refundEscrow, type EscrowServiceOpts } from "../escrow/service";
 import { insertAdminAudit } from "./audit";
+import { isUuid } from "../ids";
 import { AdminError } from "./errors";
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Admin entry to the existing poster refund. No new transfer path.
@@ -26,7 +25,7 @@ export async function adminRefundBounty(input: {
 }): Promise<{ id: string; status: string; refundTxHash: string | null }> {
   const now = input.now ?? new Date();
   const actorEmail = input.actorEmail.trim().toLowerCase();
-  if (!UUID.test(input.bountyId)) throw new AdminError(404, "not_found", "Not found.");
+  if (!isUuid(input.bountyId)) throw new AdminError(404, "not_found", "Not found.");
   if (!apiMoneyEnabled(input.env as NodeJS.ProcessEnv)) {
     await insertAdminAudit(input.db, {
       actorEmail,

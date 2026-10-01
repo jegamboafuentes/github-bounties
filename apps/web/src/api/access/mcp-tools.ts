@@ -27,6 +27,7 @@ import {
   runAuthed,
   type ApiResult,
 } from "./handlers";
+import { isUuid } from "../../ids";
 import { PublicApiError } from "../public/errors";
 import { logMcpToolCall, mcpOutcomeCode, mcpOutcomeFromBody } from "../public/mcp-log";
 import { apiMoneyEnabled, assertNoAddress, assertNoUserOverride } from "./policy";
@@ -96,6 +97,17 @@ async function guarded(
 ): Promise<CallToolResult> {
   const started = Date.now();
   const principal = access?.principal ?? null;
+  if (bountyId && !isUuid(bountyId)) {
+    logMcpToolCall({
+      tool: toolNameFromRoute(route),
+      apiKeyId: principal?.keyId ?? null,
+      userId: principal?.userId ?? null,
+      outcome: "not_found",
+      latencyMs: 0,
+      rateClass: klass,
+    });
+    return toolJson(publicApiErrorBody("not_found", "Bounty not found.", null), true);
+  }
   const emit = (outcome: string) => {
     logMcpToolCall({
       tool: toolNameFromRoute(route),
@@ -112,7 +124,13 @@ async function guarded(
       return toolJson(missingKeyBody(klass), true);
     }
     const result = await runAuthed(
-      { principal: requirePrincipal(principal), klass, route, bountyId, ip: access.ip },
+      {
+        principal: requirePrincipal(principal),
+        klass,
+        route,
+        bountyId: bountyId && isUuid(bountyId) ? bountyId : null,
+        ip: access.ip,
+      },
       access.deps,
       run,
     );

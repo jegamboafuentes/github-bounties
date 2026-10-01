@@ -288,11 +288,19 @@ function asApiError(err: unknown): PublicApiError {
     return new PublicApiError(err.code, err.message, null, statusForDomainCode(err.code));
   }
   if (isBountyError(err) || isEscrowError(err)) {
+    if (isEscrowError(err) && err.httpStatus === 410) {
+      return new PublicApiError("not_found", "Bounty not found.", null, 410);
+    }
     const details =
       isEscrowError(err) && (err.missing || err.details)
         ? { missing: err.missing ?? null, ...err.details }
         : null;
-    return new PublicApiError(err.code, err.message, details, statusForDomainCode(err.code));
+    return new PublicApiError(
+      err.code,
+      err.message,
+      details,
+      isEscrowError(err) && err.httpStatus ? err.httpStatus : statusForDomainCode(err.code),
+    );
   }
   console.error(
     JSON.stringify({

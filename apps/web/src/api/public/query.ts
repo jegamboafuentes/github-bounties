@@ -1,15 +1,13 @@
 import type { BoardKeyset, BoardListSort } from "../../bounties/list";
+import { isUuid, UUID_RE } from "../../ids";
 import { PublicApiError, zodErrorDetails } from "./errors";
-import { listBountiesInputSchema, type ListBountiesInput, bountyIdSchema } from "./schemas";
+import { listBountiesInputSchema, type ListBountiesInput } from "./schemas";
 
 const CURSOR_PREFIX = "gb1.";
 
 export type BoardCursor =
   | { v: 1; sort: "newest"; createdAt: string; id: string }
   | { v: 1; sort: "amount"; amount: string; id: string };
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function encodeBoardCursor(cursor: BoardCursor): string {
   return `${CURSOR_PREFIX}${Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url")}`;
@@ -112,10 +110,10 @@ export function acceptListInput(input: unknown): ListBountiesInput & { cursorVal
   return { ...parsed.data, cursorValue };
 }
 
+/** Malformed bounty ids are 404 not_found. The same check the page uses. */
 export function acceptBountyId(raw: string): string {
-  const parsed = bountyIdSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new PublicApiError("validation_failed", "Invalid bounty id.", zodErrorDetails(parsed.error));
+  if (!isUuid(raw)) {
+    throw new PublicApiError("not_found", "Bounty not found.", null, 404);
   }
-  return parsed.data;
+  return raw;
 }

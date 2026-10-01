@@ -317,8 +317,9 @@ export const intelligenceResponseSchema = z
   })
   .openapi("CachedIntelligence");
 
+/** MCP and path input. Format stays uuid in OpenAPI; the handler returns 404 not_found. */
 export const bountyIdParamsSchema = z.object({
-  id: bountyIdSchema,
+  id: z.string().describe("Bounty id.").openapi({ format: "uuid" }),
 });
 
 export const publicApiRegistry = new OpenAPIRegistry();

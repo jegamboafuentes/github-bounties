@@ -2,12 +2,13 @@ import { getCurrentPublicUser } from "@/auth/protect";
 import { getRuntimeDb } from "@/db/runtime";
 import {
   escrowErrorJson,
-  httpStatusForEscrowCode,
+  httpStatusForEscrowError,
   isEscrowError,
   jsonForUnknown,
   settleEscrow,
   takeRequestId,
 } from "@/escrow";
+import { isUuid, platformNotFoundResponse } from "@/ids";
 
 export const dynamic = "force-dynamic";
 
@@ -20,11 +21,12 @@ export async function POST(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await ctx.params;
+  if (!isUuid(id)) return platformNotFoundResponse();
   const user = await getCurrentPublicUser();
   if (!user) {
     return Response.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }
-  const { id } = await ctx.params;
 
   try {
     const result = await settleEscrow(
@@ -38,7 +40,7 @@ export async function POST(
     );
   } catch (err) {
     if (isEscrowError(err)) {
-      return Response.json(escrowErrorJson(err), { status: httpStatusForEscrowCode(err.code) });
+      return Response.json(escrowErrorJson(err), { status: httpStatusForEscrowError(err) });
     }
     return Response.json(jsonForUnknown(err instanceof Error ? err.message : "settle failed"), {
       status: 500,

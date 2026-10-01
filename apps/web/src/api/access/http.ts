@@ -169,21 +169,22 @@ export function apiResultResponse(result: ApiResult): Response {
 export async function handleV1Action(
   request: Request,
   action: V1Action,
-  deps: AccessDeps = runtimeAccessDeps(),
+  deps?: AccessDeps,
 ): Promise<Response> {
   const ip = clientIpFromRequest(request);
   const klass = actionClass(action);
   const rateHeaders = keyedRateLimitHeaders(klass);
   try {
+    const rawBountyId = actionBountyId(action);
+    const bountyId = rawBountyId ? acceptBountyId(rawBountyId) : null;
+    const resolved = deps ?? runtimeAccessDeps();
     const principal = requirePrincipal(
-      await authenticateBearer(request.headers.get("authorization"), ip, deps),
+      await authenticateBearer(request.headers.get("authorization"), ip, resolved),
     );
-    const bountyId = actionBountyId(action);
-    if (bountyId) acceptBountyId(bountyId);
     const result = await runAuthed(
-      { principal, klass, route: actionRoute(action), bountyId: actionBountyId(action), ip },
-      deps,
-      () => perform(request, action, principal, deps),
+      { principal, klass, route: actionRoute(action), bountyId, ip },
+      resolved,
+      () => perform(request, action, principal, resolved),
     );
     return apiResultResponse({
       ...result,

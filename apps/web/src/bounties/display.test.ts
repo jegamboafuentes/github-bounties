@@ -75,8 +75,8 @@ describe("board display helpers", () => {
     assert.match(LOCK_NOT_MONEY_COPY, /not exclusive/i);
     assert.match(ELIGIBILITY_FREEZE_COPY, /freezes at the winning merge/i);
     assert.match(POOL_PAYOUT_COPY, /Winner Claim pays winner \+ fee only/i);
-    assert.equal(bountyStatusLabel("claim_locked"), "Funded (open)");
-    assert.equal(bountyStatusLabel("funded"), "Funded (open)");
+    assert.equal(bountyStatusLabel("funded"), "Funded");
+    assert.equal(bountyStatusLabel("claim_locked"), "Claim locked");
     assert.equal(bountyStatusLabel("settled"), "Completed (paid)");
     assert.equal(bountyStatusLabel("settled_partial"), "Winner paid — pool pending");
     assert.match(CLAIM_PAYOUT_COPY, /eligible winner/i);

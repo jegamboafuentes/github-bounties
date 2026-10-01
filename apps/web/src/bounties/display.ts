@@ -110,9 +110,9 @@ export function bountyStatusLabel(status: (typeof bountyStatusValues)[number] | 
     case "pending_fund":
       return "Pending fund";
     case "funded":
-      return "Funded (open)";
+      return "Funded";
     case "claim_locked":
-      return "Funded (open)";
+      return "Claim locked";
     case "settling":
       return "Settling";
     case "settled":

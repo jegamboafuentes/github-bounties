@@ -7,7 +7,7 @@ export {
   VOIDED_UNFUNDED_CODE,
   VOIDED_UNFUNDED_REASON,
 } from "./fail";
-export { escrowErrorJson, httpStatusForEscrowCode, jsonForUnknown } from "./http";
+export { escrowErrorJson, httpStatusForEscrowCode, httpStatusForEscrowError, jsonForUnknown } from "./http";
 export {
   CDP_OPTIONAL_ENV_KEYS,
   CDP_REQUIRED_ENV_KEYS,
@@ -20,6 +20,7 @@ export {
 } from "./env";
 export { HOSTED_CHECKOUT_BLOCKER, HOSTED_CHECKOUT_ENABLED, hostedCheckoutStatus } from "./hosted";
 export { logMoneyAction, takeRequestId } from "./actor-log";
+export { bountyGoneError, rejectIfBountyDeleted } from "./deleted";
 export { assertCallerLockHash, assertCallerTopUpHash, assertFundTxHashAvailable } from "./fund-hash";
 export { configuredUsdcContract } from "./rail";
 export { inboundIsRecorded, recordExactInbound, resolveLockFundTxHash } from "./inbound";
