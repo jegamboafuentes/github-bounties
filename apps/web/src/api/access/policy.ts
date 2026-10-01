@@ -404,6 +404,8 @@ const DOMAIN_STATUS: Record<string, number> = {
   issue_not_found: 404,
   not_found: 404,
   not_poster: 403,
+  bounty_has_funds: 409,
+  amount_unchanged: 409,
   not_winner: 403,
   not_hunter: 403,
   not_pool_member: 403,

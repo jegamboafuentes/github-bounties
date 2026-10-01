@@ -106,6 +106,13 @@ export const allocationLedgerStatusEnum = pgEnum("allocation_ledger_status", [
   "failed",
 ]);
 
+/** Where a poster changed an unfunded bounty face. */
+export const bountyAmountChangeSourceEnum = pgEnum("bounty_amount_change_source", [
+  "web",
+  "rest",
+  "mcp",
+]);
+
 /**
  * Product identity. One row per Google `google_sub` (unique).
  * Do not add a second user table — sign-in upserts this row in place.
@@ -747,6 +754,43 @@ export const apiKeys = pgTable(
 );
 
 /**
+ * Audit row for a poster edit of an unfunded face.
+ * Written in the same transaction that updates `bounties.amount_usdc`.
+ */
+export const bountyAmountChanges = pgTable(
+  "bounty_amount_changes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bountyId: uuid("bounty_id")
+      .notNull()
+      .references(() => bounties.id, { onDelete: "restrict" }),
+    oldAmountUsdc: numeric("old_amount_usdc", { precision: 20, scale: 6 }).notNull(),
+    newAmountUsdc: numeric("new_amount_usdc", { precision: 20, scale: 6 }).notNull(),
+    actorUserId: uuid("actor_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    source: bountyAmountChangeSourceEnum("source").notNull(),
+    apiKeyId: uuid("api_key_id").references(() => apiKeys.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("bounty_amount_changes_bounty_id_idx").on(table.bountyId),
+    index("bounty_amount_changes_actor_user_id_idx").on(table.actorUserId),
+    index("bounty_amount_changes_created_at_idx").on(table.createdAt),
+    check(
+      "bounty_amount_changes_amounts_positive",
+      sql`${table.oldAmountUsdc} > 0 AND ${table.newAmountUsdc} > 0`,
+    ),
+    check(
+      "bounty_amount_changes_amount_changed",
+      sql`${table.oldAmountUsdc} <> ${table.newAmountUsdc}`,
+    ),
+  ],
+);
+
+/**
  * One row per authenticated API or MCP call. Also the Postgres rate-limit
  * counter (Cloud Run has several instances, so an in-memory map is not enough).
  * `route` starts with `read `, `write `, or `money `.
@@ -855,3 +899,5 @@ export const claimStatusValues = claimStatusEnum.enumValues;
 export const poolParticipantRoleValues = poolParticipantRoleEnum.enumValues;
 export const allocationLedgerKindValues = allocationLedgerKindEnum.enumValues;
 export const allocationLedgerStatusValues = allocationLedgerStatusEnum.enumValues;
+export const bountyAmountChangeSourceValues = bountyAmountChangeSourceEnum.enumValues;
+export type BountyAmountChangeSource = (typeof bountyAmountChangeSourceValues)[number];

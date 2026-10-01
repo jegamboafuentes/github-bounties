@@ -20,6 +20,18 @@ export const topUpBodySchema = z
   .strict()
   .openapi("TopUpBody");
 
+export const updateBountyAmountBodySchema = z
+  .object({
+    amount_usdc: z
+      .string()
+      .trim()
+      .min(1)
+      .max(40)
+      .describe("New face USDC. Same min, max, and decimal rules as create. The value must change."),
+  })
+  .strict()
+  .openapi("UpdateBountyAmountBody");
+
 export const fundBodySchema = z
   .object({})
   .strict()
@@ -127,6 +139,20 @@ export const bountyClaimsToolSchema = z
   .strict();
 
 export const createBountyToolSchema = createBountyBodySchema;
+
+export const updateBountyAmountToolSchema = z.object({
+  bounty_id: idSchema.describe("Bounty id."),
+  amount_usdc: z.string().trim().min(1).max(40).describe("New face USDC. Same rules as create."),
+});
+
+export const updatedBountyAmountSchema = z
+  .object({
+    id: idSchema,
+    status: z.literal("pending_fund"),
+    amount_usdc: usdcDecimal.describe("Face after the edit."),
+    previous_amount_usdc: usdcDecimal.describe("Face before the edit."),
+  })
+  .openapi("UpdatedBountyAmount");
 
 const errorRef = z.object({
   error: z.object({
@@ -443,6 +469,44 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
           },
         },
       },
+    },
+  });
+
+  registry.registerPath({
+    method: "patch",
+    path: "/api/v1/bounties/{id}/amount",
+    operationId: "updateBountyAmount",
+    summary: "Edit the face of an unfunded bounty",
+    description:
+      "Scope write. Poster only. Allowed only while nothing is funded: no confirmed funding or contributions, no x402 lock or fund hash, no pending lock or in-flight payment, and status pending_fund. amount_usdc uses the same rules as create and must change. Hunters may already be working. Does not move USDC. Idempotency-Key is not required.",
+    security: bearer,
+    request: {
+      params: z.object({ id: idSchema }),
+      body: { content: json(updateBountyAmountBodySchema) },
+    },
+    responses: {
+      200: { description: "Face updated.", content: json(updatedBountyAmountSchema) },
+      400: { description: "amount_usdc missing, or it fails the create amount rules.", ...errorContent },
+      401: { description: "Unauthorized.", ...errorContent },
+      403: { description: "Missing write scope, or not the poster.", ...errorContent },
+      404: { description: "Bounty not found.", ...errorContent },
+      409: {
+        description: "bounty_has_funds when anything is funded or in flight, or amount_unchanged when the face is already this value.",
+        content: {
+          "application/json": {
+            schema: errorRef,
+            example: {
+              error: {
+                code: "bounty_has_funds",
+                message:
+                  "This bounty already has funds or a payment in progress. The amount can be changed only while it is unfunded.",
+                details: null,
+              },
+            },
+          },
+        },
+      },
+      429: { description: "Per-key write limit (20/min).", ...errorContent },
     },
   });
 

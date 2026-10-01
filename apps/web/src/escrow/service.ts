@@ -255,16 +255,33 @@ export async function lockEscrowFunds(
     const [updated] = await tx
       .update(bounties)
       .set({ status: "funded", fundedAt: now, updatedAt: now })
-      .where(and(eq(bounties.id, bountyId), eq(bounties.status, "pending_fund")))
-      .returning({ id: bounties.id });
+      .where(
+        and(
+          eq(bounties.id, bountyId),
+          eq(bounties.status, "pending_fund"),
+          eq(bounties.amountUsdc, bounty.amountUsdc),
+        ),
+      )
+      .returning({ id: bounties.id, amountUsdc: bounties.amountUsdc });
     if (!updated) {
+      const [current] = await tx
+        .select({ amountUsdc: bounties.amountUsdc })
+        .from(bounties)
+        .where(eq(bounties.id, bountyId))
+        .limit(1);
+      if (current && current.amountUsdc !== bounty.amountUsdc) {
+        throw new EscrowError(
+          "not_fundable",
+          "Bounty face changed during lock. Retry Lock so escrow matches the current amount.",
+        );
+      }
       throw new EscrowError("not_fundable", "Bounty is no longer pending_fund.");
     }
 
     const existing = await loadEscrow(tx as unknown as Database, bountyId);
     const patch = {
       status: ESCROW_LOCKED,
-      amountUsdc: bounty.amountUsdc,
+      amountUsdc: updated.amountUsdc,
       fundTxHash: normalizeFundTxHash(locked.txHash),
       escrowAddress: locked.escrowAddress,
       funderAddress,
@@ -289,7 +306,7 @@ export async function lockEscrowFunds(
     await recordLockContribution(tx as unknown as Database, {
       bountyId,
       funderUserId: actorUserId,
-      amountUsdc: bounty.amountUsdc,
+      amountUsdc: updated.amountUsdc,
       fundTxHash: normalizeFundTxHash(locked.txHash),
       funderAddress,
       now,

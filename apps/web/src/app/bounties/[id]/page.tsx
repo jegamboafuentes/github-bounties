@@ -19,6 +19,7 @@ import {
 } from "@/bounties";
 import { BountyIntelligenceCard } from "@/components/bounty-intelligence-card";
 import { ClaimPayoutPanel } from "@/components/claim-payout-form";
+import { EditAmountForm } from "@/components/edit-amount-form";
 import { FundLockPanel } from "@/components/fund-lock-panel";
 import { FunderContributionList } from "@/components/funder-contributions";
 import { GitHubAvatar } from "@/components/github-avatar";
@@ -115,6 +116,13 @@ export default async function BountyDetailPage({
 
   const isPoster = user?.id === bounty.posterUserId;
   const isEligibleHunter = Boolean(user && bounty.payout && user.id === bounty.payout.hunterUserId);
+  const canEditAmount = Boolean(
+    isPoster &&
+      bounty.status === "pending_fund" &&
+      escrow?.status === "pending" &&
+      !escrow.inboundRecorded &&
+      contributions.length === 0,
+  );
   const canFund = Boolean(isPoster && bounty.status === "pending_fund");
   const canTopUp = Boolean(
     user && bounty.status === "funded" && !bounty.payout && !roster?.frozen,
@@ -152,9 +160,12 @@ export default async function BountyDetailPage({
             {bounty.repoFullName} · #{bounty.githubIssueNumber}
           </p>
           <h1 className="text-3xl font-semibold tracking-tight">{bounty.title}</h1>
-          <p className="text-lg font-medium">
+          <p className="text-lg font-medium" data-bounty-amount>
             {formatUsdc(bounty.amountUsdc)} {bounty.currency} · {bountyStatusLabel(bounty.status)}
           </p>
+          {canEditAmount ? (
+            <EditAmountForm bountyId={bounty.id} amountUsdc={bounty.amountUsdc} />
+          ) : null}
         </div>
 
         <IssueBodyCard markdown={issue?.markdown ?? null} />

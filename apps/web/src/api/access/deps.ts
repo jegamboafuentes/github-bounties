@@ -242,6 +242,18 @@ export type AccessDeps = {
     status: string;
     refundTxHash: string | null;
   }>;
+  updateBountyAmount: (input: {
+    bountyId: string;
+    actorUserId: string;
+    amountUsdc: string;
+    source: "web" | "rest" | "mcp";
+    apiKeyId: string | null;
+  }) => Promise<{
+    id: string;
+    status: "pending_fund";
+    oldAmountUsdc: string;
+    newAmountUsdc: string;
+  }>;
   loadClaimAuthz: (userId: string, bountyId: string, kind: ClaimKind) => Promise<ClaimAuthContext>;
   performClaim: (input: {
     bountyId: string;

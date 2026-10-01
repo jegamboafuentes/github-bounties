@@ -8,6 +8,8 @@ import type { ApiKeyScope } from "../../db/schema";
 import type { FacilitatorSettlementCheck } from "../../escrow/fund-hash";
 import type { X402SellerResult } from "../../escrow/x402-seller";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
+import { BountyError } from "../../bounties/errors";
+import { assertNewBountyAmount } from "../../bounties/update-amount";
 import { PublicApiError } from "../public/errors";
 import type { AccessDeps, ApiKeyRecord, SpendRow } from "./deps";
 import {
@@ -21,6 +23,7 @@ import {
   handleMe,
   handleMyClaims,
   handleRefund,
+  handleUpdateBountyAmount,
   handleUsage,
   handleTopUp,
   revokeApiKey,
@@ -66,6 +69,7 @@ function memory(options?: {
   poster?: string;
   now?: Date;
   rosterFrozen?: boolean;
+  hasFunds?: boolean;
 }) {
   const keys: ApiKeyRecord[] = [];
   const logs: { id: string; keyId: string; route: string; status: number; createdAt: Date }[] = [];
@@ -76,7 +80,14 @@ function memory(options?: {
   >();
   const spends: SpendRow[] = [];
   const idem = new Map<string, IdempotencyRow>();
-  const calls = { lock: 0, topUp: 0, seller: 0, inbound: 0, cancel: 0, create: 0, claim: 0, refund: 0 };
+  const calls = { lock: 0, topUp: 0, seller: 0, inbound: 0, cancel: 0, create: 0, claim: 0, refund: 0, amount: 0 };
+  const amountInputs: {
+    bountyId: string;
+    actorUserId: string;
+    amountUsdc: string;
+    source: string;
+    apiKeyId: string | null;
+  }[] = [];
   const poolPaid = new Set<string>();
   let openSpend = BigInt(0);
   const deps: AccessDeps = {
@@ -304,6 +315,22 @@ function memory(options?: {
       calls.cancel += 1;
       return { status: "cancelled", refundTxHash: null };
     },
+    async updateBountyAmount(input) {
+      calls.amount += 1;
+      amountInputs.push(input);
+      if (input.actorUserId !== (options?.poster ?? USER)) {
+        throw new BountyError("not_poster", "Only the poster can edit this bounty's amount.");
+      }
+      if (options?.hasFunds || (options?.status ?? "pending_fund") !== "pending_fund") {
+        throw new BountyError(
+          "bounty_has_funds",
+          "This bounty already has funds or a payment in progress. The amount can be changed only while it is unfunded.",
+        );
+      }
+      const current = options?.face ?? "10.000000";
+      const next = assertNewBountyAmount(current, input.amountUsdc);
+      return { id: input.bountyId, status: "pending_fund" as const, oldAmountUsdc: current, newAmountUsdc: next };
+    },
     async loadClaimAuthz(userId, bountyId, kind) {
       if (bountyId !== BOUNTY) {
         return { bounty: null, walletAddress: null, githubLogin: null, winner: null, pool: null, rosterFrozen: false };
@@ -410,7 +437,17 @@ function memory(options?: {
       ];
     },
   };
-  return { deps, keys, calls, spends, poolPaid, setOpenSpend: (usdc: string) => { openSpend = usdcToAtomic(usdc); } };
+  return {
+    deps,
+    keys,
+    calls,
+    spends,
+    poolPaid,
+    amountInputs,
+    setOpenSpend: (usdc: string) => {
+      openSpend = usdcToAtomic(usdc);
+    },
+  };
 }
 
 async function principal(
@@ -1487,5 +1524,188 @@ describe("profile, notifications, and linked accounts", () => {
     );
     assert.equal(welcome.status, 400);
     assert.equal(((await welcome.json()) as { error: { code: string } }).error.code, "validation_failed");
+  });
+});
+
+describe("PATCH bounty amount", () => {
+  it("lets the poster key change the face and refuses other scopes", async () => {
+    const bag = memory();
+    const { token, principal: key } = await principal(bag.deps, ["read", "write"]);
+    const updated = await handleUpdateBountyAmount(key, BOUNTY, { amount_usdc: "25" }, "rest", bag.deps);
+    assert.equal(updated.status, 200);
+    assert.deepEqual(updated.body, {
+      id: BOUNTY,
+      status: "pending_fund",
+      amount_usdc: "25.000000",
+      previous_amount_usdc: "10.000000",
+    });
+    assert.equal(bag.amountInputs[0]?.source, "rest");
+    assert.equal(bag.amountInputs[0]?.apiKeyId, key.keyId);
+    assert.equal(bag.calls.amount, 1);
+
+    const http = await handleV1Action(
+      new Request(`https://dev.githubbounties.xyz/api/v1/bounties/${BOUNTY}/amount`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ amount_usdc: "30" }),
+      }),
+      { kind: "amount", bountyId: BOUNTY },
+      bag.deps,
+    );
+    assert.equal(http.status, 200);
+    assert.equal(http.headers.get("ratelimit-limit"), "20");
+    const body = (await http.json()) as { amount_usdc: string };
+    assert.equal(body.amount_usdc, "30.000000");
+
+    const { principal: reader } = await principal(bag.deps, ["read"]);
+    await assert.rejects(
+      () => handleUpdateBountyAmount(reader, BOUNTY, { amount_usdc: "40" }, "rest", bag.deps),
+      (err: unknown) => codeOf(err) === "forbidden_scope",
+    );
+    assert.equal(bag.calls.amount, 2);
+
+    const denied = await handleV1Action(
+      new Request(`https://dev.githubbounties.xyz/api/v1/bounties/${BOUNTY}/amount`, {
+        method: "PATCH",
+        headers: {
+          authorization: `Bearer ${(await principal(bag.deps, ["read"])).token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ amount_usdc: "40" }),
+      }),
+      { kind: "amount", bountyId: BOUNTY },
+      bag.deps,
+    );
+    assert.equal(denied.status, 403);
+    assert.equal(((await denied.json()) as { error: { code: string } }).error.code, "forbidden_scope");
+  });
+
+  it("returns 403 for another user, 409 when funded, and 400 for a bad amount", async () => {
+    const stranger = memory();
+    const { principal: other } = await principal(stranger.deps, ["read", "write"], undefined, BOB);
+    await assert.rejects(
+      () => handleUpdateBountyAmount(other, BOUNTY, { amount_usdc: "12" }, "rest", stranger.deps),
+      (err: unknown) => codeOf(err) === "not_poster",
+    );
+    const http = await handleV1Action(
+      new Request(`https://dev.githubbounties.xyz/api/v1/bounties/${BOUNTY}/amount`, {
+        method: "PATCH",
+        headers: {
+          authorization: `Bearer ${(await principal(stranger.deps, ["read", "write"], undefined, BOB)).token}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ amount_usdc: "12" }),
+      }),
+      { kind: "amount", bountyId: BOUNTY },
+      stranger.deps,
+    );
+    assert.equal(http.status, 403);
+    assert.equal(((await http.json()) as { error: { code: string } }).error.code, "not_poster");
+
+    const funded = memory({ status: "funded", hasFunds: true });
+    const { principal: poster } = await principal(funded.deps, ["read", "write"]);
+    await assert.rejects(
+      () => handleUpdateBountyAmount(poster, BOUNTY, { amount_usdc: "12" }, "rest", funded.deps),
+      (err: unknown) => codeOf(err) === "bounty_has_funds",
+    );
+
+    const same = memory();
+    const { principal: owner } = await principal(same.deps, ["read", "write"]);
+    await assert.rejects(
+      () => handleUpdateBountyAmount(owner, BOUNTY, { amount_usdc: "10" }, "rest", same.deps),
+      (err: unknown) => codeOf(err) === "amount_unchanged",
+    );
+    await assert.rejects(
+      () => handleUpdateBountyAmount(owner, BOUNTY, { amount_usdc: "0" }, "rest", same.deps),
+      (err: unknown) => codeOf(err) === "invalid_amount",
+    );
+    await assert.rejects(
+      () => handleUpdateBountyAmount(owner, BOUNTY, { amount_usdc: "1.0000001" }, "rest", same.deps),
+      (err: unknown) => codeOf(err) === "invalid_amount",
+    );
+    await assert.rejects(
+      () => handleUpdateBountyAmount(owner, BOUNTY, {}, "rest", same.deps),
+      (err: unknown) => codeOf(err) === "validation_failed",
+    );
+    assert.equal(same.calls.amount, 3);
+  });
+
+  it("exposes the same service through the MCP tool", async () => {
+    const bag = memory();
+    const { token } = await principal(bag.deps, ["read", "write"]);
+    const ok = await handleMcpHttp(
+      new Request("https://dev.githubbounties.xyz/mcp", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 7,
+          method: "tools/call",
+          params: {
+            name: "update_bounty_amount",
+            arguments: { bounty_id: BOUNTY, amount_usdc: "15" },
+          },
+        }),
+      }),
+      bag.deps,
+    );
+    assert.equal(ok.status, 200);
+    const text = await ok.text();
+    assert.match(text, /15\.000000/);
+    assert.equal(bag.amountInputs.at(-1)?.source, "mcp");
+    assert.equal(bag.calls.amount, 1);
+
+    const { token: readToken } = await principal(bag.deps, ["read"]);
+    const denied = await handleMcpHttp(
+      new Request("https://dev.githubbounties.xyz/mcp", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${readToken}`,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 8,
+          method: "tools/call",
+          params: {
+            name: "update_bounty_amount",
+            arguments: { bounty_id: BOUNTY, amount_usdc: "16" },
+          },
+        }),
+      }),
+      bag.deps,
+    );
+    assert.equal(denied.status, 200);
+    assert.match(await denied.text(), /forbidden_scope/);
+    assert.equal(bag.calls.amount, 1);
+
+    const unknown = await handleMcpHttp(
+      new Request("https://dev.githubbounties.xyz/mcp", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 9,
+          method: "tools/call",
+          params: {
+            name: "update_bounty_amount",
+            arguments: { bounty_id: BOUNTY, amount_usdc: "18", walletAddress: PAYER },
+          },
+        }),
+      }),
+      bag.deps,
+    );
+    const unknownText = await unknown.text();
+    assert.match(unknownText, /Unknown argument: walletAddress/);
+    assert.equal(bag.calls.amount, 1);
   });
 });

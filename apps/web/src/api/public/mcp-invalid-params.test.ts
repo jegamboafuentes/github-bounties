@@ -59,6 +59,7 @@ describe("MCP invalid params", () => {
     assert.equal(toolClassForMcpTool("get_me"), "read");
     assert.equal(toolClassForMcpTool("get_profile"), "read");
     assert.equal(toolClassForMcpTool("update_profile"), "write");
+    assert.equal(toolClassForMcpTool("update_bounty_amount"), "write");
     assert.equal(toolClassForMcpTool("update_notification_preferences"), "write");
     assert.equal(invalidParamsRateHeaders("refund_bounty")["RateLimit-Limit"], "10");
     assert.equal(invalidParamsRateHeaders("refund_bounty")["RateLimit-Remaining"], "10");

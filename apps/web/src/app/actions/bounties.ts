@@ -12,6 +12,7 @@ import {
   fundBounty,
   signalWorkingOnThis,
   topUpBounty,
+  updateBountyAmount,
 } from "@/bounties";
 import { claimPoolPayout, claimPayout, isClaimError } from "@/claims";
 import { getRuntimeDb } from "@/db/runtime";
@@ -68,6 +69,32 @@ export async function createBountyAction(
     );
     revalidatePath("/board");
     redirect(`/bounties/${created.id}`);
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
+    return fail(err);
+  }
+}
+
+export async function updateBountyAmountAction(
+  _prev: BountyActionState | undefined,
+  formData: FormData,
+): Promise<BountyActionState> {
+  const bountyId = String(formData.get("bountyId") ?? "");
+  const user = await getCurrentPublicUser();
+  if (!user) {
+    redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
+  }
+  try {
+    const updated = await updateBountyAmount({
+      bountyId,
+      actorUserId: user.id,
+      amountUsdc: String(formData.get("amountUsdc") ?? ""),
+      source: "web",
+      apiKeyId: null,
+      db: getRuntimeDb(),
+    });
+    refreshBounty(bountyId);
+    return { ok: true, message: `Face updated to ${updated.newAmountUsdc} USDC.` };
   } catch (err) {
     if (isRedirectError(err)) throw err;
     return fail(err);

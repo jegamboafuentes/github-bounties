@@ -37,6 +37,12 @@ export { BountyError, isBountyError } from "./errors";
 export { expireClaimLocks, expireClaimLocksForBounty, drainExclusiveClaimLocks } from "./expire";
 export { fundBounty, topUpBounty } from "./fund";
 export {
+  assertNewBountyAmount,
+  bountyAmountEditBlocked,
+  updateBountyAmount,
+  BOUNTY_HAS_FUNDS_MESSAGE,
+} from "./update-amount";
+export {
   getBoardBounty,
   listBoardBounties,
   listBoardBountiesPage,

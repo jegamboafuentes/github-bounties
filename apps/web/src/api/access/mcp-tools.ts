@@ -16,6 +16,7 @@ import {
   handleMyBounties,
   handleMyClaims,
   handleRefund,
+  handleUpdateBountyAmount,
   handleUpdateNotificationPreferences,
   handleUpdateProfile,
   handleUsage,
@@ -37,6 +38,7 @@ import {
   createBountyToolSchema,
   fundToolSchema,
   topUpToolSchema,
+  updateBountyAmountToolSchema,
   updateNotificationToolSchema,
   updateProfileToolSchema,
   workSignalToolSchema,
@@ -46,6 +48,7 @@ const emptyToolSchema = z.object({}).passthrough();
 const looseCreate = createBountyToolSchema.passthrough();
 const looseWork = workSignalToolSchema.passthrough();
 const looseCancel = cancelToolSchema.passthrough();
+const looseAmount = updateBountyAmountToolSchema.passthrough();
 const looseFund = fundToolSchema.passthrough();
 const looseTopUp = topUpToolSchema.passthrough();
 const looseClaim = claimToolSchema.passthrough();
@@ -232,6 +235,29 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       guarded(access, "write", `tool:cancel_bounty ${args.id}`, args.id, () => {
         rejectUnknownToolArgs(args, ["id", "idempotencyKey"]);
         return handleCancel(requirePrincipal(access?.principal), args.id, args.idempotencyKey, access!.deps);
+      }),
+  );
+
+  server.registerTool(
+    "update_bounty_amount",
+    {
+      title: "Edit an unfunded bounty amount",
+      description:
+        "Requires API key (write scope). Poster only. Changes the face while nothing is funded: no confirmed funding or contributions, no recorded x402 lock or fund hash, no pending lock or in-flight payment, and status pending_fund. bounty_id and amount_usdc are required. amount_usdc uses the same rules as create and must change. Hunters may already be working. Does not move USDC.",
+      inputSchema: looseAmount,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) =>
+      guarded(access, "write", `tool:update_bounty_amount ${args.bounty_id}`, args.bounty_id, () => {
+        rejectUnknownToolArgs(args, ["bounty_id", "amount_usdc"]);
+        assertNoAddress(args);
+        return handleUpdateBountyAmount(
+          requirePrincipal(access?.principal),
+          args.bounty_id,
+          { amount_usdc: args.amount_usdc },
+          "mcp",
+          access!.deps,
+        );
       }),
   );
 
