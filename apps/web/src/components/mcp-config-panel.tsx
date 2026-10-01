@@ -9,20 +9,35 @@ export function McpConfigPanel({ snippets }: { snippets: readonly McpConfigSnipp
   const active = snippets.find((item) => item.id === tab) ?? snippets[0];
   if (!active) return null;
 
+  function copyWithTextarea(text: string) {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.left = "-9999px";
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+  }
+
   async function copy() {
     const text = active.body;
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      const area = document.createElement("textarea");
-      area.value = text;
-      area.setAttribute("readonly", "");
-      area.style.position = "fixed";
-      area.style.left = "-9999px";
-      document.body.appendChild(area);
-      area.select();
-      document.execCommand("copy");
-      area.remove();
+    const write = navigator.clipboard?.writeText(text);
+    const outcome = write
+      ? await Promise.race([
+          write.then(() => "ok" as const).catch(() => "fail" as const),
+          new Promise<"timeout">((resolve) => {
+            window.setTimeout(() => resolve("timeout"), 1500);
+          }),
+        ])
+      : "fail";
+    if (outcome !== "ok") {
+      try {
+        copyWithTextarea(text);
+      } catch {
+        // The button still confirms the attempt. The snippet stays selected for a manual copy.
+      }
     }
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
