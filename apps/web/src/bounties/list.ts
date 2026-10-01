@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
   bounties,
@@ -84,6 +84,8 @@ export type BoardBounty = {
   escrowFail: { code: string; reason: string; label: string } | null;
   /** Ready Gemini cache only. Null when missing/error — board hides the badge. */
   intelligence: BoardIntelligenceBadge | null;
+  feeBps: number;
+  participationPoolBps: number | null;
 };
 
 const STATUS_SET = new Set<string>(bountyStatusValues);
@@ -104,6 +106,8 @@ const BOARD_COLUMNS = {
   createdAt: bounties.createdAt,
   escrowFailCode: escrows.failCode,
   escrowFailReason: escrows.failReason,
+  feeBps: bounties.feeBps,
+  participationPoolBps: bounties.participationPoolBps,
 };
 
 /**
@@ -262,6 +266,8 @@ type ListRow = {
   createdAt: Date;
   escrowFailCode: string | null;
   escrowFailReason: string | null;
+  feeBps: number;
+  participationPoolBps: number | null;
   intelStatus: string | null;
   intelComplexity: string | null;
   intelLanguageStack: string | null;
@@ -398,6 +404,7 @@ function boardWhere(opts: {
       ? sql`${repos.fullName} ilike ${`%${escapeLike(opts.repoFilter)}%`}`
       : undefined,
     opts.status ? eq(bounties.status, opts.status) : undefined,
+    isNull(bounties.deletedAt),
   );
 }
 
@@ -434,6 +441,8 @@ function toBoardBounty(
       complexity: row.intelComplexity,
       languageStack: row.intelLanguageStack,
     }),
+    feeBps: row.feeBps,
+    participationPoolBps: row.participationPoolBps,
   };
 }
 

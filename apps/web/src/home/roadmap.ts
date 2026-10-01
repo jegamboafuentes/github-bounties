@@ -1,3 +1,4 @@
+import { surfaceCountPhrase, type PublicSurfaceCounts } from "../api/public/surface-counts";
 import { PUBLIC_API_VERSION } from "../api/public/version";
 
 /** Public /roadmap copy. Keep in sync with docs/roadmap.md. No invented ship dates. */
@@ -71,7 +72,7 @@ export const PUBLIC_ROADMAP = [
     id: "v4",
     version: "V4",
     title: "API + MCP",
-    summary: `DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version ${PUBLIC_API_VERSION}, 23 operations, 24 tools (#76 #79 #80 #81 #78). API money is OFF on PROD.`,
+    summary: `DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version ${PUBLIC_API_VERSION} (#76 #79 #80 #81 #78). API money is OFF on PROD.`,
     status: "shipped",
     href: "/mcp",
   },
@@ -106,6 +107,19 @@ export const PUBLIC_ROADMAP = [
     status: "parked",
   },
 ] as const satisfies readonly RoadmapItem[];
+
+/** V4 copy with the live OpenAPI operation count and MCP tool count. */
+export function roadmapWithSurface(counts: PublicSurfaceCounts): RoadmapItem[] {
+  const phrase = surfaceCountPhrase(counts);
+  return PUBLIC_ROADMAP.map((item) =>
+    item.id === "v4"
+      ? {
+          ...item,
+          summary: `DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version ${PUBLIC_API_VERSION}, ${phrase} (#76 #79 #80 #81 #78). API money is OFF on PROD.`,
+        }
+      : item,
+  );
+}
 
 export const ROADMAP_STATUS_LABEL: Record<RoadmapStatus, string> = {
   shipped: "Shipped",

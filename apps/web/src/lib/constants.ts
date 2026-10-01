@@ -6,6 +6,13 @@ export const PRODUCT_NAME = "GitHub Bounties";
 export const FEE_BPS = 200;
 
 /**
+ * Product maximum face and top-up, in whole USDC.
+ * `numeric(20,6)` can store more; amounts above this are `invalid_amount`
+ * before they reach Postgres.
+ */
+export const MAX_BOUNTY_FACE_USDC = "1000000";
+
+/**
  * Historical V1 exclusive coordination lock (hours). Does not move USDC.
  * V2-4 sunsets exclusive `claim_locks`: do not acquire new rows; drain
  * residuals on read. Use non-exclusive `work_signals`.

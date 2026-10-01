@@ -5,6 +5,7 @@
  * winning merge. Overflow / excluded / late hunters are not paid from the pool.
  */
 
+import { bountyFeeBps, bountyPoolBps } from "../bounties/rates";
 import { CLAIM_SKIP } from "../webhooks/outcome";
 import { splitPostFeePool } from "./money";
 import {
@@ -105,7 +106,12 @@ export function frozenParticipantsFromEligibility(
     };
   }
 
-  const split = splitPostFeePool(faceUsdc, result.eligibleCount);
+  const split = splitPostFeePool(
+    faceUsdc,
+    result.eligibleCount,
+    bountyFeeBps(input.bounty.feeBps),
+    bountyPoolBps(input.bounty.poolBpsOfPostFee),
+  );
   const repo = input.bounty.repositoryFullName;
   const byGithubId = new Map<number, FrozenParticipantDraft>();
 

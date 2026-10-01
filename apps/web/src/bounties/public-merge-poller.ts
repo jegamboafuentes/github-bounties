@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { bounties, repos } from "../db/schema";
 import type { GitHubHttp } from "../github/api";
@@ -105,6 +105,7 @@ export async function pollPublicMerges(
       and(
         eq(repos.connectionKind, "public_reference"),
         inArray(bounties.status, [...FUNDED_BOUNTY_STATUSES]),
+        isNull(bounties.deletedAt),
       ),
     );
 

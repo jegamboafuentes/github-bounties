@@ -60,6 +60,7 @@ export async function getPlatformStats(
         count(*)::int as n,
         coalesce(sum(amount_usdc), 0)::text as "faceUsdc"
       from bounties
+      where deleted_at is null
       group by status
     `),
     db.execute(sql`
@@ -106,7 +107,7 @@ export async function getPlatformStats(
     `),
     db.execute(sql`
       select
-        (select count(distinct repo_id)::int from bounties) as "withBounties",
+        (select count(distinct repo_id)::int from bounties where deleted_at is null) as "withBounties",
         count(*)::int as total
       from repos
     `),

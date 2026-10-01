@@ -13,6 +13,7 @@ export type BountyErrorCode =
   | "bounty_not_found"
   | "not_poster"
   | "bounty_has_funds"
+  | "bounty_not_editable"
   | "amount_unchanged"
   | "not_claimant_or_poster"
   | "not_fundable"

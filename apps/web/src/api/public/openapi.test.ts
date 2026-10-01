@@ -36,7 +36,7 @@ describe("OpenAPI document", () => {
     await SwaggerParser.validate(document);
     assert.equal(document.openapi, "3.1.0");
     assert.equal(document.info.title, "GitHub Bounties API");
-    assert.equal(document.info.version, "4.4.0");
+    assert.equal(document.info.version, "4.5.0");
     assert.equal(document.info.version, PUBLIC_API_VERSION);
     assert.match(document.info.description ?? "", /60 requests per minute/);
     assert.match(PUBLIC_API_DESCRIPTION, /Cloud Run instance/);
@@ -73,6 +73,7 @@ describe("OpenAPI document", () => {
     for (const path of READ_ONLY) {
       assert.ok(document.paths?.[path]?.get?.responses?.["405"], `${path} 405`);
     }
+    assert.match(json, /at most 1,000,000/);
     assert.match(json, /bearer/);
     assert.match(json, /payment_required/);
     assert.match(json, /spend_cap_exceeded/);

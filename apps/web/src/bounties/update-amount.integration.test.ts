@@ -230,4 +230,64 @@ describe("updateBountyAmount", () => {
       await sql.end({ timeout: 5 });
     }
   });
+
+  it("rejects a face above 1,000,000 and a never-funded cancelled or settled bounty", async () => {
+    const { db, sql, posterId, fullName } = await fixture();
+    try {
+      await assert.rejects(
+        () => post(db, posterId, fullName, 17, "1000000000000000"),
+        (err: unknown) => codeOf(err) === "invalid_amount",
+      );
+      const open = await post(db, posterId, fullName, 18, "10");
+      await assert.rejects(
+        () =>
+          updateBountyAmount({
+            bountyId: open.id,
+            actorUserId: posterId,
+            amountUsdc: "1000000000000000",
+            source: "rest",
+            db,
+          }),
+        (err: unknown) => {
+          assert.ok(err instanceof BountyError);
+          assert.equal(err.code, "invalid_amount");
+          assert.match(err.message, /1,000,000 USDC/);
+          return true;
+        },
+      );
+      const [unchanged] = await db.select().from(bounties).where(eq(bounties.id, open.id)).limit(1);
+      assert.equal(unchanged?.amountUsdc, "10.000000");
+      assert.equal(unchanged?.status, "pending_fund");
+
+      const capped = await updateBountyAmount({
+        bountyId: open.id,
+        actorUserId: posterId,
+        amountUsdc: "1000000",
+        source: "web",
+        db,
+      });
+      assert.equal(capped.newAmountUsdc, "1000000.000000");
+
+      for (const [issue, status] of [
+        [19, "cancelled"],
+        [20, "settled"],
+      ] as const) {
+        const draft = await post(db, posterId, fullName, issue, "8");
+        await db.update(bounties).set({ status }).where(eq(bounties.id, draft.id));
+        await assert.rejects(
+          () =>
+            updateBountyAmount({
+              bountyId: draft.id,
+              actorUserId: posterId,
+              amountUsdc: "9",
+              source: "mcp",
+              db,
+            }),
+          (err: unknown) => codeOf(err) === "bounty_not_editable",
+        );
+      }
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
 });

@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { McpAccess } from "../access/http";
+import { registerAdminMcpTools } from "../../admin/mcp-tools";
 import { registerAuthedMcpTools } from "../access/mcp-tools";
 import { mcpBountyId, runLoggedMcpTool } from "./mcp-log";
 import { acceptBountyId, acceptListInput } from "./query";
@@ -26,7 +27,11 @@ function serverInstructions(): string {
   ].join(" ");
 }
 
-export function createBountiesMcpServer(api: PublicReadApi, access?: McpAccess | null): McpServer {
+export function createBountiesMcpServer(
+  api: PublicReadApi,
+  access?: McpAccess | null,
+  options?: { admin?: boolean },
+): McpServer {
   const server = new McpServer(
     { name: "github-bounties", version: PUBLIC_API_VERSION },
     { instructions: serverInstructions() },
@@ -131,5 +136,6 @@ export function createBountiesMcpServer(api: PublicReadApi, access?: McpAccess |
   );
 
   registerAuthedMcpTools(server, access);
+  if (options?.admin) registerAdminMcpTools(server, access);
   return server;
 }

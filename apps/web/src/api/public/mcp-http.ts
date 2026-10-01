@@ -1,5 +1,6 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { AccessDeps } from "../access/deps";
+import type { McpAccess } from "../access/http";
 import { captureKeyedRateHeaders } from "../access/handlers";
 import { keyedRateLimitHeaders, mcpAccessFromRequest } from "../access/http";
 import { PUBLIC_API_CORS_HEADERS, publicCorsPreflight } from "./cors";
@@ -12,6 +13,7 @@ import {
   toolNameFromMcpRequest,
 } from "./mcp-invalid-params";
 import { logMcpToolCall } from "./mcp-log";
+import { isAdminIdentity } from "../../admin/identity";
 import { publicReadApi } from "./service";
 
 function withMcpCors(response: Response, rateHeaders?: Record<string, string>): Response {
@@ -41,9 +43,25 @@ function parseJson(raw: string): unknown {
   }
 }
 
+async function includeAdminTools(access: McpAccess): Promise<boolean> {
+  const principal = access.principal;
+  if (!principal || !principal.scopes.has("admin")) return false;
+  const actor = await access.deps.loadAdminActor?.(principal.userId);
+  if (!actor) return false;
+  return isAdminIdentity(
+    { email: actor.email, googleSub: actor.googleSub, sessionGoogleSub: actor.googleSub },
+    access.deps.env,
+  );
+}
+
 async function serveMcp(request: Request, access: Awaited<ReturnType<typeof mcpAccessFromRequest>>): Promise<Response> {
   if (access instanceof Response) return access;
-  const server = createBountiesMcpServer(publicReadApi, access.principal ? access : { ...access, principal: null });
+  const admin = await includeAdminTools(access);
+  const server = createBountiesMcpServer(
+    publicReadApi,
+    access.principal ? access : { ...access, principal: null },
+    { admin },
+  );
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
@@ -76,7 +94,22 @@ function logSchemaReject(toolName: string | null, started: number, apiKeyId: str
   });
 }
 
+function sseStreamRefused(request: Request): Response | null {
+  if (request.method !== "GET" && request.method !== "HEAD") return null;
+  const accept = request.headers.get("accept") ?? "";
+  if (!accept.toLowerCase().includes("text/event-stream")) return null;
+  return new Response(null, {
+    status: 405,
+    headers: {
+      allow: "POST, DELETE, OPTIONS",
+      "cache-control": "no-store",
+    },
+  });
+}
+
 async function dispatchMcp(request: Request, deps?: AccessDeps): Promise<Response> {
+  const refused = sseStreamRefused(request);
+  if (refused) return withMcpCors(refused);
   const started = Date.now();
   const raw = request.method === "GET" || request.method === "HEAD" ? "" : await request.text();
   const replay = replayRequest(request, raw);

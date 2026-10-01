@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { escrows } from "../db/schema";
+import { bounties, escrows } from "../db/schema";
+import { bountyFeeBps } from "../bounties/rates";
 import { confirmedOutflowsFromLegs, loadAllocationLegs } from "./allocation";
 import { probeCdpEnv, type CdpRailMode } from "./env";
 import { formatEscrowFailLabel } from "./fail";
@@ -64,6 +65,12 @@ export async function getEscrowSnapshot(
 ): Promise<EscrowSnapshot | null> {
   const [row] = await db.select().from(escrows).where(eq(escrows.bountyId, bountyId)).limit(1);
   if (!row) return null;
+  const [bounty] = await db
+    .select({ feeBps: bounties.feeBps, deletedAt: bounties.deletedAt })
+    .from(bounties)
+    .where(eq(bounties.id, bountyId))
+    .limit(1);
+  if (bounty?.deletedAt) return null;
   const hashes = [row.fundTxHash, row.payoutTxHash, row.feeTxHash, row.refundTxHash];
   const rail = inferEscrowRail(hashes);
   const origin = publicOrigin();
@@ -109,6 +116,7 @@ export async function getEscrowSnapshot(
       confirmedWinnerAtomic: out?.winnerAtomic,
       confirmedPoolAtomic: out?.poolAtomic,
       confirmedFeeAtomic: out?.feeAtomic,
+      feeBps: bountyFeeBps(bounty?.feeBps),
     }),
   };
 }

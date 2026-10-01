@@ -40,6 +40,8 @@ describe("isDevSite", () => {
     assert.equal(isDevSite({ env: { APP_ENV: "production" } }), false);
     assert.equal(isDevSite({ env: {} }), false);
     assert.equal(isDevSite({ host: "localhost:3000", env: {} }), false);
+    assert.equal(isDevSite({ host: "admin-dev.githubbounties.xyz", env: {} }), false);
+    assert.equal(isDevSite({ host: "admin.githubbounties.xyz", env: {} }), false);
   });
 });
 

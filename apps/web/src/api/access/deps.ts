@@ -1,3 +1,4 @@
+import type { Database } from "../../db/client";
 import type { ApiKeyEnv, ApiKeyScope, ApiSpendKind, ApiSpendStatus } from "../../db/schema";
 import type { AccountProfile, EmailNotificationPrefs, LinkedAccounts } from "../../profile/settings";
 import type { MoneyAction } from "../../escrow/actor-log";
@@ -262,6 +263,9 @@ export type AccessDeps = {
     requestId: string;
     apiKeyId: string;
   }) => Promise<PerformedClaim>;
+  /** Present on the Postgres store. Admin tools re-read the owner on every call. */
+  db?: Database;
+  loadAdminActor?: (userId: string) => Promise<{ email: string; googleSub: string } | null>;
   performRefund: (input: {
     bountyId: string;
     actorUserId: string;

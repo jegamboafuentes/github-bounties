@@ -1,7 +1,8 @@
 import { and, eq, inArray, lte } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { bounties, claimLocks, claims, escrows, feeLedger, githubLinks, users } from "../db/schema";
-import { FEE_BPS, POOL_BPS_OF_POST_FEE } from "../lib/constants";
+import { bountyFeeBps, bountyPoolBps } from "../bounties/rates";
+import { FEE_BPS } from "../lib/constants";
 import { splitFaceUsdc, splitPostFeePool, type PostFeePoolSplit } from "../lib/money";
 import { EscrowError } from "./errors";
 import { probeCdpEnv } from "./env";
@@ -53,7 +54,7 @@ import {
   type ContributionRefundLeg,
 } from "./top-up";
 import { x402ExactStatus } from "./x402";
-import { reconcileBountyNotes, type EscrowReconRow } from "./reconcile";
+import { reconcileBountyNotes, unappliedSettledInbound, type EscrowReconRow } from "./reconcile";
 import {
   assertEscrowTransition,
   ESCROW_LOCKED,
@@ -75,6 +76,11 @@ export type EscrowServiceOpts = {
   apiKeyId?: string | null;
   /** Overrides the Base JSON-RPC reader used to count legacy funding. Tests inject this. */
   legacyChain?: LegacyChainReader;
+  /**
+   * Test seam. Runs inside the lock transaction before the funded update so a
+   * test can change the face after Lock has already read it.
+   */
+  beforeLockWrite?: (tx: Database) => Promise<void>;
 };
 
 async function coverageAfterLegacy(
@@ -98,7 +104,7 @@ function railOf(opts: EscrowServiceOpts): CdpRail {
 
 async function loadBounty(db: Database, bountyId: string) {
   const [bounty] = await db.select().from(bounties).where(eq(bounties.id, bountyId)).limit(1);
-  if (!bounty) {
+  if (!bounty || bounty.deletedAt) {
     throw new EscrowError("bounty_not_found", "Bounty not found.");
   }
   return bounty;
@@ -114,6 +120,7 @@ function toRecon(
   faceUsdc: string,
   escrow: typeof escrows.$inferSelect,
   outflows?: { winnerAtomic: bigint; poolAtomic: bigint; feeAtomic: bigint },
+  feeBps?: number | null,
 ): EscrowReconRow {
   return {
     bountyId,
@@ -126,8 +133,12 @@ function toRecon(
     confirmedWinnerAtomic: outflows?.winnerAtomic,
     confirmedPoolAtomic: outflows?.poolAtomic,
     confirmedFeeAtomic: outflows?.feeAtomic,
+    feeBps: bountyFeeBps(feeBps),
   };
 }
+
+export const LOCK_FACE_CHANGED_MESSAGE =
+  "Bounty face changed during lock. Retry Lock so escrow matches the current amount.";
 
 export type LockResult = {
   bountyId: string;
@@ -171,7 +182,7 @@ export async function lockEscrowFunds(
     throw new EscrowError("not_fundable", `Bounty is ${bounty.status}, not pending_fund.`);
   }
 
-  const split = splitFaceUsdc(bounty.amountUsdc);
+  const split = splitFaceUsdc(bounty.amountUsdc, bountyFeeBps(bounty.feeBps));
   const fundKey = moneyIdempotencyKey(bountyId, "FUND_IN");
   const existingBeforeLock = await loadEscrow(opts.db, bountyId);
   const requestId = takeRequestId(opts.requestId);
@@ -252,6 +263,7 @@ export async function lockEscrowFunds(
   }
 
   await opts.db.transaction(async (tx) => {
+    if (opts.beforeLockWrite) await opts.beforeLockWrite(tx as unknown as Database);
     const [updated] = await tx
       .update(bounties)
       .set({ status: "funded", fundedAt: now, updatedAt: now })
@@ -270,10 +282,7 @@ export async function lockEscrowFunds(
         .where(eq(bounties.id, bountyId))
         .limit(1);
       if (current && current.amountUsdc !== bounty.amountUsdc) {
-        throw new EscrowError(
-          "not_fundable",
-          "Bounty face changed during lock. Retry Lock so escrow matches the current amount.",
-        );
+        throw new EscrowError("not_fundable", LOCK_FACE_CHANGED_MESSAGE);
       }
       throw new EscrowError("not_fundable", "Bounty is no longer pending_fund.");
     }
@@ -311,6 +320,32 @@ export async function lockEscrowFunds(
       funderAddress,
       now,
     });
+  }).catch(async (err: unknown) => {
+    if (err instanceof EscrowError && err.message === LOCK_FACE_CHANGED_MESSAGE) {
+      const inbound = unappliedSettledInbound({
+        escrowStatus: existingBeforeLock?.status ?? "pending",
+        fundTxHash: existingBeforeLock?.fundTxHash ?? null,
+        x402PaymentId: existingBeforeLock?.x402PaymentId ?? null,
+      });
+      if (inbound) {
+        await persistEscrowFail(opts.db, bountyId, {
+          code: "not_fundable",
+          reason: LOCK_FACE_CHANGED_MESSAGE,
+          now,
+        });
+        logMoneyAction({
+          action: "lock",
+          actorUserId,
+          bountyId,
+          payer: funderAddress,
+          amountUsdc: bounty.amountUsdc,
+          txHash: existingBeforeLock?.fundTxHash ?? null,
+          result: "not_fundable",
+          requestId,
+        });
+      }
+    }
+    throw err;
   });
 
   const escrow = await loadEscrow(opts.db, bountyId);
@@ -342,7 +377,7 @@ export async function lockEscrowFunds(
     network: rail.network,
     missingEnv: rail.missingEnv,
     hostedCheckout: hostedCheckoutStatus(),
-    reconcile: reconcileBountyNotes(toRecon(bountyId, bounty.amountUsdc, escrow)),
+    reconcile: reconcileBountyNotes(toRecon(bountyId, bounty.amountUsdc, escrow, undefined, bounty.feeBps)),
   };
 }
 
@@ -429,8 +464,9 @@ export async function settleEscrow(
   const bounty = await loadBounty(opts.db, bountyId);
   const escrow = await loadEscrow(opts.db, bountyId);
   const freeze = await loadFrozenSettleSet(opts.db, bountyId);
-  const poolBps = bounty.participationPoolBps ?? POOL_BPS_OF_POST_FEE;
-  const split = splitPostFeePool(bounty.amountUsdc, freeze.eligibleCount, FEE_BPS, poolBps);
+  const poolBps = bountyPoolBps(bounty.participationPoolBps);
+  const feeBps = bountyFeeBps(bounty.feeBps);
+  const split = splitPostFeePool(bounty.amountUsdc, freeze.eligibleCount, feeBps, poolBps);
   const unpaidPool = freeze.poolMembers.filter((row) => !row.payoutTxHash);
 
   // Settler rule before the idempotent return. A fully settled bounty used to
@@ -676,14 +712,9 @@ export async function settleEscrow(
           .update(escrows)
           .set({ payoutTxHash, updatedAt: now })
           .where(eq(escrows.id, escrow.id));
-        if (leg.participantId) {
-          await markPoolParticipantPaid(opts.db, {
-            participantId: leg.participantId,
-            payoutAddress: toAddress,
-            payoutTxHash: sent.txHash,
-            now,
-          });
-        }
+        // Winner hash stays on escrows.payout_tx_hash and the WINNER_PAYOUT
+        // ledger row. Do not copy it onto pool_participants: that table's
+        // payout_tx_hash is the pool share's own transfer.
       } else if (leg.kind === "FEE_OUT") {
         feeTxHash = sent.txHash;
         await opts.db
@@ -807,7 +838,7 @@ export async function settleEscrow(
           bountyId,
           faceUsdc: split.faceUsdc,
           feeUsdc: split.feeUsdc,
-          feeBps: FEE_BPS,
+          feeBps: split.feeBps,
           settledAt: now,
         })
         .onConflictDoUpdate({
@@ -815,7 +846,7 @@ export async function settleEscrow(
           set: {
             faceUsdc: split.faceUsdc,
             feeUsdc: split.feeUsdc,
-            feeBps: FEE_BPS,
+            feeBps: split.feeBps,
             settledAt: now,
           },
         });
@@ -920,7 +951,9 @@ function finishSettleResult(args: {
     network: args.rail.network,
     missingEnv: args.rail.missingEnv,
     hostedCheckout: hostedCheckoutStatus(),
-    reconcile: reconcileBountyNotes(toRecon(args.bountyId, args.faceUsdc, args.escrow, out)),
+    reconcile: reconcileBountyNotes(
+      toRecon(args.bountyId, args.faceUsdc, args.escrow, out, args.split.feeBps),
+    ),
     legs: args.legs.map((row) => ({
       destination: row.toAddress,
       amount: row.amountUsdc,
@@ -1177,7 +1210,7 @@ export async function refundEscrow(
       missingEnv: rail.missingEnv,
       hostedCheckout: hostedCheckoutStatus(),
       reconcile: existing
-        ? reconcileBountyNotes(toRecon(bountyId, bounty.amountUsdc, existing))
+        ? reconcileBountyNotes(toRecon(bountyId, bounty.amountUsdc, existing, undefined, bounty.feeBps))
         : ["already terminal"],
       legs: [],
     };
@@ -1208,7 +1241,7 @@ export async function refundEscrow(
       network: rail.network,
       missingEnv: rail.missingEnv,
       hostedCheckout: hostedCheckoutStatus(),
-      reconcile: reconcileBountyNotes(toRecon(bountyId, bounty.amountUsdc, escrow)),
+      reconcile: reconcileBountyNotes(toRecon(bountyId, bounty.amountUsdc, escrow, undefined, bounty.feeBps)),
       legs: [],
     };
   }
@@ -1219,6 +1252,7 @@ export async function refundEscrow(
     return refundSplitContributions({
       bountyId,
       faceUsdc: bounty.amountUsdc,
+      feeBps: bounty.feeBps,
       escrow,
       reason: input.reason,
       actorUserId: input.actorUserId,
@@ -1236,7 +1270,7 @@ export async function refundEscrow(
     (await walletOf(opts.db, bounty.posterUserId));
   const funderAddress = requireBasePayoutAddress(recordedPayer, "missing_funder_address");
 
-  const split = splitFaceUsdc(bounty.amountUsdc);
+  const split = splitFaceUsdc(bounty.amountUsdc, bountyFeeBps(bounty.feeBps));
   const coverage = await coverageAfterLegacy(opts, bountyId, rail.mode);
   const singleLeg: CoverageLeg = {
     destination: funderAddress,
@@ -1356,7 +1390,7 @@ export async function refundEscrow(
     missingEnv: rail.missingEnv,
     hostedCheckout: hostedCheckoutStatus(),
     reconcile: latest
-      ? reconcileBountyNotes(toRecon(bountyId, bounty.amountUsdc, latest))
+      ? reconcileBountyNotes(toRecon(bountyId, bounty.amountUsdc, latest, undefined, bounty.feeBps))
       : [],
     legs: paidLegs,
   };
@@ -1369,6 +1403,7 @@ export async function refundEscrow(
 async function refundSplitContributions(input: {
   bountyId: string;
   faceUsdc: string;
+  feeBps?: number | null;
   escrow: NonNullable<Awaited<ReturnType<typeof loadEscrow>>>;
   reason: "cancel" | "expiry";
   actorUserId?: string;
@@ -1507,7 +1542,9 @@ async function refundSplitContributions(input: {
     network: rail.network,
     missingEnv: rail.missingEnv,
     hostedCheckout: hostedCheckoutStatus(),
-    reconcile: latest ? reconcileBountyNotes(toRecon(bountyId, faceUsdc, latest)) : [],
+    reconcile: latest
+      ? reconcileBountyNotes(toRecon(bountyId, faceUsdc, latest, undefined, input.feeBps))
+      : [],
     legs: paidLegs,
   };
 }

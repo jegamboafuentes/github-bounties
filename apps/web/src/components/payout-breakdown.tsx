@@ -2,7 +2,6 @@ import { formatUsdc, POOL_PAYOUT_COPY, sharePaidLabel } from "@/bounties";
 import { payoutPiesFromBreakdown } from "@/bounties/payout-pie";
 import type { PoolRosterView } from "@/bounties/roster";
 import { PayoutPieCharts } from "@/components/payout-pie";
-import { FEE_BPS } from "@/lib/constants";
 
 export function PayoutBreakdown({
   roster,
@@ -34,7 +33,7 @@ export function PayoutBreakdown({
             </dd>
           </div>
           <div className="grid gap-1 px-3 py-2 sm:grid-cols-3">
-            <dt className="text-xs uppercase tracking-wide text-zinc-500">Fee ({FEE_BPS / 100}%)</dt>
+            <dt className="text-xs uppercase tracking-wide text-zinc-500">Fee ({breakdown.feeBps / 100}%)</dt>
             <dd className="sm:col-span-2">
               {formatUsdc(breakdown.feeUsdc)} {currency}
               {breakdown.feeTxHash ? (

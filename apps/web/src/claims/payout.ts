@@ -73,7 +73,7 @@ export async function claimPayout(
     .from(bounties)
     .where(eq(bounties.id, bountyId))
     .limit(1);
-  if (!bounty) {
+  if (!bounty || bounty.deletedAt) {
     throw new ClaimError("bounty_not_found", "Bounty not found.");
   }
 
@@ -125,7 +125,7 @@ export async function claimPayout(
     .where(eq(claims.id, claim.id))
     .limit(1);
 
-  const split = splitFaceUsdc(bounty.amountUsdc);
+  const split = splitFaceUsdc(bounty.amountUsdc, bounty.feeBps);
   return {
     ...settled,
     claimId: claim.id,
@@ -154,7 +154,7 @@ export async function claimPoolPayout(
     .from(bounties)
     .where(eq(bounties.id, bountyId))
     .limit(1);
-  if (!bounty) {
+  if (!bounty || bounty.deletedAt) {
     throw new ClaimError("bounty_not_found", "Bounty not found.");
   }
 
@@ -215,7 +215,7 @@ export async function claimPoolPayout(
     throw err;
   }
 
-  const split = splitFaceUsdc(bounty.amountUsdc);
+  const split = splitFaceUsdc(bounty.amountUsdc, bounty.feeBps);
   return {
     ...settled,
     participantId: member.id,

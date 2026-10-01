@@ -11,7 +11,7 @@ export type ApiKeyListItem = {
   name: string;
   prefix: string;
   env: "test" | "live";
-  scopes: Array<"read" | "write" | "money">;
+  scopes: Array<"read" | "write" | "money" | "admin">;
   perTxCapUsdc: string;
   dailyCapUsdc: string;
   createdAt: string;
@@ -111,6 +111,7 @@ export type ApiKeysCardProps = {
   moneyEligible: boolean;
   walletSet: boolean;
   githubLinked: boolean;
+  canGrantAdmin?: boolean;
 };
 
 export function ApiKeysCard(props: ApiKeysCardProps) {
@@ -131,6 +132,7 @@ export function ApiKeysPanel({
   moneyEligible,
   walletSet,
   githubLinked,
+  canGrantAdmin = false,
   createKey,
   refresh,
 }: ApiKeysCardProps & {
@@ -230,6 +232,12 @@ export function ApiKeysPanel({
             <input type="checkbox" name="scopeMoney" value="1" disabled={!moneyEligible} autoComplete="off" />
             money
           </label>
+          {canGrantAdmin ? (
+            <label className="inline-flex items-center gap-2">
+              <input type="checkbox" name="scopeAdmin" value="1" autoComplete="off" />
+              admin
+            </label>
+          ) : null}
         </fieldset>
         {moneyEligible ? null : (
           <p className="text-xs text-zinc-500">

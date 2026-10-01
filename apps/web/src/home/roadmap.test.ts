@@ -4,7 +4,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { PUBLIC_API_VERSION } from "../api/public/version";
-import { PUBLIC_ROADMAP, ROADMAP_INTRO, ROADMAP_STATUS_LABEL, ROADMAP_STATUSES } from "./roadmap";
+import { publicSurfaceCounts, surfaceCountPhrase } from "../api/public/surface-counts";
+import { PUBLIC_ROADMAP, ROADMAP_INTRO, roadmapWithSurface, ROADMAP_STATUS_LABEL, ROADMAP_STATUSES } from "./roadmap";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const docsRoadmap = readFileSync(join(repoRoot, "docs/roadmap.md"), "utf8");
@@ -81,7 +82,7 @@ describe("public roadmap", () => {
     assert.equal(byId.v4?.href, "/mcp");
     assert.match(byId.v4?.summary ?? "", /DONE, LIVE on PROD 2026-09-25/);
     assert.match(byId.v4?.summary ?? "", new RegExp(PUBLIC_API_VERSION.replace(/\./g, "\\.")));
-    assert.match(byId.v4?.summary ?? "", /23 operations, 24 tools/);
+    assert.doesNotMatch(byId.v4?.summary ?? "", /23 operations, 24 tools/);
     assert.match(byId.v4?.summary ?? "", /API money is OFF on PROD/);
     assert.doesNotMatch(byId.v4?.summary ?? "", /In planning/);
     assert.equal(byId.v5?.status, "next");
@@ -134,5 +135,21 @@ describe("public roadmap", () => {
       assert.match(docsRoadmap, title);
       assert.match(readme, title);
     }
+  });
+
+  it("prints live OpenAPI and MCP counts on the roadmap, docs, and README", async () => {
+    const counts = await publicSurfaceCounts();
+    const phrase = surfaceCountPhrase(counts);
+    assert.ok(counts.operations > 23, String(counts.operations));
+    assert.ok(counts.tools > 24, String(counts.tools));
+    const surfaced = roadmapWithSurface(counts).find((item) => item.id === "v4");
+    assert.match(surfaced?.summary ?? "", new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(surfaced?.summary ?? "", new RegExp(PUBLIC_API_VERSION.replace(/\./g, "\\.")));
+    assert.match(docsRoadmap, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(readme, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(docsRoadmap, /version 4\.5\.0/);
+    assert.match(readme, /version 4\.5\.0/);
+    assert.doesNotMatch(docsRoadmap, /23 operations, 24 tools/);
+    assert.doesNotMatch(readme, /23 operations, 24 tools/);
   });
 });

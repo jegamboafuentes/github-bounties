@@ -4,6 +4,7 @@ import { ZodError, z } from "zod";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { needsSession } from "../../proxy";
 import { API_CORS_EXPOSE_HEADERS, publicCorsPreflight, publicSurfaceDispatch } from "./cors";
 import { apiErrorResponse, publicApiErrorBody, zodErrorDetails, PUBLIC_API_ERROR_CODES } from "./errors";
 import { handlePublicRead } from "./http";
@@ -86,12 +87,15 @@ describe("public API error shape", () => {
     assert.equal(preflight.headers.get("access-control-allow-origin"), "*");
     assert.match(preflight.headers.get("access-control-allow-methods") ?? "", /OPTIONS/);
     assert.equal(preflight.headers.get("access-control-expose-headers"), API_CORS_EXPOSE_HEADERS);
+    assert.equal(needsSession("/settings", "dev.githubbounties.xyz"), true);
+    assert.equal(needsSession("/api/v1/bounties", "dev.githubbounties.xyz"), false);
+    assert.equal(needsSession("/api/v1/admin/settings", "githubbounties.xyz"), false);
+    assert.equal(needsSession("/api/docs", "githubbounties.xyz"), false);
+    assert.equal(needsSession("/mcp", "admin.githubbounties.xyz"), false);
+    assert.equal(needsSession("/mcp", "dev.githubbounties.xyz"), false);
     const proxy = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../../proxy.ts"), "utf8");
-    const matcher = proxy.slice(proxy.indexOf("matcher:"));
-    assert.match(matcher, /\/settings/);
-    assert.doesNotMatch(matcher, /\/api\/v1/);
-    assert.doesNotMatch(matcher, /\/api\/docs/);
-    assert.doesNotMatch(matcher, /\/mcp/);
+    assert.match(proxy, /if \(!needsSession\(pathname, host\)\)/);
+    assert.match(proxy, /return sessionProxy\(req, event\)/);
   });
 
   it("read-only /api/v1 routes still answer writes with methodNotAllowed", () => {

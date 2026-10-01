@@ -25,6 +25,7 @@ import {
   handleRefund,
   handleUpdateBountyAmount,
   handleUsage,
+  resultFromError,
   handleTopUp,
   revokeApiKey,
   runAuthed,
@@ -1625,9 +1626,36 @@ describe("PATCH bounty amount", () => {
     );
     await assert.rejects(
       () => handleUpdateBountyAmount(owner, BOUNTY, {}, "rest", same.deps),
-      (err: unknown) => codeOf(err) === "validation_failed",
+      (err: unknown) =>
+        err instanceof PublicApiError &&
+        err.code === "validation_failed" &&
+        err.message === "amount_usdc is required.",
     );
     assert.equal(same.calls.amount, 3);
+
+    await assert.rejects(
+      () => handleUpdateBountyAmount(owner, BOUNTY, { amountUsdc: "12" }, "rest", same.deps),
+      (err: unknown) =>
+        err instanceof PublicApiError && err.status === 400 && err.message === "Unrecognized field.",
+    );
+    await assert.rejects(
+      () => handleUpdateBountyAmount(owner, BOUNTY, { amount_usdc: "12", extra: 1 }, "rest", same.deps),
+      (err: unknown) =>
+        err instanceof PublicApiError && err.code === "validation_failed" && err.message === "Unrecognized field.",
+    );
+    await assert.rejects(
+      () => handleUpdateBountyAmount(owner, BOUNTY, { amount_usdc: "1000000000000000" }, "rest", same.deps),
+      (err: unknown) => {
+        assert.ok(err instanceof BountyError);
+        assert.equal(err.code, "invalid_amount");
+        assert.equal(resultFromError(err).status, 400);
+        return true;
+      },
+    );
+    await assert.rejects(
+      () => handleUpdateBountyAmount(owner, BOUNTY, { amount_usdc: "1000000000000000" }, "mcp", same.deps),
+      (err: unknown) => err instanceof BountyError && err.code === "invalid_amount" && resultFromError(err).status === 400,
+    );
   });
 
   it("exposes the same service through the MCP tool", async () => {

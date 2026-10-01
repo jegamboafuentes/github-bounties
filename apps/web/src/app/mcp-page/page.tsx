@@ -5,6 +5,7 @@ import { McpConfigPanel } from "@/components/mcp-config-panel";
 import { listRegisteredMcpTools } from "@/api/public/mcp-catalog";
 import { MONEY_ACTIONS_DISABLED } from "@/api/access/money-wording";
 import { apiMoneyEnabled, KEY_RATE_LIMITS, spendCeilings } from "@/api/access/policy";
+import { openApiOperationCount, surfaceCountPhrase } from "@/api/public/surface-counts";
 import { PUBLIC_API_VERSION } from "@/api/public/version";
 import { PRODUCT_NAME } from "@/lib/constants";
 import { spendCapsLabel } from "@/mcp/caps";
@@ -51,6 +52,7 @@ export default async function McpPage() {
   const mcpUrl = mcpEndpointUrl(process.env);
   const snippets = mcpConfigSnippets(process.env);
   const tools = await listRegisteredMcpTools();
+  const surface = surfaceCountPhrase({ operations: openApiOperationCount(), tools: tools.length });
   const moneyOn = apiMoneyEnabled();
   const caps = spendCeilings();
   const readLimit = windowPhrase(KEY_RATE_LIMITS.read.limit, KEY_RATE_LIMITS.read.windowMs);
@@ -62,7 +64,7 @@ export default async function McpPage() {
       <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-12 px-6 py-14">
         <header className="flex flex-col gap-3">
           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-            Public API {PUBLIC_API_VERSION}
+            Public API {PUBLIC_API_VERSION} · {surface}
           </p>
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">MCP</h1>
           <p className="max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-400">
@@ -122,7 +124,7 @@ export default async function McpPage() {
             Tools · {tools.length}
           </h2>
           <p className="text-sm text-zinc-500">
-            Listed from the MCP tool registry. Public API version <code>{PUBLIC_API_VERSION}</code>.
+            Listed from the MCP tool registry ({tools.length} tools). OpenAPI lists {openApiOperationCount()} operations. Public API version <code>{PUBLIC_API_VERSION}</code>.
           </p>
           <ul className="flex flex-col gap-3">
             {tools.map((tool) => (

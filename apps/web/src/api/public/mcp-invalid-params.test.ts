@@ -14,6 +14,7 @@ import {
   toolNameFromMcpRequest,
 } from "./mcp-invalid-params";
 import { logMcpToolCall, runLoggedMcpTool } from "./mcp-log";
+import { PUBLIC_API_VERSION } from "./version";
 
 const BOUNTY = "b99a9163-4ef8-4f73-b051-e404b569bc17";
 
@@ -214,7 +215,7 @@ describe("MCP invalid params", () => {
         email: "ada@example.com",
       }),
     } as unknown as AccessDeps;
-    const server = new McpServer({ name: "github-bounties", version: "4.4.0" });
+    const server = new McpServer({ name: "github-bounties", version: PUBLIC_API_VERSION });
     const access: McpAccess = {
       principal: principal(),
       deps,

@@ -1,7 +1,10 @@
+import { MAX_BOUNTY_FACE_USDC } from "../lib/constants";
 import { atomicToUsdc, usdcToAtomic } from "../lib/money";
 import { BountyError } from "./errors";
 
-/** Normalize a face amount to 6-decimal USDC. Rejects empty, zero, and negative. */
+const MAX_FACE_ATOMIC = usdcToAtomic(MAX_BOUNTY_FACE_USDC);
+
+/** Normalize a face amount to 6-decimal USDC. Rejects empty, zero, negative, and above 1,000,000. */
 export function normalizeBountyAmountUsdc(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) {
@@ -11,6 +14,9 @@ export function normalizeBountyAmountUsdc(raw: string): string {
     const atomic = usdcToAtomic(trimmed);
     if (atomic <= BigInt(0)) {
       throw new BountyError("invalid_amount", "Bounty face must be greater than 0 USDC.");
+    }
+    if (atomic > MAX_FACE_ATOMIC) {
+      throw new BountyError("invalid_amount", "Bounty face cannot exceed 1,000,000 USDC.");
     }
     return atomicToUsdc(atomic);
   } catch (err) {

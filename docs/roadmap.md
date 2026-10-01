@@ -48,7 +48,7 @@ Related polish on PROD: board complexity/language badges + filters, Settings/Pos
 
 ### V4 — API + MCP
 
-**DONE, LIVE on PROD 2026-09-25.** `/api/v1` (OpenAPI) + `/mcp`, version 4.4.0, 23 operations, 24 tools ([#76](https://github.com/jegamboafuentes/github-bounties/pull/76) [#79](https://github.com/jegamboafuentes/github-bounties/pull/79) [#80](https://github.com/jegamboafuentes/github-bounties/pull/80) [#81](https://github.com/jegamboafuentes/github-bounties/pull/81) [#78](https://github.com/jegamboafuentes/github-bounties/pull/78)). API money is OFF on PROD. On the site: [MCP](https://githubbounties.xyz/mcp) (`/mcp`).
+**DONE, LIVE on PROD 2026-09-25.** `/api/v1` (OpenAPI) + `/mcp`, version 4.5.0, 24 operations, 25 tools ([#76](https://github.com/jegamboafuentes/github-bounties/pull/76) [#79](https://github.com/jegamboafuentes/github-bounties/pull/79) [#80](https://github.com/jegamboafuentes/github-bounties/pull/80) [#81](https://github.com/jegamboafuentes/github-bounties/pull/81) [#78](https://github.com/jegamboafuentes/github-bounties/pull/78)). API money is OFF on PROD. On the site: [MCP](https://githubbounties.xyz/mcp) (`/mcp`).
 
 ## Next
 

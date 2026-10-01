@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { notifyPullRequestWon, type DomainEmailDeps } from "../email/events";
 import { findGithubLinkByIdOrLogin } from "../github/persist";
@@ -94,6 +94,7 @@ export async function markEligibleClaims(
           eq(bounties.repoId, repo.id),
           eq(bounties.githubIssueNumber, issueNumber),
           inArray(bounties.status, [...FUNDED_BOUNTY_STATUSES]),
+          isNull(bounties.deletedAt),
         ),
       )
       .limit(1);
