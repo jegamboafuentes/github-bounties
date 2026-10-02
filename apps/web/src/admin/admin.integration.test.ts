@@ -20,6 +20,7 @@ import { getPlatformStats } from "../stats/get-platform-stats";
 import { expectedEscrowLiabilitiesAtomic } from "./balances";
 import { softDeleteBounty } from "./delete";
 import { AdminError } from "./errors";
+import { adminRefundBounty } from "./refund";
 import { setPlatformFee, setPlatformFeeBps, setPlatformPool, setPlatformPoolBps, readPlatformSettings } from "./settings";
 
 loadDotenvFiles();
@@ -207,6 +208,97 @@ describe("admin settings, stamping, and soft delete", () => {
       assert.equal(settings.feeBps >= 0, true);
       const [row] = await db.select().from(platformSettings).limit(1);
       assert.ok(row);
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("refunds a funded bounty through the existing flow only when ADMIN_REFUND_ENABLED=1", async () => {
+    const { db, sql, posterId, fullName } = await fixture();
+    const rail = createMockRail(probeCdpEnv({}));
+    const envOff = { API_MONEY_ENABLED: "0", ADMIN_REFUND_ENABLED: "0", CDP_NETWORK: "base-sepolia" };
+    const envOn = { API_MONEY_ENABLED: "0", ADMIN_REFUND_ENABLED: "1", CDP_NETWORK: "base-sepolia" };
+    try {
+      const funded = await post(db, posterId, fullName, 40);
+      await fundBounty(funded.id, posterId, db, new Date(), { rail });
+
+      await assert.rejects(
+        () =>
+          adminRefundBounty({
+            bountyId: "not-a-uuid",
+            actorEmail: "admin@example.com",
+            db,
+            env: envOff,
+            rail,
+          }),
+        (err: unknown) => err instanceof AdminError && err.status === 404 && err.code === "not_found",
+      );
+      const missingId = randomUUID();
+      await assert.rejects(
+        () =>
+          adminRefundBounty({
+            bountyId: missingId,
+            actorEmail: "admin@example.com",
+            db,
+            env: envOff,
+            rail,
+          }),
+        (err: unknown) => err instanceof AdminError && err.status === 404 && err.code === "not_found",
+      );
+      const stray = await db.select().from(adminAuditLog).where(eq(adminAuditLog.target, missingId));
+      assert.equal(stray.length, 0);
+
+      const draft = await post(db, posterId, fullName, 41);
+      await softDeleteBounty({ bountyId: draft.id, actorEmail: "admin@example.com", db });
+      await assert.rejects(
+        () =>
+          adminRefundBounty({
+            bountyId: draft.id,
+            actorEmail: "Admin@Example.com",
+            db,
+            env: envOn,
+            rail,
+          }),
+        (err: unknown) => err instanceof AdminError && err.status === 410 && err.code === "not_found",
+      );
+      const deletedAudits = await db.select().from(adminAuditLog).where(eq(adminAuditLog.target, draft.id));
+      const deletedAudit = deletedAudits.find((row) => row.action === "refund_bounty");
+      assert.equal(deletedAudit?.result, "refused");
+      assert.equal((deletedAudit?.after as { reason?: string } | null)?.reason, "deleted");
+
+      await assert.rejects(
+        () =>
+          adminRefundBounty({
+            bountyId: funded.id,
+            actorEmail: "Admin@Example.com",
+            db,
+            env: envOff,
+            rail,
+          }),
+        (err: unknown) => err instanceof AdminError && err.status === 403 && err.code === "admin_refund_disabled",
+      );
+      const [stillFunded] = await db.select({ status: bounties.status }).from(bounties).where(eq(bounties.id, funded.id));
+      assert.equal(stillFunded?.status, "funded");
+      const [refused] = await db
+        .select()
+        .from(adminAuditLog)
+        .where(eq(adminAuditLog.target, funded.id));
+      assert.equal(refused?.result, "refused");
+      assert.equal((refused?.after as { reason?: string } | null)?.reason, "admin_refund_disabled");
+
+      const refunded = await adminRefundBounty({
+        bountyId: funded.id,
+        actorEmail: "admin@example.com",
+        db,
+        env: envOn,
+        rail,
+      });
+      assert.equal(refunded.status, "cancelled");
+      assert.match(refunded.refundTxHash ?? "", /^mock:/);
+      const [after] = await db.select({ status: bounties.status }).from(bounties).where(eq(bounties.id, funded.id));
+      assert.equal(after?.status, "cancelled");
+      const audits = await db.select().from(adminAuditLog).where(eq(adminAuditLog.target, funded.id));
+      assert.equal(audits.some((row) => row.result === "ok" && row.action === "refund_bounty"), true);
     } finally {
       await sql.end({ timeout: 5 });
     }

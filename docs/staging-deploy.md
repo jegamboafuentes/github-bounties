@@ -260,7 +260,9 @@ Plain env (not Secret Manager):
 | `PUBLIC_BASE_URL` | omit | Optional env after live origin (GitHub URL helpers) |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | omit | Public Reown Cloud project id (not SM). Needed for WalletConnect QR on fund / Lock. Browser wallets work without it. Allow `https://dev.githubbounties.xyz` and `http://localhost:3000` in the Reown dashboard. |
 | `EMAIL_FROM` | omit | Optional plain env (not SM). Verified Resend sender. Unset uses `GitHub Bounties <noreply@githubbounties.xyz>`. DEV only. |
-| `API_MONEY_ENABLED` | omit | Optional plain env. Unset is **on** for `CDP_NETWORK=base-sepolia` and **off** for `base`. Set `0` to disable fund/top-up on the public API. Leave unset on PROD so mainnet cannot turn money on by accident. |
+| `API_MONEY_ENABLED` | omit | Optional plain env. Unset is **on** for `CDP_NETWORK=base-sepolia` and **off** for `base`. Set `0` to disable public fund/top-up/claim/refund. Leave unset or `0` on PROD. This does not enable admin refunds. |
+| `ADMIN_REFUND_ENABLED` | omit | Optional plain env. Exactly `1` enables admin refunds (admin host, admin session, `/api/v1/admin/*`, admin MCP). Set `1` on PROD when an admin should refund. Leave unset to keep admin refunds off. |
+| `ADMIN_WITHDRAW_ENABLED` | omit | Optional plain env. Exactly `1` enables admin fee withdraw. A preview writes an audit row and mints a 5-minute confirm token, so it is not read-only. |
 | `API_PER_TX_CAP_USDC` | omit | Optional plain env. Admin per-transaction ceiling. DEV default `50`, PROD default `25`. Users can only lower a key. |
 | `API_DAILY_CAP_USDC` | omit | Optional plain env. Admin daily ceiling. DEV default `200`, PROD default `100`. |
 

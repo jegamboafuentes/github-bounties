@@ -569,6 +569,104 @@ describe("scopes, money gate, and the mainnet flag", () => {
       assert.equal(bag.calls.seller, 0);
     });
   });
+
+  it("keeps public fund, cancel, and refund money-disabled when ADMIN_REFUND_ENABLED=1", async () => {
+    const env = envFor("base-sepolia", { API_MONEY_ENABLED: "0", ADMIN_REFUND_ENABLED: "1" });
+    assert.equal(apiMoneyEnabled(env), false);
+    const funded = memory({ env, status: "funded" });
+    const { token } = await principal(funded.deps, ["read", "write", "money"]);
+    const call = (kind: "fund" | "refund" | "cancel", key: string) =>
+      handleV1Action(
+        new Request(`https://dev.githubbounties.xyz/api/v1/bounties/${BOUNTY}/${kind}`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${token}`,
+            "idempotency-key": key,
+            "content-type": "application/json",
+          },
+          body: "{}",
+        }),
+        { kind, bountyId: BOUNTY },
+        funded.deps,
+      );
+    const fund = await call("fund", "public-fund-off");
+    const refund = await call("refund", "public-refund-off");
+    const cancel = await call("cancel", "public-cancel-funded");
+    for (const response of [fund, refund]) {
+      assert.equal(response.status, 403);
+      const body = (await response.json()) as {
+        error: { code: string; message: string; details: { apiMoneyEnabled?: boolean } };
+      };
+      assert.equal(body.error.code, "forbidden_scope");
+      assert.match(body.error.message, /disabled/i);
+      assert.equal(body.error.details.apiMoneyEnabled, false);
+    }
+    const cancelBody = (await cancel.json()) as { error: { code: string } };
+    assert.equal(cancel.status, 409);
+    assert.equal(cancelBody.error.code, "not_refundable");
+
+    const mcpCall = (name: string, idempotencyKey: string, id: number) =>
+      handleMcpHttp(
+        new Request("https://dev.githubbounties.xyz/mcp", {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+            accept: "application/json, text/event-stream",
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id,
+            method: "tools/call",
+            params: { name, arguments: { id: BOUNTY, idempotencyKey } },
+          }),
+        }),
+        funded.deps,
+      );
+    const mcpFund = await mcpCall("fund_bounty", "mcp-fund-off", 1);
+    const mcpRefund = await mcpCall("refund_bounty", "mcp-refund-off", 2);
+    const mcpCancel = await mcpCall("cancel_bounty", "mcp-cancel-funded", 3);
+    for (const response of [mcpFund, mcpRefund]) {
+      assert.equal(response.status, 200);
+      const outer = (await response.json()) as {
+        result: { isError: boolean; content: { text: string }[] };
+      };
+      assert.equal(outer.result.isError, true);
+      const inner = JSON.parse(outer.result.content[0]?.text ?? "{}") as {
+        error: { code: string; details: { apiMoneyEnabled?: boolean } };
+      };
+      assert.equal(inner.error.code, "forbidden_scope");
+      assert.equal(inner.error.details.apiMoneyEnabled, false);
+    }
+    const mcpCancelBody = (await mcpCancel.json()) as {
+      result: { isError: boolean; content: { text: string }[] };
+    };
+    assert.equal(mcpCancelBody.result.isError, true);
+    assert.match(mcpCancelBody.result.content[0]?.text ?? "", /not_refundable/);
+    assert.equal(funded.calls.seller, 0);
+    assert.equal(funded.calls.refund, 0);
+    assert.equal(funded.calls.cancel, 0);
+
+    const draft = memory({ env, status: "pending_fund" });
+    const { token: draftToken } = await principal(draft.deps, ["read", "write", "money"]);
+    const unfunded = await handleV1Action(
+      new Request(`https://dev.githubbounties.xyz/api/v1/bounties/${BOUNTY}/cancel`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${draftToken}`,
+          "idempotency-key": "public-cancel-draft",
+          "content-type": "application/json",
+        },
+        body: "{}",
+      }),
+      { kind: "cancel", bountyId: BOUNTY },
+      draft.deps,
+    );
+    assert.equal(unfunded.status, 200);
+    assert.equal(draft.calls.cancel, 1);
+    assert.equal(draft.calls.refund, 0);
+    assert.equal(draft.calls.seller, 0);
+  });
 });
 
 describe("per-key rate limits", () => {

@@ -182,7 +182,7 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
     "admin_refund_bounty",
     {
       title: "Admin: refund a bounty",
-      description: `${adminLead} Runs the existing refund flow for a funded bounty. The money flag applies. Funds return to the recorded payer. No caller-supplied destination.`,
+      description: `${adminLead} Runs the existing refund flow for a funded bounty when ADMIN_REFUND_ENABLED=1. Funds return to each recorded payer. No caller-supplied destination. API_MONEY_ENABLED does not enable this tool.`,
       inputSchema: { bountyId: z.string() },
       annotations: { destructiveHint: true },
     },
@@ -230,12 +230,12 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
     "admin_withdraw_fees_preview",
     {
       title: "Admin: preview a fee withdrawal",
-      description: `${adminLead} Preview a fee-wallet withdrawal and return a short-lived confirm token. Does not send.`,
+      description: `${adminLead} Preview a fee-wallet withdrawal. Writes an audit row and mints a 5-minute confirm token. Does not send USDC. Not read-only. Requires ADMIN_WITHDRAW_ENABLED=1.`,
       inputSchema: {
         amountUsdc: z.string(),
         destination: z.string(),
       },
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: false },
     },
     async (args) => {
       const email = await adminEmail(access);

@@ -26,6 +26,7 @@ export type AdminDashboardData = {
   feeOnChain: AdminMoneyTile;
   feesEarned: AdminMoneyTile;
   feesWithdrawn: AdminMoneyTile;
+  refundEnabled: boolean;
   withdrawEnabled: boolean;
   bounties: {
     rows: AdminBountyRow[];
@@ -273,13 +274,19 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
               className="mt-1 block w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-950"
             />
           </label>
-          <button
-            className="rounded-lg bg-zinc-900 px-3 py-2 text-sm text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-            type="submit"
-            disabled={!data.withdrawEnabled && !data.fixture}
+          <span
+            className="inline-flex"
+            title={data.withdrawEnabled ? undefined : "Withdrawals disabled on this deployment"}
           >
-            Preview
-          </button>
+            <button
+              className="rounded-lg bg-zinc-900 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+              type="submit"
+              disabled={!data.withdrawEnabled && !data.fixture}
+              title={data.withdrawEnabled ? undefined : "Withdrawals disabled on this deployment"}
+            >
+              Preview
+            </button>
+          </span>
         </form>
         {preview ? (
           <form
@@ -383,14 +390,28 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
                     <td className="py-2">
                       <div className="flex gap-1">
                         {row.refundable ? (
-                          <button
-                            type="button"
-                            aria-label={`Refund ${row.title}`}
-                            className="rounded-md border border-zinc-300 p-2 dark:border-zinc-700"
-                            onClick={() => setConfirm({ kind: "refund", bounty: row })}
+                          <span
+                            className="inline-flex"
+                            title={data.refundEnabled ? undefined : "Refunds disabled on this deployment"}
                           >
-                            <RefundIcon />
-                          </button>
+                            <button
+                              type="button"
+                              aria-label={
+                                data.refundEnabled
+                                  ? `Refund ${row.title}`
+                                  : "Refunds disabled on this deployment"
+                              }
+                              title={data.refundEnabled ? undefined : "Refunds disabled on this deployment"}
+                              disabled={!data.refundEnabled}
+                              className="rounded-md border border-zinc-300 p-2 disabled:cursor-not-allowed disabled:opacity-40 dark:border-zinc-700"
+                              onClick={() => {
+                                if (!data.refundEnabled) return;
+                                setConfirm({ kind: "refund", bounty: row });
+                              }}
+                            >
+                              <RefundIcon />
+                            </button>
+                          </span>
                         ) : null}
                         <button
                           type="button"
@@ -446,7 +467,7 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
             <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
               {confirmBounty.kind === "delete"
                 ? "It leaves the public board, API, and stats. Paid, cancelled, refunded, and never-funded bounties can be deleted. A bounty that still holds funds stays put."
-                : "This uses the existing refund flow. Funds return to the recorded payer. The money flag and the current refund guards still apply."}
+                : "This uses the existing refund flow. Each contributor is refunded to their recorded refund address. The current refund guards still apply."}
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button

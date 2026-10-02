@@ -3,6 +3,7 @@ import { readBalanceReport, type BalanceReport } from "@/admin/balances";
 import { listAdminBounties, parseAdminBountyStatus, type AdminBountyRow } from "@/admin/bounties";
 import { requireAdminPageUser } from "@/admin/gate";
 import { bpsToPercent, readPlatformSettings } from "@/admin/settings";
+import { adminRefundEnabled } from "@/admin/refund";
 import { withdrawEnabled } from "@/admin/withdraw-guards";
 import { bountyStatusLabel } from "@/bounties/display";
 import { AdminDashboard, type AdminDashboardData } from "@/components/admin-dashboard";
@@ -74,6 +75,7 @@ function fixtureData(step: string | undefined, search: string, status: string): 
     feeOnChain: { text: "0.664200", error: false },
     feesEarned: { text: "0.664200", error: false },
     feesWithdrawn: { text: "0.000000", error: false },
+    refundEnabled: true,
     withdrawEnabled: true,
     bounties: {
       rows,
@@ -149,6 +151,7 @@ export default async function AdminPage({
     feeOnChain: tileText(report.feeOnChain.usdc, report.feeOnChain.error, "—"),
     feesEarned: tileText(report.feesEarned.usdc, report.feesEarned.error, "—"),
     feesWithdrawn: tileText(report.feesWithdrawn.usdc, report.feesWithdrawn.error, "—"),
+    refundEnabled: adminRefundEnabled(),
     withdrawEnabled: withdrawEnabled(),
     bounties: {
       rows: listed.bounties,
