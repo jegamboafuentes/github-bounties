@@ -140,7 +140,7 @@ Spend ceilings (a user can lower these, not raise them):
 
 `API_PER_TX_CAP_USDC` and `API_DAILY_CAP_USDC` are optional admin overrides of those ceilings.
 
-`API_MONEY_ENABLED` defaults **on** for `base-sepolia` and **off** for `CDP_NETWORK=base`. Set it to `0` to disable money on DEV. Do not set it on PROD until a later sign-off.
+`API_MONEY_ENABLED` defaults **on** for `base-sepolia` and **off** for `CDP_NETWORK=base`. Set it to `0` to disable money on DEV. Leave it unset or `0` on PROD. It gates public REST and MCP money actions only. Admin refunds need `ADMIN_REFUND_ENABLED=1` on that deployment (PROD, and DEV if you want admin refunds there). Admin fee withdraw needs `ADMIN_WITHDRAW_ENABLED=1`. Neither admin flag turns public fund, cancel, or refund on. A fee-withdraw preview writes an admin audit row and mints a 5-minute confirm token, so that preview is not read-only.
 
 Authenticated limits, counted in `api_request_log` (shared across Cloud Run instances): read 120/minute, write 20/minute, money 10/hour. Anonymous reads stay at the V4-1 per-IP limit. `GET /api/v1/me`, `GET /api/v1/me/usage`, `GET /api/v1/me/bounties`, `GET /api/v1/me/claims`, `GET /api/v1/bounties/{id}/claims`, `GET /api/v1/me/profile`, `GET /api/v1/me/notification-preferences`, and `GET /api/v1/me/linked-accounts` need the `read` scope. Post, work-signal, unfunded cancel, unfunded amount edit, and the profile and notification PATCH routes need `write`. Fund, top-up, claim, and refund need `money`. Profile and notification PATCH do not require `Idempotency-Key`.
 
@@ -260,7 +260,9 @@ GB_API_KEY=gb_test_... BOUNTY_ID=... KIND=winner \
 | Name | Kind | Notes |
 | --- | --- | --- |
 | `API_KEY_HMAC_SECRET` | Secret Manager | Required before any key can be created or accepted. HMAC-SHA256 secret, at least 16 characters. Attach as `API_KEY_HMAC_SECRET=API_KEY_HMAC_SECRET:latest` when an enabled version exists (`WEB_OPTIONAL_SECRETS`, same skip-if-absent rule as `GEMINI_API_KEY`). |
-| `API_MONEY_ENABLED` | Plain env, optional | Unset means on for `base-sepolia` and off for `base`. Set `0` to turn money off on DEV. Leave unset on PROD. |
+| `API_MONEY_ENABLED` | Plain env, optional | Unset means on for `base-sepolia` and off for `base`. Set `0` to turn public money off on DEV. Leave unset or `0` on PROD. Does not enable admin refunds. |
+| `ADMIN_REFUND_ENABLED` | Plain env, optional | Exactly `1` enables admin refunds on the admin host. Leave unset to keep them off. |
+| `ADMIN_WITHDRAW_ENABLED` | Plain env, optional | Exactly `1` enables admin fee withdraw. A preview writes an audit row and mints a 5-minute confirm token, so it is not read-only. |
 | `API_PER_TX_CAP_USDC` | Plain env, optional | Admin ceiling. Default 50 on DEV, 25 on PROD. Users cannot raise their keys above this. |
 | `API_DAILY_CAP_USDC` | Plain env, optional | Admin ceiling. Default 200 on DEV, 100 on PROD. |
 

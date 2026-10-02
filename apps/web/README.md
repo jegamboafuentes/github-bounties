@@ -202,6 +202,15 @@ Eligible hunter (merged PR author) claims winner share + fee to a BYO Base addre
 | API | `POST /api/bounties/:id/claim` (hunter-only) |
 | Docs | [docs/claims.md](../../docs/claims.md) |
 
+## Admin console
+
+The console is the admin host only (`admin.githubbounties.xyz` on PROD, `admin-dev.githubbounties.xyz` on DEV), and every action requires an admin session (`ADMIN_EMAILS`). Public REST and MCP money actions stay on `API_MONEY_ENABLED`. Leave that unset or `0` on PROD.
+
+| Env | Effect |
+| --- | --- |
+| `ADMIN_REFUND_ENABLED=1` | Enables admin refunds (UI, `/api/v1/admin/*`, admin MCP). Anything else keeps them off. Does not turn public fund, cancel, or refund on. |
+| `ADMIN_WITHDRAW_ENABLED=1` | Enables fee withdraw. A preview writes an admin audit row and mints a 5-minute confirm token. It does not send USDC, and it is not read-only. |
+
 ## Out of scope (later tickets)
 
 - Participation-pool accounting beyond nullable columns
