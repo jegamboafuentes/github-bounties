@@ -8,6 +8,7 @@ describe("protected paths", () => {
     assert.equal(isProtectedPagePath("/settings/wallet"), true);
     assert.equal(isProtectedPagePath("/github/setup"), true);
     assert.equal(isProtectedPagePath("/github/callback"), true);
+    assert.equal(isProtectedPagePath("/huggingface/callback"), true);
     assert.equal(isProtectedPagePath("/bounties/new"), true);
     assert.equal(isProtectedPagePath("/board"), false);
     assert.equal(isProtectedPagePath("/about"), false);
@@ -19,6 +20,8 @@ describe("protected paths", () => {
 
     assert.equal(isProtectedApiPath("/api/me"), true);
     assert.equal(isProtectedApiPath("/api/github/connect"), true);
+    assert.equal(isProtectedApiPath("/api/huggingface/connect"), true);
+    assert.equal(isProtectedApiPath("/api/huggingface/disconnect"), true);
     assert.equal(isProtectedApiPath("/api/health"), false);
     assert.equal(isProtectedApiPath("/api/stats"), false);
     assert.equal(isProtectedApiPath("/api/v1/bounties"), false);

@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { githubLinks, userNotificationPreferences, users, type EmailTemplateName } from "../db/schema";
+import { githubLinks, hfLinks, userNotificationPreferences, users, type EmailTemplateName } from "../db/schema";
 
 export const DISPLAY_NAME_MAX = 80;
 
@@ -49,11 +49,26 @@ export const DEFAULT_EMAIL_NOTIFICATION_PREFS: EmailNotificationPrefs = {
   poolClaimable: true,
 };
 
+export type HuggingFaceAccount = {
+  username: string;
+  linkedAt: string;
+};
+
 export type LinkedAccounts = {
   google: { email: string };
   github: { login: string; id: string; linkedAt: string } | null;
+  huggingface: HuggingFaceAccount | null;
   wallet: { address: string | null };
 };
+
+export function huggingfaceAccountView(
+  username: string | null | undefined,
+  linkedAt: Date | null | undefined,
+): HuggingFaceAccount | null {
+  const name = username?.trim() ?? "";
+  if (!name || !linkedAt) return null;
+  return { username: name, linkedAt: linkedAt.toISOString() };
+}
 
 /**
  * Trim, collapse internal whitespace, then enforce 1–80 code points.
@@ -219,11 +234,20 @@ export async function loadLinkedAccounts(db: Database, userId: string): Promise<
     .from(githubLinks)
     .where(eq(githubLinks.userId, userId))
     .limit(1);
+  const [hf] = await db
+    .select({
+      hfUsername: hfLinks.hfUsername,
+      linkedAt: hfLinks.linkedAt,
+    })
+    .from(hfLinks)
+    .where(eq(hfLinks.userId, userId))
+    .limit(1);
   return {
     google: { email: user.email },
     github: link
       ? { login: link.githubLogin, id: link.githubId.toString(), linkedAt: link.linkedAt.toISOString() }
       : null,
+    huggingface: huggingfaceAccountView(hf?.hfUsername, hf?.linkedAt),
     wallet: { address: user.walletAddress },
   };
 }
