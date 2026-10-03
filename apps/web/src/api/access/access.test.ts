@@ -815,6 +815,55 @@ describe("spend caps, idempotency, and headless x402", () => {
     assert.equal(top.calls.lock, 0);
   });
 
+  it("declares the builder code on REST and MCP fund challenges", async () => {
+    const code = "bc_u97ii222";
+    const bag = memory({
+      env: envFor("base-sepolia", { BASE_BUILDER_CODE: code }),
+      face: "10.000000",
+    });
+    const { principal: key, token } = await principal(bag.deps, ["money"]);
+    const rest = await handleFund(key, BOUNTY, {}, "fund-bc", null, "https://dev.githubbounties.xyz", bag.deps);
+    assert.equal(rest.status, 402);
+    const restRequired = (
+      rest.body as {
+        error: { details: { paymentRequired: { extensions?: Record<string, { info?: { a?: string } }> } } };
+      }
+    ).error.details.paymentRequired;
+    assert.equal(restRequired.extensions?.["builder-code"]?.info?.a, code);
+
+    const mcp = await handleMcpHttp(
+      new Request("https://dev.githubbounties.xyz/mcp", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: { name: "fund_bounty", arguments: { id: BOUNTY, idempotencyKey: "mcp-fund-bc" } },
+        }),
+      }),
+      bag.deps,
+    );
+    assert.equal(mcp.status, 200);
+    const outer = (await mcp.json()) as { result: { content: { text: string }[] } };
+    const inner = JSON.parse(outer.result.content[0]?.text ?? "{}") as {
+      error: { details: { paymentRequired: { extensions?: Record<string, { info?: { a?: string } }> } } };
+    };
+    assert.equal(inner.error.details.paymentRequired.extensions?.["builder-code"]?.info?.a, code);
+
+    const plain = memory({ face: "10.000000" });
+    const { principal: payer } = await principal(plain.deps, ["money"]);
+    const unset = await handleFund(payer, BOUNTY, {}, "fund-plain", null, "https://dev.githubbounties.xyz", plain.deps);
+    const unsetRequired = (
+      unset.body as { error: { details: { paymentRequired: { extensions?: unknown } } } }
+    ).error.details.paymentRequired;
+    assert.equal(unsetRequired.extensions, undefined);
+  });
+
   it("rejects a body that carries an address and never calls the facilitator", async () => {
     const bag = memory();
     const { principal: key } = await principal(bag.deps, ["money"]);

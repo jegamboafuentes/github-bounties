@@ -19,7 +19,7 @@ This is **not** Lightning Bounties, LB1, or “Lightning Bounties 2”. Older pr
 
 ## Status now
 
-As of **2026-10-03**. No invented ship dates. `/roadmap`, About, and [docs/roadmap.md](docs/roadmap.md) use this list. Chain differs by environment; the versions do not. The homepage has no roadmap section.
+As of **2026-10-03**. No invented ship dates. `/roadmap`, About, and [docs/roadmap.md](docs/roadmap.md) use this list. Chain differs by environment. PROD serves API 4.5.0. 4.6.0 is the DEV and main API version and adds the provider field. The homepage has no roadmap section.
 
 | Environment | URL | Chain |
 | --- | --- | --- |
@@ -34,7 +34,7 @@ As of **2026-10-03**. No invented ship dates. `/roadmap`, About, and [docs/roadm
 - **FE epic** — LIVE on PROD 2026-09-20. Homepage stats, public roadmap, and vs-Lightning differentiators. Same aggregates as GET /api/stats. Bounty pages include the payout split charts.
 - **V3 wave** — LIVE on PROD 2026-09-21. Full GitHub issue + Gemini about/stack/complexity (AI estimates, cached). Related polish: board badges/filters, Settings/Post connected-only, homepage motion/roadmap refresh.
 - **Funding wave** — LIVE on PROD 2026-09-24. Crowdfunding (#61): USDC top-ups on already-funded bounties. Fund any public issue (#64) without installing the GitHub App, with Claim running through the public merge poller. Funder avatars (#65 to #67) on the board cards and on the bounty page Funders list.
-- **V4 — API + MCP.** DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version 4.6.0, 24 operations, 25 tools (#76 #79 #80 #81 #78). API money is OFF on PROD. [MCP](https://githubbounties.xyz/mcp).
+- **V4 — API + MCP.** LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp (#76 #79 #80 #81 #78). API money is OFF on PROD. PROD serves 4.5.0. 4.6.0 is the DEV and main API version (24 operations, 25 tools) and adds the provider field. [MCP](https://githubbounties.xyz/mcp).
 - **V5 — MCP page, unfunded edits, admin.** DONE. `/mcp` is the MCP server endpoint and its docs page. Posters edit an unfunded bounty amount on the web, REST, and MCP (`update_bounty_amount`). The admin dashboard on admin hosts sets fee and pool, lists bounties with trash and refund, gates refunds on `ADMIN_REFUND_ENABLED`, and gates fee-wallet withdraws on `ADMIN_WITHDRAW_ENABLED` with a single-use confirm token and a duplicate guard. Admin actions write an admin audit log. No recorded PROD date.
 
 ### In progress
@@ -112,7 +112,7 @@ Plain env, not Secret Manager. Empty placeholders live in `apps/web/.env.example
 | `ADMIN_REFUND_ENABLED` | Exactly `1` enables admin refunds (dashboard, `/api/v1/admin/*`, admin MCP). Anything else keeps them off. Does not enable public fund, cancel, or refund. |
 | `ADMIN_WITHDRAW_ENABLED` | Exactly `1` enables fee-wallet withdraw. A preview writes an audit row and mints a 5-minute single-use confirm token. It does not send USDC, and it is not read-only. `API_MONEY_ENABLED` does not enable it. |
 | `FEE_WALLET_ADDRESS` | Expected `gb-fee` address. Withdraw aborts when it is unset or when `getAccount({ name: "gb-fee" })` does not match it. |
-| `BASE_BUILDER_CODE` | Optional public [base.dev](https://www.base.dev/) builder code (`^[a-z0-9_]{1,32}$`). When set, server-sent escrow and fee USDC transfers append an ERC-8021 Schema 0 suffix. Unset sends the same plain `transfer` calldata as before. Not a secret. |
+| `BASE_BUILDER_CODE` | Optional public [base.dev](https://www.base.dev/) builder code (`^[a-z0-9_]{1,32}$`). The registered code is `bc_u97ii222`. When set, server-sent USDC transfers append an ERC-8021 Schema 0 suffix, and x402 fund challenges declare the same code so the facilitator can settle Schema 2 `{ a, w }`. Unset is a no-op. Not a secret. Ops sets `BASE_BUILDER_CODE=bc_u97ii222` on DEV first, then on PROD on Enrique's GO. |
 
 ## Money path
 
@@ -128,7 +128,7 @@ The product money path **is wired**. PROD moves real USDC. Early V0-A “no prod
 | Fund UX | x402 `exact` to `gb-escrow` + WalletConnect / Pay face. Paste-hash stays under Advanced. Hosted checkout is off. |
 | Refund / cancel | Full **F** to the funder. No fee, no pool. |
 
-Outbound escrow payouts, refunds, and admin fee withdraws are ERC-20 `transfer` calls from the CDP server wallet. When `BASE_BUILDER_CODE` is set, that calldata carries an ERC-8021 Schema 0 suffix so Base can attribute the transaction. Unset, the calldata is the transfer alone. Those sends use `account.sendTransaction` and pass the persisted idempotency key. `account.transfer()` in `@coinbase/cdp-sdk` 1.55–1.57 dropped that key, so CDP was not de-duplicating them. x402 funding is unchanged.
+Outbound escrow payouts, refunds, and admin fee withdraws are ERC-20 `transfer` calls from the CDP server wallet. When `BASE_BUILDER_CODE` is set, that calldata carries an ERC-8021 Schema 0 suffix so Base can attribute the transaction. Unset, the calldata is the transfer alone. Those sends use `account.sendTransaction` and pass the persisted idempotency key. `account.transfer()` in `@coinbase/cdp-sdk` 1.55–1.57 dropped that key, so CDP was not de-duplicating them. x402 funding declares the same code on the 402 challenge (`@x402/extensions/builder-code`). The browser payer echoes it. The CDP facilitator reads `a` from that payload and appends Schema 2 `{ a, w }` on the fund transaction. A payer that does not echo the code still settles. The registered code is `bc_u97ii222`. Ops sets `BASE_BUILDER_CODE=bc_u97ii222` on DEV first, then on PROD on Enrique's GO.
 
 Decisions, sequences, and failure modes:
 
@@ -152,7 +152,7 @@ Decisions, sequences, and failure modes:
 | GitHub App + webhooks | [docs/github-app.md](docs/github-app.md), [docs/webhooks.md](docs/webhooks.md) |
 | Schema | [docs/v1-schema.md](docs/v1-schema.md) |
 | DEV deploy / E2E | [docs/staging-deploy.md](docs/staging-deploy.md), [docs/staging-e2e.md](docs/staging-e2e.md) |
-| PROD cutover (apex, mainnet, separate stack) | [docs/prod-cutover.md](docs/prod-cutover.md) |
+| PROD (apex, mainnet, shared CDP wallets for now) | [docs/prod-cutover.md](docs/prod-cutover.md) |
 
 Product app: [`apps/web`](apps/web) (Next.js App Router, Drizzle, Cloud Run `standalone`).
 
@@ -193,8 +193,7 @@ No secrets belong in git. App private keys (`*.pem`) are gitignored. Empty place
 
 ## Infra notes
 
-- GCP project is still **`experiment-jegf`** (`42206083192`). DEV and PROD are **separate** Cloud Run services, Cloud SQL instances, and Secret Manager stacks. Do not remount DEV onto the apex.
-- Suggested names: DEV `github-bounties-web` / `github-bounties-staging`; PROD `github-bounties-web-prod` / `github-bounties-prod`. See [docs/prod-cutover.md](docs/prod-cutover.md).
+- GCP project is still **`experiment-jegf`** (`42206083192`). DEV and PROD are **separate** Cloud Run services and databases. They share one CDP project and wallet secret; only `CDP_NETWORK` separates the chains. Do not remount DEV onto the apex. See [docs/prod-cutover.md](docs/prod-cutover.md).
 - Hosted Coinbase checkout and BTC payouts are parked (see [docs/roadmap.md](docs/roadmap.md)).
 
 ## Sandbox / historical spikes

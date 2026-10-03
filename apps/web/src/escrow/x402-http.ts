@@ -250,6 +250,7 @@ export async function handleX402Fund(
     payTo: wallets.escrowAddress,
     faceUsdc: bounty.amountUsdc,
     network: rail.network,
+    env,
   });
 
   if (!paymentHeader) {
@@ -442,6 +443,7 @@ async function handleFundedTopUp(input: {
     faceUsdc: amountUsdc,
     network: rail.network,
     description,
+    env,
   });
 
   if (!paymentHeader) {

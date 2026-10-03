@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { BASE_MAINNET_CAIP2, BASE_SEPOLIA_CAIP2, USDC_BASE_MAINNET, USDC_BASE_SEPOLIA } from "../lib/constants";
-import { decodePaymentRequiredHeader } from "../escrow/x402";
-import { encodePaymentRequiredHeader } from "../escrow/x402";
+import { buildX402ExactChallenge, decodePaymentRequiredHeader, encodePaymentRequiredHeader } from "../escrow/x402";
 import {
   buildEip3009Authorization,
   buildExactPaymentPayload,
+  echoedBuilderCodeExtension,
   caip2ToChainId,
   eip3009TypedData,
   encodePaymentSignatureHeader,
@@ -83,8 +83,48 @@ describe("x402 browser pay payload", () => {
     assert.equal(decoded.x402Version, 2);
     assert.equal(decoded.accepted.scheme, "exact");
     assert.equal(decoded.payload.authorization.value, "1");
+    assert.equal("extensions" in payload, false);
+    assert.equal(echoedBuilderCodeExtension(challenge), undefined);
     const nonce = randomAuthorizationNonce((out) => out.fill(7));
     assert.equal(nonce, `0x${"07".repeat(32)}`);
+  });
+
+  it("echoes the declared builder code and still builds a payload when the challenge has none", () => {
+    const declared = buildX402ExactChallenge({
+      bountyId: "b1",
+      origin: "https://dev.githubbounties.xyz",
+      payTo: "0x00000000000000000000000000000000e5c400",
+      faceUsdc: "1",
+      network: "base-sepolia",
+      env: { BASE_BUILDER_CODE: "bc_u97ii222" },
+    });
+    const parsed = parseX402Challenge(declared, encodePaymentRequiredHeader(declared));
+    assert.ok(parsed);
+    const auth = buildEip3009Authorization({
+      from: "0x1111111111111111111111111111111111111111",
+      to: "0x00000000000000000000000000000000e5c400",
+      amountAtomic: "1",
+      nowSeconds: 10,
+      maxTimeoutSeconds: 60,
+      nonce: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    });
+    const payload = buildExactPaymentPayload({
+      challenge: parsed,
+      requirements: parsed.accepts[0],
+      authorization: auth,
+      signature: `0x${"cd".repeat(65)}`,
+    });
+    assert.equal(
+      (payload.extensions?.["builder-code"] as { info?: { a?: string } } | undefined)?.info?.a,
+      "bc_u97ii222",
+    );
+    const plain = buildExactPaymentPayload({
+      challenge,
+      requirements: challenge.accepts[0],
+      authorization: auth,
+      signature: `0x${"cd".repeat(65)}`,
+    });
+    assert.equal("extensions" in plain, false);
   });
 
   it("signs the 402 challenge and retries with PAYMENT-SIGNATURE", async () => {

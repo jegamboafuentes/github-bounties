@@ -19,6 +19,32 @@ export type RoadmapItem = {
   href?: string;
 };
 
+export type RoadmapTextSegment = { kind: "text" | "code"; text: string };
+
+/**
+ * Roadmap copy may use `backticks` for inline code. An unmatched backtick
+ * stays literal text so a typo cannot swallow the rest of the line.
+ */
+export function roadmapTextSegments(text: string): RoadmapTextSegment[] {
+  const parts = text.split("`");
+  if (parts.length % 2 === 0) return [{ kind: "text", text }];
+  const segments: RoadmapTextSegment[] = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+    if (!part) continue;
+    segments.push({ kind: index % 2 === 1 ? "code" : "text", text: part });
+  }
+  return segments.length > 0 ? segments : [{ kind: "text", text: "" }];
+}
+
+/** V4 is live on PROD at API 4.5.0. PUBLIC_API_VERSION is DEV and main. */
+function v4Summary(phrase?: string): string {
+  const version = phrase
+    ? `${PUBLIC_API_VERSION} is the DEV and main API version (${phrase}) and adds the provider field.`
+    : `${PUBLIC_API_VERSION} is the DEV and main API version and adds the provider field.`;
+  return `LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp (#76 #79 #80 #81 #78). API money is OFF on PROD. PROD serves 4.5.0. ${version}`;
+}
+
 export const PUBLIC_ROADMAP = [
   {
     id: "v1",
@@ -72,7 +98,7 @@ export const PUBLIC_ROADMAP = [
     id: "v4",
     version: "V4",
     title: "API + MCP",
-    summary: `DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version ${PUBLIC_API_VERSION} (#76 #79 #80 #81 #78). API money is OFF on PROD.`,
+    summary: v4Summary(),
     status: "shipped",
     href: "/mcp",
   },
@@ -130,7 +156,7 @@ export function roadmapWithSurface(counts: PublicSurfaceCounts): RoadmapItem[] {
     item.id === "v4"
       ? {
           ...item,
-          summary: `DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version ${PUBLIC_API_VERSION}, ${phrase} (#76 #79 #80 #81 #78). API money is OFF on PROD.`,
+          summary: v4Summary(phrase),
         }
       : item,
   );

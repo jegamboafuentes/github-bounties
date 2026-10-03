@@ -421,6 +421,7 @@ function paymentRequired(input: {
   origin: string;
   description: string;
   topUp?: boolean;
+  env?: NodeJS.ProcessEnv;
 }): ApiResult {
   const challenge = buildX402ExactChallenge({
     bountyId: input.bountyId,
@@ -429,6 +430,7 @@ function paymentRequired(input: {
     faceUsdc: input.amountUsdc,
     network: input.network,
     description: input.description,
+    env: input.env,
   });
   const url = approvalUrl(input.origin, input.bountyId);
   return {
@@ -807,6 +809,7 @@ async function settleAndLock(input: {
       network: escrow.network,
       origin: input.origin,
       description,
+      env: deps.env,
       topUp: input.kind === "top_up",
     });
   }

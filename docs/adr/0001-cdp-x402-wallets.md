@@ -306,7 +306,7 @@ sequenceDiagram
   Note over App,Ledger: If fee tx fails: SettledPartial; retry FEE_OUT only.
 ```
 
-Outbound USDC is `account.sendTransaction` of an ERC-20 `transfer`, not `account.transfer()`. The idempotency key in the diagram is the `idempotencyKey` argument (`X-Idempotency-Key`). `transfer()` in `@coinbase/cdp-sdk` 1.55–1.57 dropped that argument. When `BASE_BUILDER_CODE` is set, the calldata also carries an ERC-8021 Schema 0 suffix. CDP returns the transaction hash the same way; this path does not add a separate receipt poll.
+Outbound USDC is `account.sendTransaction` of an ERC-20 `transfer`, not `account.transfer()`. The idempotency key in the diagram is the `idempotencyKey` argument (`X-Idempotency-Key`). `transfer()` in `@coinbase/cdp-sdk` 1.55–1.57 dropped that argument. When `BASE_BUILDER_CODE` is set, the calldata also carries an ERC-8021 Schema 0 suffix. x402 fund settlements then carry Schema 2 `{ a, w }` because the 402 declares the code and the payer echoes it. The registered code is `bc_u97ii222`. CDP returns the transaction hash the same way; this path does not add a separate receipt poll.
 
 ### Refund / expiry
 

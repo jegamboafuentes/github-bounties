@@ -30,7 +30,26 @@ export type X402ExactPaymentPayload = {
     signature: `0x${string}`;
     authorization: Eip3009Authorization;
   };
+  /**
+   * Echo of the 402 `builder-code` declaration. The CDP facilitator reads `a`
+   * from here. Omitted when the challenge did not declare a code, so an
+   * external payer that leaves this off still settles.
+   */
+  extensions?: Record<string, unknown>;
 };
+
+const BUILDER_CODE_EXTENSION = "builder-code";
+
+/** Copy the declared builder-code extension onto the payer payload, or omit it. */
+export function echoedBuilderCodeExtension(
+  challenge: X402PaymentRequired,
+): Record<string, unknown> | undefined {
+  const declared = challenge.extensions?.[BUILDER_CODE_EXTENSION];
+  if (!declared || typeof declared !== "object") return undefined;
+  const info = (declared as { info?: { a?: unknown } }).info;
+  if (typeof info?.a !== "string" || !info.a) return undefined;
+  return { [BUILDER_CODE_EXTENSION]: declared };
+}
 
 export type WalletTypedDataSigner = {
   address: `0x${string}`;
@@ -153,6 +172,7 @@ export function buildExactPaymentPayload(input: {
   authorization: Eip3009Authorization;
   signature: `0x${string}`;
 }): X402ExactPaymentPayload {
+  const extensions = echoedBuilderCodeExtension(input.challenge);
   return {
     x402Version: 2,
     resource: input.challenge.resource,
@@ -161,6 +181,7 @@ export function buildExactPaymentPayload(input: {
       signature: input.signature,
       authorization: input.authorization,
     },
+    ...(extensions ? { extensions } : {}),
   };
 }
 
@@ -232,6 +253,11 @@ export function parseX402Challenge(
     (typeof requirements.payTo === "string" ? "" : "");
   const resource = normalizeResource(resourceRaw, fallback);
   if (!resource) return null;
+  const extensionsRaw = headerObj?.extensions ?? bodyObj?.extensions;
+  const extensions =
+    extensionsRaw && typeof extensionsRaw === "object" && !Array.isArray(extensionsRaw)
+      ? (extensionsRaw as Record<string, unknown>)
+      : undefined;
   return {
     x402Version: 2,
     error: typeof headerObj?.error === "string"
@@ -241,6 +267,7 @@ export function parseX402Challenge(
         : "Payment required",
     resource,
     accepts: [requirements, ...((accepts as X402ExactRequirements[]).filter((row) => row !== requirements))],
+    ...(extensions ? { extensions } : {}),
   };
 }
 

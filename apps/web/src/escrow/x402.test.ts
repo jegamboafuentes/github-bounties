@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { x402ResourceServer } from "@x402/core/server";
+import { builderCodeResourceServerExtension } from "@x402/extensions/builder-code";
 import {
   BASE_MAINNET_CAIP2,
   BASE_SEPOLIA_CAIP2,
@@ -24,6 +27,7 @@ import {
   x402FailureFromChallenge,
   x402NetworkCaip2,
   x402ResourceUrl,
+  x402BuilderCodeExtensions,
   x402UsdcEip712Extra,
 } from "./x402";
 
@@ -35,7 +39,9 @@ describe("x402 exact fund challenge", () => {
       payTo: "0x00000000000000000000000000000000e5c400",
       faceUsdc: "12.500000",
       network: "base-sepolia",
+      env: {},
     });
+    assert.equal(challenge.extensions, undefined);
     assert.equal(challenge.x402Version, 2);
     assert.equal(challenge.accepts.length, 1);
     const accept = challenge.accepts[0];
@@ -86,7 +92,9 @@ describe("x402 exact fund challenge", () => {
       payTo: "0x4a26235bf51c73048635d607EB5371E9b3e611B8",
       faceUsdc: "1",
       network: "base",
+      env: {},
     });
+    assert.equal(challenge.extensions, undefined);
     const accept = challenge.accepts[0];
     assert.equal(accept.network, BASE_MAINNET_CAIP2);
     assert.equal(accept.asset, USDC_BASE_MAINNET);
@@ -126,6 +134,42 @@ describe("x402 exact fund challenge", () => {
   });
 
   it("seller follows the rail mainnet allow flag", () => {
+    assert.equal(x402BuilderCodeExtensions({}), undefined);
+    const declared = x402BuilderCodeExtensions({ BASE_BUILDER_CODE: "bc_u97ii222" });
+    assert.equal(
+      (declared?.["builder-code"] as { info?: { a?: string } } | undefined)?.info?.a,
+      "bc_u97ii222",
+    );
+    assert.throws(() => x402BuilderCodeExtensions({ BASE_BUILDER_CODE: "NOT-A-CODE" }));
+    const seller = readFileSync(new URL("./x402-seller.ts", import.meta.url), "utf8");
+    assert.match(seller, /extensions: builderExtensions/);
+    assert.match(seller, /registerExtension\(builderCodeResourceServerExtension\)/);
+    assert.match(seller, /if \(builderExtensions\)/);
+
+    const required = buildX402ExactChallenge({
+      bountyId: "33333333-3333-4333-8333-333333333333",
+      origin: "https://dev.githubbounties.xyz",
+      payTo: "0x4a26235bf51c73048635d607EB5371E9b3e611B8",
+      faceUsdc: "1",
+      network: "base-sepolia",
+      env: { BASE_BUILDER_CODE: "bc_u97ii222" },
+    });
+    const server = new x402ResourceServer({ url: "http://127.0.0.1" } as never);
+    server.registerExtension(builderCodeResourceServerExtension);
+    const bare = { x402Version: 2 as const, accepted: required.accepts[0], payload: {} };
+    assert.equal(server.validateExtensions(required, bare).valid, true);
+    assert.equal(
+      server.validateExtensions(required, { ...bare, extensions: required.extensions }).valid,
+      true,
+    );
+    assert.equal(
+      server.validateExtensions(required, {
+        ...bare,
+        extensions: { "builder-code": { info: { a: "bc_othercode" } } },
+      }).valid,
+      false,
+    );
+
     assert.equal(x402SellerNetworkCaip2("base-sepolia", {}), BASE_SEPOLIA_CAIP2);
     assert.throws(
       () => x402SellerNetworkCaip2("base", {}),

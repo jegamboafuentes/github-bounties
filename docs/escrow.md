@@ -62,7 +62,7 @@ CDP_NETWORK=base-sepolia          # default
 # CDP_ALLOW_MAINNET=1             # required in addition to CDP_NETWORK=base
 # CDP_DRY_RUN=1                   # documented dry-run (default in .env.example)
 # CDP_DRY_RUN_LIVE=1              # Sepolia faucet + live transfers only
-# BASE_BUILDER_CODE=              # optional public code; unset means no suffix
+# BASE_BUILDER_CODE=bc_u97ii222   # optional public code; unset means no suffix and no x402 extension
 
 # Public Reown / WalletConnect project id (not Secret Manager).
 # NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
@@ -72,7 +72,7 @@ CDP_NETWORK=base-sepolia          # default
 
 ## Builder code
 
-`BASE_BUILDER_CODE` is optional and not a secret. It must match `^[a-z0-9_]{1,32}$` (the same pattern Base publishes, for example `bc_b7k3p9da`). When it is set, payout, refund, and admin fee-withdraw calldata is the ERC-20 `transfer(to, amount)` plus an ERC-8021 Schema 0 suffix from `Attribution.toDataSuffix` (`ox/erc8021`). The suffix ends in `8021` repeated eight times. Contracts ignore the extra bytes. When it is unset or blank, the calldata is the 68-byte transfer and matches the previous send. x402 fund transactions are not changed here.
+`BASE_BUILDER_CODE` is optional and not a secret. It must match `^[a-z0-9_]{1,32}$`. The registered code is `bc_u97ii222`. Ops sets `BASE_BUILDER_CODE=bc_u97ii222` on DEV first, then on PROD on Enrique's GO. When it is set, payout, refund, and admin fee-withdraw calldata is the ERC-20 `transfer(to, amount)` plus an ERC-8021 Schema 0 suffix from `Attribution.toDataSuffix` (`ox/erc8021`). The suffix ends in `8021` repeated eight times. Contracts ignore the extra bytes. The same code is declared on the x402 `exact` 402 challenge (`extensions["builder-code"]`, Schema 2). The browser payer echoes `a`. The CDP facilitator reads that echo and appends `{ a, w }` on the fund transaction. A payer that does not echo it still settles. When the variable is unset or blank, the calldata is the 68-byte transfer and the 402 has no builder-code extension.
 
 The USDC contract is still the rail network: Base Sepolia on DEV, Base mainnet on PROD.
 
