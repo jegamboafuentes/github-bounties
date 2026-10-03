@@ -1,11 +1,8 @@
 import type { Database } from "../db/client";
 import type { EnvMap } from "../auth/env";
-import {
-  fetchRepoContext,
-  type GitHubHttp,
-  type GitHubRepoContext,
-} from "../github/api";
+import { type GitHubHttp, type GitHubRepoContext } from "../github/api";
 import { splitFullName } from "../bounties/issue-body";
+import { getProvider } from "../providers/registry";
 import {
   cacheIsFresh,
   intelligenceFingerprint,
@@ -133,6 +130,11 @@ const EMPTY_REPO: GitHubRepoContext = {
   language: null,
   languages: [],
   readmeBlurb: null,
+  private: null,
+  createdAt: null,
+  stars: null,
+  ownerId: null,
+  ownerLogin: null,
 };
 
 /**
@@ -144,6 +146,7 @@ const EMPTY_REPO: GitHubRepoContext = {
 export async function loadBountyIntelligence(args: {
   bountyId: string;
   repoFullName: string;
+  provider?: string;
   githubIssueNumber: number;
   issueTitle: string;
   issueBody: string | null;
@@ -316,16 +319,28 @@ function toReadyView(
 
 async function loadRepoContext(args: {
   repoFullName: string;
+  provider?: string;
   installationId: bigint | null;
   githubHttp?: GitHubHttp;
 }): Promise<GitHubRepoContext> {
   const [owner, repo] = splitFullName(args.repoFullName);
   if (!owner || !repo) return EMPTY_REPO;
   try {
-    return await fetchRepoContext(owner, repo, {
-      installationId: args.installationId,
-      http: args.githubHttp,
-    });
+    const meta = await getProvider(args.provider ?? "github").repoMeta(
+      { owner, repo },
+      { installationId: args.installationId, http: args.githubHttp },
+    );
+    return {
+      description: meta.description,
+      language: meta.language,
+      languages: meta.languages,
+      readmeBlurb: meta.readmeBlurb,
+      private: meta.private,
+      createdAt: meta.createdAt,
+      stars: meta.stars,
+      ownerId: meta.ownerId,
+      ownerLogin: meta.ownerLogin,
+    };
   } catch {
     return EMPTY_REPO;
   }

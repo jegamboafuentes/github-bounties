@@ -316,6 +316,8 @@ export type GitHubIssueSnapshot = {
   state: string;
   /** Set when the issues API payload is actually a pull request. */
   pullRequest?: boolean;
+  authorLogin?: string | null;
+  authorId?: string | null;
 };
 
 export async function fetchIssue(
@@ -342,6 +344,7 @@ export async function fetchIssue(
     html_url?: string;
     state?: string;
     pull_request?: unknown;
+    user?: { login?: string | null; id?: number | null } | null;
   };
   if (body.pull_request) {
     throw new Error(`${owner}/${repo}#${issueNumber} is a pull request, not an issue`);
@@ -352,6 +355,8 @@ export async function fetchIssue(
     body: body.body ?? null,
     htmlUrl: body.html_url ?? `https://github.com/${owner}/${repo}/issues/${issueNumber}`,
     state: body.state ?? "open",
+    authorLogin: body.user?.login?.trim() || null,
+    authorId: typeof body.user?.id === "number" ? String(body.user.id) : null,
   };
 }
 
@@ -362,6 +367,12 @@ export type GitHubRepoContext = {
   language: string | null;
   languages: string[];
   readmeBlurb: string | null;
+  /** Anti-spam fields from the same repo payload. Null when GitHub omitted them. */
+  private: boolean | null;
+  createdAt: string | null;
+  stars: number | null;
+  ownerId: string | null;
+  ownerLogin: string | null;
 };
 
 /**
@@ -395,13 +406,27 @@ export async function fetchRepoContext(
   });
   let description: string | null = null;
   let language: string | null = null;
+  let isPrivate: boolean | null = null;
+  let createdAt: string | null = null;
+  let stars: number | null = null;
+  let ownerId: string | null = null;
+  let ownerLogin: string | null = null;
   if (repoRes.ok) {
     const body = (await repoRes.json()) as {
       description?: string | null;
       language?: string | null;
+      private?: boolean;
+      created_at?: string | null;
+      stargazers_count?: number | null;
+      owner?: { id?: number | null; login?: string | null } | null;
     };
     description = body.description?.trim() || null;
     language = body.language?.trim() || null;
+    isPrivate = typeof body.private === "boolean" ? body.private : null;
+    createdAt = body.created_at?.trim() || null;
+    stars = typeof body.stargazers_count === "number" ? body.stargazers_count : null;
+    ownerId = typeof body.owner?.id === "number" ? String(body.owner.id) : null;
+    ownerLogin = body.owner?.login?.trim() || null;
   }
 
   const langRes = await http(`${GITHUB_API}/repos/${owner}/${repo}/languages`, {
@@ -432,7 +457,17 @@ export async function fetchRepoContext(
     readmeBlurb = clipped || null;
   }
 
-  return { description, language, languages, readmeBlurb };
+  return {
+    description,
+    language,
+    languages,
+    readmeBlurb,
+    private: isPrivate,
+    createdAt,
+    stars,
+    ownerId,
+    ownerLogin,
+  };
 }
 
 export function decodeGithubFileContent(

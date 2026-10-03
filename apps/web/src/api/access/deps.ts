@@ -117,6 +117,7 @@ export type ClaimAuthContext = {
     status: string;
     amountUsdc: string;
     posterUserId: string;
+    provider?: "github" | "huggingface";
   } | null;
   walletAddress: string | null;
   githubLogin: string | null;
