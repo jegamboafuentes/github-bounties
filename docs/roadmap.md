@@ -4,11 +4,12 @@ High-level versions for **GitHub Bounties**. This is not Lightning Bounties / LB
 
 The public `/roadmap` page reads the same items from [`apps/web/src/home/roadmap.ts`](../apps/web/src/home/roadmap.ts). Edit that constant (and this file) when a version actually ships. **Do not invent ship dates.**
 
-Refreshed **as of 2026-09-25**. Dates on shipped rows are recorded PROD ship dates, not forecasts. V5 and V6+ have no ship date.
+Refreshed **as of 2026-10-03**. Dates on shipped rows are recorded PROD ship dates, not forecasts. V6, V7, and V8 have no ship date.
 
 | Status | Meaning |
 | --- | --- |
 | `shipped` | On `main` and LIVE on PROD unless noted |
+| `in_progress` | In progress. No public date |
 | `next` | Next. Not built; no public date |
 | `then` | After next. Not scheduled |
 | `later` | Later. No schedule |
@@ -50,15 +51,25 @@ Related polish on PROD: board complexity/language badges + filters, Settings/Pos
 
 **DONE, LIVE on PROD 2026-09-25.** `/api/v1` (OpenAPI) + `/mcp`, version 4.5.0, 24 operations, 25 tools ([#76](https://github.com/jegamboafuentes/github-bounties/pull/76) [#79](https://github.com/jegamboafuentes/github-bounties/pull/79) [#80](https://github.com/jegamboafuentes/github-bounties/pull/80) [#81](https://github.com/jegamboafuentes/github-bounties/pull/81) [#78](https://github.com/jegamboafuentes/github-bounties/pull/78)). API money is OFF on PROD. On the site: [MCP](https://githubbounties.xyz/mcp) (`/mcp`).
 
+### V5 — MCP page, unfunded edits, admin
+
+**DONE.** `/mcp` is the MCP server endpoint and its docs page. Posters edit an unfunded bounty amount on the web, REST, and MCP (`update_bounty_amount`). The admin dashboard on admin hosts sets fee and pool, lists bounties with trash and refund, gates refunds on `ADMIN_REFUND_ENABLED`, and gates fee-wallet withdraws on `ADMIN_WITHDRAW_ENABLED` with a single-use confirm token and a duplicate guard. Admin actions write an admin audit log. No recorded PROD date.
+
+## In progress
+
+### V6 — Hugging Face
+
+Bounties on Hugging Face discussions and PRs. In progress. No ship date.
+
 ## Next
 
-### V5 — GitHub-native /bounty
+### V7 — /bounty command
 
-GitHub-native bounty creation via a `/bounty` comment on a GitHub issue. Roadmap only. Nothing is built. No ship date.
+A `/bounty` command on GitHub and Hugging Face. Roadmap only. Nothing is built. No ship date.
 
 ## Then
 
-### V6+ — Agent economy
+### V8 — Agent economy
 
 The agent economy on x402. No ship date.
 
@@ -77,4 +88,4 @@ Parked until settlement fee / net proceeds equal face ([ADR 0001](adr/0001-cdp-x
 - Fake “Q3 2026” or similar marketing dates
 - PROD remount of the DEV Cloud Run service
 - Treating FE-0 `/api/stats` or this homepage as a fee dashboard
-- Building the V5 `/bounty` comment
+- Building the V7 `/bounty` command
