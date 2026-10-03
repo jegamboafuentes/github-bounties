@@ -346,7 +346,9 @@ const meSchema = z
       name: z.string(),
       prefix: z.string(),
       env: z.enum(["test", "live"]),
-      scopes: z.array(z.enum(["read", "write", "money"])),
+      scopes: z
+        .array(z.enum(["read", "write", "money", "admin"]))
+        .describe("read, write, money, and admin. admin is present only when this key was minted with it."),
       perTxCapUsdc: usdcDecimalOrNull.describe("Null when this key does not have the money scope. Cap enforcement is unchanged."),
       dailyCapUsdc: usdcDecimalOrNull.describe("Null when this key does not have the money scope. Cap enforcement is unchanged."),
     }),
@@ -369,7 +371,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     scheme: "bearer",
     bearerFormat: "API key",
     description:
-      "API key sent as Authorization: Bearer. gb_test_ on DEV (Base Sepolia), gb_live_ on mainnet. No cookies. Scopes: read, write, money.",
+      "API key sent as Authorization: Bearer. gb_test_ on DEV (Base Sepolia), gb_live_ on mainnet. No cookies. Scopes: read, write, money, and admin. The admin scope is minted only for an admin account and is returned by GET /api/v1/me.",
   });
 
   const bearer = [{ bearerAuth: [] }];

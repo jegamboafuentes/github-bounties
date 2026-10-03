@@ -90,7 +90,10 @@ describe("OpenAPI document", () => {
       for (const child of Object.values(record)) visit(child);
     };
     visit(document);
-    assert.deepEqual(adminEnums, []);
+    assert.ok(adminEnums.length >= 1);
+    for (const values of adminEnums) {
+      assert.deepEqual(values, ["read", "write", "money", "admin"]);
+    }
     assert.match(json, /payment_required/);
     assert.match(json, /spend_cap_exceeded/);
     assert.match(json, /idempotency_conflict/);

@@ -199,7 +199,8 @@ export function ApiKeysPanel({
         <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">API keys</h2>
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Keys belong to this Google account. Format <code>{prefix}…</code>, shown once, stored as an
-          HMAC. Scopes are read, write, and money. Money needs a saved payout wallet and a linked
+          HMAC. Scopes are read, write, and money
+          {canGrantAdmin ? ". The admin checkbox grants the admin scope" : ""}. Money needs a saved payout wallet and a linked
           GitHub account. Caps start at {formatCapMoney(ceilings.perTxUsdc)} per payment and{" "}
           {formatCapMoney(ceilings.dailyUsdc)} per UTC day. You can lower them here. Raising them is
           an admin change.
