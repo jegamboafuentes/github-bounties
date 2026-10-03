@@ -151,7 +151,7 @@ export async function completeGitHubAppReturn(
         installationId: String(installation.id),
         repos: rows.map((r) => ({
           fullName: r.fullName,
-          githubRepoId: r.githubRepoId.toString(),
+          githubRepoId: githubRepoIdText(r.githubRepoId),
         })),
         next: "oauth",
         oauthUrl: githubAppOAuthUrl({
@@ -167,7 +167,7 @@ export async function completeGitHubAppReturn(
       installationId: String(installation.id),
       repos: rows.map((r) => ({
         fullName: r.fullName,
-        githubRepoId: r.githubRepoId.toString(),
+        githubRepoId: githubRepoIdText(r.githubRepoId),
       })),
       githubLogin,
     };
@@ -176,4 +176,12 @@ export async function completeGitHubAppReturn(
       err instanceof Error ? err.message : "Could not confirm the GitHub App installation";
     return { ok: false, error: "install_unconfirmed", message };
   }
+}
+
+/** App-install rows always have a GitHub repo id. The column is nullable for other providers. */
+function githubRepoIdText(id: bigint | null): string {
+  if (id == null) {
+    throw new Error("GitHub installation repo is missing github_repo_id.");
+  }
+  return id.toString();
 }

@@ -17,6 +17,13 @@ import {
 } from "drizzle-orm/pg-core";
 import { FEE_BPS, POOL_BPS_OF_POST_FEE } from "../lib/constants";
 
+/** Repo host. GitHub is the only provider that creates bounties today. */
+export const bountyProviderValues = ["github", "huggingface"] as const;
+export type BountyProvider = (typeof bountyProviderValues)[number];
+
+export const hfRepoTypeValues = ["model", "dataset", "space"] as const;
+export type HfRepoType = (typeof hfRepoTypeValues)[number];
+
 /**
  * V1 domain schema plus additive V2-1 pool tables.
  *
@@ -279,7 +286,12 @@ export const repos = pgTable(
   "repos",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    githubRepoId: bigint("github_repo_id", { mode: "bigint" }).notNull(),
+    /** Null only for a non-GitHub repo. GitHub rows are rejected without it. */
+    githubRepoId: bigint("github_repo_id", { mode: "bigint" }),
+    provider: text("provider").$type<BountyProvider>().notNull().default("github"),
+    /** Stable id on the provider (HF repo `_id`). Null for GitHub rows. */
+    providerRepoId: text("provider_repo_id"),
+    hfRepoType: text("hf_repo_type").$type<HfRepoType | null>(),
     fullName: text("full_name").notNull(),
     installationId: bigint("installation_id", { mode: "bigint" }),
     connectionKind: repoConnectionKindEnum("connection_kind")
@@ -293,6 +305,9 @@ export const repos = pgTable(
   },
   (table) => [
     uniqueIndex("repos_github_repo_id_uidx").on(table.githubRepoId),
+    uniqueIndex("repos_provider_repo_id_uidx")
+      .on(table.provider, table.providerRepoId)
+      .where(sql`${table.providerRepoId} is not null`),
     index("repos_full_name_idx").on(table.fullName),
     index("repos_installation_id_idx").on(table.installationId),
     index("repos_connection_kind_idx").on(table.connectionKind),
@@ -301,6 +316,15 @@ export const repos = pgTable(
     check(
       "repos_app_install_requires_installation",
       sql`${table.connectionKind} <> 'app_install' OR ${table.installationId} IS NOT NULL`,
+    ),
+    check("repos_provider", sql`${table.provider} in ('github', 'huggingface')`),
+    check(
+      "repos_github_requires_github_repo_id",
+      sql`${table.provider} <> 'github' OR ${table.githubRepoId} IS NOT NULL`,
+    ),
+    check(
+      "repos_hf_repo_type",
+      sql`${table.hfRepoType} IS NULL OR ${table.hfRepoType} in ('model', 'dataset', 'space')`,
     ),
   ],
 );
@@ -325,6 +349,7 @@ export const bounties = pgTable(
     repoId: uuid("repo_id")
       .notNull()
       .references(() => repos.id, { onDelete: "restrict" }),
+    provider: text("provider").$type<BountyProvider>().notNull().default("github"),
     githubIssueNumber: integer("github_issue_number").notNull(),
     url: text("url").notNull(),
     posterUserId: uuid("poster_user_id")
@@ -369,7 +394,13 @@ export const bounties = pgTable(
     index("bounties_poster_user_id_idx").on(table.posterUserId),
     index("bounties_status_idx").on(table.status),
     index("bounties_repo_issue_idx").on(table.repoId, table.githubIssueNumber),
+    index("bounties_provider_idx").on(table.provider),
     check("bounties_issue_positive", sql`${table.githubIssueNumber} > 0`),
+    check("bounties_provider", sql`${table.provider} in ('github', 'huggingface')`),
+    check(
+      "bounties_github_requires_issue_number",
+      sql`${table.provider} <> 'github' OR ${table.githubIssueNumber} IS NOT NULL`,
+    ),
     check("bounties_amount_positive", sql`${table.amountUsdc} > 0`),
     check("bounties_fee_bps_range", sql`${table.feeBps} >= 0 AND ${table.feeBps} <= 1000`),
     check(
@@ -466,6 +497,10 @@ export const claims = pgTable(
     prUrl: text("pr_url"),
     /** Winner: merged PR author (login) that closes #N. Pool members are not claims rows. */
     prAuthorLogin: text("pr_author_login"),
+    /** Provider user id of the PR author. Unused until HF claims. */
+    prAuthorProviderId: text("pr_author_provider_id"),
+    mergedByLogin: text("merged_by_login"),
+    mergedByProviderId: text("merged_by_provider_id"),
     mergedAt: timestamp("merged_at", { withTimezone: true, mode: "date" }),
     mergeCommitSha: text("merge_commit_sha"),
     closedIssueNumber: integer("closed_issue_number"),
@@ -980,19 +1015,87 @@ export const adminAuditLog = pgTable(
   (table) => [index("admin_audit_log_created_at_idx").on(table.createdAt)],
 );
 
-export const webhookDeliveries = pgTable("webhook_deliveries", {
-  deliveryId: text("delivery_id").primaryKey(),
-  event: text("event").notNull(),
-  action: text("action"),
-  eligible: boolean("eligible"),
-  winnerLogin: text("winner_login"),
-  pullRequestNumber: integer("pull_request_number"),
-  repositoryFullName: text("repository_full_name"),
-  claimResults: jsonb("claim_results").$type<WebhookClaimResult[] | null>(),
-  receivedAt: timestamp("received_at", { withTimezone: true, mode: "date" })
-    .notNull()
-    .defaultNow(),
-});
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    deliveryId: text("delivery_id").primaryKey(),
+    event: text("event").notNull(),
+    action: text("action"),
+    eligible: boolean("eligible"),
+    winnerLogin: text("winner_login"),
+    pullRequestNumber: integer("pull_request_number"),
+    repositoryFullName: text("repository_full_name"),
+    claimResults: jsonb("claim_results").$type<WebhookClaimResult[] | null>(),
+    provider: text("provider").$type<BountyProvider>().notNull().default("github"),
+    receivedAt: timestamp("received_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    check("webhook_deliveries_provider", sql`${table.provider} in ('github', 'huggingface')`),
+  ],
+);
+
+/**
+ * Hugging Face account link. Mirrors `github_links`, plus `unlinked_at`.
+ * Unused until the connect flow. One row per user and per `hf_sub`.
+ */
+export const hfLinks = pgTable(
+  "hf_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    hfSub: text("hf_sub").notNull(),
+    hfUsername: text("hf_username").notNull(),
+    hfAvatarUrl: text("hf_avatar_url"),
+    linkedAt: timestamp("linked_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    unlinkedAt: timestamp("unlinked_at", { withTimezone: true, mode: "date" }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("hf_links_user_id_uidx").on(table.userId),
+    uniqueIndex("hf_links_hf_sub_uidx").on(table.hfSub),
+    index("hf_links_hf_username_idx").on(table.hfUsername),
+  ],
+);
+
+/**
+ * Hunter-submitted PR for a bounty. Unused until the HF submit flow.
+ * Unique per bounty and PR number. `user_id` is the submitter.
+ */
+export const bountySubmissions = pgTable(
+  "bounty_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    bountyId: uuid("bounty_id")
+      .notNull()
+      .references(() => bounties.id, { onDelete: "restrict" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    provider: text("provider").$type<BountyProvider>().notNull(),
+    prNumber: integer("pr_number").notNull(),
+    prUrl: text("pr_url").notNull(),
+    prAuthorProviderId: text("pr_author_provider_id"),
+    status: text("status").notNull().default("submitted"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("bounty_submissions_bounty_pr_uidx").on(table.bountyId, table.prNumber),
+    index("bounty_submissions_bounty_id_idx").on(table.bountyId),
+    index("bounty_submissions_user_id_idx").on(table.userId),
+    check("bounty_submissions_provider", sql`${table.provider} in ('github', 'huggingface')`),
+    check("bounty_submissions_pr_positive", sql`${table.prNumber} > 0`),
+    check("bounty_submissions_pr_url_present", sql`length(trim(${table.prUrl})) > 0`),
+    check("bounty_submissions_status_present", sql`length(trim(${table.status})) > 0`),
+  ],
+);
 
 export const repoConnectionKindValues = repoConnectionKindEnum.enumValues;
 export const bountyStatusValues = bountyStatusEnum.enumValues;

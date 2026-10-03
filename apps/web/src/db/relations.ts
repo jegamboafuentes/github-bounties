@@ -9,12 +9,14 @@ import {
   bountyAmountChanges,
   bountyContributions,
   bountyIntelligence,
+  bountySubmissions,
   claimLocks,
   claims,
   escrows,
   feeLedger,
   emailOutbox,
   githubLinks,
+  hfLinks,
   poolParticipants,
   repos,
   users,
@@ -23,6 +25,7 @@ import {
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   githubLink: one(githubLinks),
+  hfLink: one(hfLinks),
   connectedRepos: many(repos),
   postedBounties: many(bounties),
   claimLocks: many(claimLocks),
@@ -44,6 +47,13 @@ export const emailOutboxRelations = relations(emailOutbox, ({ one }) => ({
 export const githubLinksRelations = relations(githubLinks, ({ one }) => ({
   user: one(users, {
     fields: [githubLinks.userId],
+    references: [users.id],
+  }),
+}));
+
+export const hfLinksRelations = relations(hfLinks, ({ one }) => ({
+  user: one(users, {
+    fields: [hfLinks.userId],
     references: [users.id],
   }),
 }));
@@ -76,6 +86,18 @@ export const bountiesRelations = relations(bounties, ({ one, many }) => ({
   contributions: many(bountyContributions),
   amountChanges: many(bountyAmountChanges),
   apiSpends: many(apiSpendLedger),
+  submissions: many(bountySubmissions),
+}));
+
+export const bountySubmissionsRelations = relations(bountySubmissions, ({ one }) => ({
+  bounty: one(bounties, {
+    fields: [bountySubmissions.bountyId],
+    references: [bounties.id],
+  }),
+  submitter: one(users, {
+    fields: [bountySubmissions.userId],
+    references: [users.id],
+  }),
 }));
 
 export const apiKeysRelations = relations(apiKeys, ({ one, many }) => ({

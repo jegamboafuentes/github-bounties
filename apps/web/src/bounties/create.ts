@@ -1,5 +1,5 @@
 import type { Database } from "../db/client";
-import { bounties, escrows, type repos } from "../db/schema";
+import { bounties, escrows, type BountyProvider, type repos } from "../db/schema";
 import { isUniqueViolation } from "../db/errors";
 import {
   fetchIssue,
@@ -35,6 +35,7 @@ export type CreatedBounty = {
   status: "pending_fund";
   title: string;
   amountUsdc: string;
+  provider: BountyProvider;
 };
 
 type RepoRow = typeof repos.$inferSelect;
@@ -119,6 +120,7 @@ export async function createBountyFromIssueUrl(
           status: bounties.status,
           title: bounties.title,
           amountUsdc: bounties.amountUsdc,
+          provider: bounties.provider,
         });
 
       if (!row) throw new Error("insert bounty returned no row");
@@ -140,6 +142,7 @@ export async function createBountyFromIssueUrl(
       status: "pending_fund",
       title: created.title,
       amountUsdc: created.amountUsdc,
+      provider: created.provider === "huggingface" ? "huggingface" : "github",
     };
   } catch (err) {
     if (isUniqueViolation(err)) {

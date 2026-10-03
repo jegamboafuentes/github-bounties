@@ -59,6 +59,7 @@ export type MyBountyRow = {
   id: string;
   title: string;
   status: string;
+  provider: "github" | "huggingface";
   amountUsdc: string;
   issueUrl: string;
   createdAt: Date;
@@ -69,6 +70,7 @@ export type MyFundingRow = {
   bountyId: string;
   title: string;
   status: string;
+  provider: "github" | "huggingface";
   amountUsdc: string;
   contributionUsdc: string;
   txHash: string;
@@ -237,7 +239,14 @@ export type AccessDeps = {
     posterUserId: string;
     issueUrl: string;
     amountUsdc: string;
-  }) => Promise<{ id: string; status: "pending_fund"; title: string; amountUsdc: string; url: string }>;
+  }) => Promise<{
+    id: string;
+    status: "pending_fund";
+    title: string;
+    amountUsdc: string;
+    url: string;
+    provider: "github" | "huggingface";
+  }>;
   signalWorking: (bountyId: string, userId: string) => Promise<{ id: string; bountyId: string; signaledAt: Date }>;
   clearSignal: (bountyId: string, userId: string) => Promise<{ cleared: number }>;
   cancelUnfunded: (bountyId: string, actorUserId: string, requestId: string) => Promise<{

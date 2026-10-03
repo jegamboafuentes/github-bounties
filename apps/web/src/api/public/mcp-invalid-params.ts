@@ -42,33 +42,47 @@ export function toolNameFromMcpRequest(body: unknown): string | null {
   return typeof record.params?.name === "string" ? record.params.name : null;
 }
 
-function rewriteOne(body: unknown): unknown {
-  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
-  const record = body as { error?: { code?: unknown; message?: unknown } };
-  if (!record.error || record.error.code !== -32602) return body;
-  const message =
-    typeof record.error.message === "string" && record.error.message.trim()
-      ? record.error.message
-      : "Invalid params.";
-  const { error: _error, ...rest } = record as Record<string, unknown>;
+function validationResult(message: string): {
+  isError: true;
+  content: { type: "text"; text: string }[];
+} {
   return {
-    ...rest,
-    result: {
-      isError: true,
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(publicApiErrorBody("validation_failed", message)),
-        },
-      ],
-    },
+    isError: true,
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(publicApiErrorBody("validation_failed", message)),
+      },
+    ],
   };
 }
 
+function rewriteOne(body: unknown): unknown {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
+  const record = body as {
+    error?: { code?: unknown; message?: unknown };
+    result?: { isError?: boolean; content?: { text?: string }[] };
+  };
+  if (record.error?.code === -32602) {
+    const message =
+      typeof record.error.message === "string" && record.error.message.trim()
+        ? record.error.message
+        : "Invalid params.";
+    const { error: _error, ...rest } = record as Record<string, unknown>;
+    return { ...rest, result: validationResult(message) };
+  }
+  const text = record.result?.isError ? record.result.content?.[0]?.text : undefined;
+  if (typeof text === "string" && text.startsWith("MCP error -32602")) {
+    const message = text.replace(/^MCP error -32602:\s*/, "").trim() || "Invalid params.";
+    return { ...record, result: validationResult(message) };
+  }
+  return body;
+}
+
 /**
- * SDK schema rejection is JSON-RPC -32602 and never enters the tool handler,
- * so it cannot publish that tool's rate class. Rewrite it to a tool result
- * whose text is `validation_failed`.
+ * SDK schema rejection never enters the tool handler, so it cannot publish
+ * that tool's rate class. A JSON-RPC -32602, or the same code embedded in a
+ * tool result (`MCP error -32602: ...`), is rewritten to `validation_failed`.
  */
 export function rewriteInvalidParamsBody(body: unknown): unknown {
   if (Array.isArray(body)) {

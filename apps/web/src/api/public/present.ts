@@ -89,6 +89,7 @@ export function presentPublicBounty(
   const payout = roster ? payoutScheduleFromRoster(roster) : emptyPoolPayout(bounty.amountUsdc);
   return {
     id: bounty.id,
+    provider: bounty.provider,
     issue: {
       url: bounty.url,
       repo: bounty.repoFullName,

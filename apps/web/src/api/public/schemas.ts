@@ -6,7 +6,7 @@ import {
 import { registerAccessOpenApi } from "../access/openapi";
 import { z } from "zod";
 import { PUBLIC_API_VERSION } from "./version";
-import { bountyStatusValues } from "../../db/schema";
+import { bountyProviderValues, bountyStatusValues } from "../../db/schema";
 import { apiMoneyEnabled } from "../access/policy";
 import { applyInfoMoneyStatus, applyOpenApiMoneyStatus, MONEY_OPERATION_PATHS } from "../access/money-wording";
 import { DEV_SITE_HOST, PROD_SITE_HOST, originFromSiteUrl } from "../../lib/site-env";
@@ -55,6 +55,10 @@ export const listBountiesInputSchema = z
       .boolean()
       .optional()
       .describe("true: only bounties with a ready cached badge. false: only bounties without one."),
+    provider: z
+      .enum(bountyProviderValues)
+      .optional()
+      .describe("Repo host. github or huggingface. Omit to list every provider."),
     sort: z
       .enum(["newest", "amount"])
       .default("newest")
@@ -130,6 +134,9 @@ export const payoutScheduleSchema = z
 export const publicBountySchema = z
   .object({
     id: z.string().uuid(),
+    provider: z
+      .enum(bountyProviderValues)
+      .describe("Repo host. Existing bounties are github. huggingface is reserved."),
     issue: z.object({
       url: z.string().url(),
       repo: z.string(),

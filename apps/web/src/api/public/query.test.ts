@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { PublicApiError } from "./errors";
 import {
   acceptListInput,
   coerceListSearchParams,
@@ -40,6 +41,29 @@ describe("public bounty list query", () => {
     assert.equal(parsed.has_intel, true);
     assert.equal(parsed.sort, "amount");
     assert.equal(parsed.limit, 100);
+  });
+
+  it("accepts a provider filter and rejects any other value", () => {
+    const github = acceptListInput(coerceListSearchParams(new URLSearchParams({ provider: "github" })));
+    assert.equal(github.provider, "github");
+    const huggingface = acceptListInput(
+      coerceListSearchParams(new URLSearchParams({ provider: " huggingface " })),
+    );
+    assert.equal(huggingface.provider, "huggingface");
+
+    assert.throws(
+      () => acceptListInput(coerceListSearchParams(new URLSearchParams({ provider: "gitlab" }))),
+      (err: unknown) => {
+        assert.ok(err instanceof PublicApiError);
+        assert.equal(err.code, "validation_failed");
+        assert.equal(err.status, 400);
+        assert.equal(err.message, "Invalid bounty list query.");
+        const details = err.details as { path: string; message: string }[];
+        assert.equal(Array.isArray(details), true);
+        assert.equal(details.some((item) => item.path === "provider"), true);
+        return true;
+      },
+    );
   });
 
   it("treats status=all and complexity=all as omitted", () => {
