@@ -906,6 +906,63 @@ export const platformSettings = pgTable(
   ],
 );
 
+/**
+ * One preview mints one confirm token. `token_hash` is sha256 of the HMAC token.
+ * `used_at` is set before the on-chain send and stays set if that send fails.
+ */
+export const withdrawConfirmTokens = pgTable(
+  "withdraw_confirm_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tokenHash: text("token_hash").notNull(),
+    amountAtomic: text("amount_atomic").notNull(),
+    destination: text("destination").notNull(),
+    network: text("network").notNull(),
+    adminEmail: text("admin_email").notNull(),
+    feeAddress: text("fee_address").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true, mode: "date" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("withdraw_confirm_tokens_token_hash_uidx").on(table.tokenHash),
+    check("withdraw_confirm_tokens_hash_present", sql`length(trim(${table.tokenHash})) > 0`),
+  ],
+);
+
+/**
+ * One row per confirm token. `idempotency_key` is the token id.
+ * `pending` and `unknown` are in flight: a second withdraw for that fee wallet is refused.
+ */
+export const feeWithdrawals = pgTable(
+  "fee_withdrawals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tokenId: uuid("token_id")
+      .notNull()
+      .references(() => withdrawConfirmTokens.id, { onDelete: "restrict" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    feeAddress: text("fee_address").notNull(),
+    destination: text("destination").notNull(),
+    amountAtomic: text("amount_atomic").notNull(),
+    network: text("network").notNull(),
+    status: text("status").notNull(),
+    txHash: text("tx_hash"),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("fee_withdrawals_token_id_uidx").on(table.tokenId),
+    uniqueIndex("fee_withdrawals_idempotency_key_uidx").on(table.idempotencyKey),
+    uniqueIndex("fee_withdrawals_one_inflight_per_wallet_uidx")
+      .on(table.feeAddress)
+      .where(sql`${table.status} in ('pending', 'unknown')`),
+    check("fee_withdrawals_status", sql`${table.status} in ('pending', 'ok', 'failed', 'unknown')`),
+    check("fee_withdrawals_idempotency_present", sql`length(trim(${table.idempotencyKey})) > 0`),
+  ],
+);
+
 export const adminAuditLog = pgTable(
   "admin_audit_log",
   {

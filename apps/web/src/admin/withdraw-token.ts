@@ -1,14 +1,21 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { isUuid } from "../ids";
 
 export const WITHDRAW_TOKEN_TTL_MS = 5 * 60 * 1000;
 
 export type WithdrawTokenClaims = {
+  id: string;
   amountAtomic: string;
   destination: string;
   network: string;
   adminEmail: string;
   exp: number;
 };
+
+/** Stored form of the confirm token. The raw token is not written to the database. */
+export function hashWithdrawToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
 
 function sign(body: string, secret: string): string {
   return createHmac("sha256", secret).update(body).digest("base64url");
@@ -52,6 +59,8 @@ export function readWithdrawToken(
   }
   if (!parsed || typeof parsed.exp !== "number" || parsed.exp <= nowMs) return null;
   if (
+    typeof parsed.id !== "string" ||
+    !isUuid(parsed.id) ||
     typeof parsed.amountAtomic !== "string" ||
     typeof parsed.destination !== "string" ||
     typeof parsed.network !== "string" ||

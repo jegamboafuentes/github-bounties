@@ -52,6 +52,9 @@ function memoryDb(row: Record<string, unknown> | null) {
         },
       };
     },
+    update() {
+      throw new Error("draft-was-cancelled");
+    },
   };
   return db;
 }
@@ -137,6 +140,32 @@ describe("admin refund flag", () => {
     assert.equal(db.selects(), 1);
     assert.equal(db.audits.length, 1);
     assert.equal((db.audits[0]?.after as { reason?: string }).reason, "admin_refund_disabled");
+  });
+
+  it("returns 409 nothing_to_refund when no funded escrow exists and does not cancel a draft", async () => {
+    for (const status of ["pending_fund", "cancelled", "refunded", "expired"]) {
+      const db = memoryDb(bountyRow({ status }));
+      await assert.rejects(
+        () =>
+          adminRefundBounty({
+            bountyId: BOUNTY,
+            actorEmail: "ada@example.com",
+            db: db as never,
+            env: { ADMIN_REFUND_ENABLED: "1", API_MONEY_ENABLED: "0" },
+          }),
+        (err: unknown) => {
+          assert.ok(err instanceof AdminError);
+          assert.equal(err.status, 409);
+          assert.equal(err.code, "nothing_to_refund");
+          assert.match(err.message, /no funded escrow/);
+          return true;
+        },
+      );
+      assert.equal(db.audits.length, 1);
+      assert.equal(db.audits[0]?.result, "refused");
+      assert.equal((db.audits[0]?.after as { reason?: string }).reason, "nothing_to_refund");
+      assert.equal(db.selects(), 1);
+    }
   });
 
   it("reaches the existing refund flow when the admin flag is on and public money is off", async () => {

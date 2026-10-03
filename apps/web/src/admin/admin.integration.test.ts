@@ -303,4 +303,44 @@ describe("admin settings, stamping, and soft delete", () => {
       await sql.end({ timeout: 5 });
     }
   });
+
+  it("returns 409 nothing_to_refund for a draft and for cancelled, refunded, or expired bounties", async () => {
+    const { db, sql, posterId, fullName } = await fixture();
+    const env = { API_MONEY_ENABLED: "0", ADMIN_REFUND_ENABLED: "1", CDP_NETWORK: "base-sepolia" };
+    try {
+      const draft = await post(db, posterId, fullName, 42);
+      await assert.rejects(
+        () =>
+          adminRefundBounty({
+            bountyId: draft.id,
+            actorEmail: "admin@example.com",
+            db,
+            env,
+          }),
+        (err: unknown) => err instanceof AdminError && err.status === 409 && err.code === "nothing_to_refund",
+      );
+      const [still] = await db.select({ status: bounties.status }).from(bounties).where(eq(bounties.id, draft.id));
+      assert.equal(still?.status, "pending_fund");
+      const [escrow] = await db.select({ status: escrows.status }).from(escrows).where(eq(escrows.bountyId, draft.id));
+      assert.equal(escrow?.status, "pending");
+
+      for (const status of ["cancelled", "refunded", "expired"] as const) {
+        await db.update(bounties).set({ status }).where(eq(bounties.id, draft.id));
+        await assert.rejects(
+          () =>
+            adminRefundBounty({
+              bountyId: draft.id,
+              actorEmail: "admin@example.com",
+              db,
+              env,
+            }),
+          (err: unknown) => err instanceof AdminError && err.status === 409 && err.code === "nothing_to_refund",
+        );
+        const [row] = await db.select({ status: bounties.status }).from(bounties).where(eq(bounties.id, draft.id));
+        assert.equal(row?.status, status);
+      }
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
 });

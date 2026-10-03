@@ -64,10 +64,13 @@ function data(flags: { refundEnabled: boolean; withdrawEnabled: boolean }): Admi
   };
 }
 
+const originalFetch = globalThis.fetch;
+
 describe("admin money controls", () => {
   let root: Root | null = null;
 
   afterEach(() => {
+    globalThis.fetch = originalFetch;
     act(() => root?.unmount());
     root = null;
     document.body.innerHTML = "";
@@ -109,5 +112,130 @@ describe("admin money controls", () => {
       refund.click();
     });
     assert.match(document.body.textContent ?? "", /Refund this bounty/);
+  });
+
+  it("disables confirm while sending, shows a non-200 failure, and clears the token", async () => {
+    const destination = "0x0892000000000000000000000000000000000001";
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root?.render(
+        createElement(AdminDashboard, {
+          data: {
+            ...data({ refundEnabled: false, withdrawEnabled: true }),
+            fixture: { step: "withdraw", destination, amountUsdc: "1.340000" },
+          },
+        }),
+      );
+    });
+    const blocked = [...document.querySelectorAll("button")].find((item) => item.textContent === "Withdraw fees");
+    assert.ok(blocked instanceof HTMLButtonElement);
+    assert.equal(blocked.disabled, true);
+    await act(async () => {
+      root?.unmount();
+    });
+    root = createRoot(host);
+    await act(async () => {
+      root?.render(
+        createElement(AdminDashboard, {
+          data: {
+            ...data({ refundEnabled: false, withdrawEnabled: true }),
+            fixture: { step: "withdraw", destination, amountUsdc: "1.340000", confirmed: true },
+          },
+        }),
+      );
+    });
+    const button = [...document.querySelectorAll("button")].find((item) => item.textContent === "Withdraw fees");
+    assert.ok(button instanceof HTMLButtonElement);
+    assert.equal(button.disabled, false);
+
+    let calls = 0;
+    let release: (response: Response) => void = () => {};
+    globalThis.fetch = () => {
+      calls += 1;
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    };
+    await act(async () => {
+      button.click();
+      button.click();
+    });
+    assert.equal(calls, 1);
+    assert.equal(button.disabled, true);
+    assert.match(button.textContent ?? "", /Sending/);
+
+    await act(async () => {
+      release(
+        new Response(JSON.stringify({ error: "fee_transfer_failed", message: "Insufficient balance" }), {
+          status: 502,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const alert = document.querySelector("[role='alert']");
+    assert.ok(alert);
+    assert.equal(alert.getAttribute("data-status"), "502");
+    assert.match(alert.textContent ?? "", /Insufficient balance/);
+    assert.equal(document.querySelector("input[name='confirmation']"), null);
+    assert.match(document.body.textContent ?? "", /Insufficient balance/);
+  });
+
+  it("keeps the preview on a recent duplicate and sends only after Yes, send again", async () => {
+    const destination = "0x0892000000000000000000000000000000000001";
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    await act(async () => {
+      root?.render(
+        createElement(AdminDashboard, {
+          data: {
+            ...data({ refundEnabled: false, withdrawEnabled: true }),
+            fixture: { step: "withdraw", destination, amountUsdc: "1.340000", confirmed: true },
+          },
+        }),
+      );
+    });
+    const bodies: { sendAgain?: boolean }[] = [];
+    globalThis.fetch = (_input, init) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { sendAgain?: boolean };
+      bodies.push(body);
+      if (body.sendAgain !== true) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error: "withdraw_duplicate_recent",
+              message: "The same amount was sent to this destination in the last 10 minutes. Confirm sendAgain to send it again.",
+            }),
+            { status: 409, headers: { "content-type": "application/json" } },
+          ),
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ txHash: "0xagain" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    };
+    const button = [...document.querySelectorAll("button")].find((item) => item.textContent === "Withdraw fees");
+    assert.ok(button instanceof HTMLButtonElement);
+    await act(async () => {
+      button.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(bodies[0]?.sendAgain, false);
+    assert.ok(document.querySelector("input[name='confirmation']"));
+    const again = [...document.querySelectorAll("button")].find((item) => item.textContent === "Yes, send again");
+    assert.ok(again instanceof HTMLButtonElement);
+    await act(async () => {
+      again.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(bodies[1]?.sendAgain, true);
+    assert.match(document.body.textContent ?? "", /Sent 0xagain/);
+    assert.equal(document.querySelector("input[name='confirmation']"), null);
   });
 });

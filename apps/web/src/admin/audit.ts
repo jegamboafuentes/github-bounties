@@ -24,7 +24,7 @@ function auditReason(input: AdminAuditInput): string | null {
 
 /** One Cloud Logging line per audit row. Actor, action, target, and result only. */
 export function logAdminAction(input: AdminAuditInput): void {
-  const failed = input.result !== "ok" && input.result !== "preview";
+  const failed = input.result !== "ok" && input.result !== "preview" && input.result !== "pending";
   console.log(
     JSON.stringify({
       severity: failed ? "WARNING" : "INFO",
