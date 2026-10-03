@@ -13,6 +13,7 @@ import {
   VOIDED_UNFUNDED_CODE,
   VOIDED_UNFUNDED_REASON,
 } from "./fail";
+import { readBuilderCode } from "./builder-code";
 import { hostedCheckoutStatus } from "./hosted";
 import { bountyGoneError, rejectIfBountyDeleted } from "./deleted";
 import { assertCallerLockHash, assertFundTxHashAvailable, normalizeFundTxHash } from "./fund-hash";
@@ -1605,6 +1606,7 @@ export async function expireUnmergedBounties(
 
 export function escrowHealth(env = process.env) {
   const probe = probeCdpEnv(env);
+  const builderCode = readBuilderCode(env);
   return {
     wired: true,
     ticket: "V2-5",
@@ -1612,8 +1614,9 @@ export function escrowHealth(env = process.env) {
     rail: probe.mode,
     missing: probe.missing,
     hosted_checkout: hostedCheckoutStatus(),
-    x402_exact: x402ExactStatus(env),
-    walletconnect: walletConnectStatus(env),
+    x402_exact: { ...x402ExactStatus(env), builderCode },
+    walletconnect: { ...walletConnectStatus(env), builderCode },
+    builderCode,
     mainnet_refused: probe.unsafeNetwork && !probe.mainnetAllowed,
     fee_bps: FEE_BPS,
     wallets: { escrow: "gb-escrow", fee: "gb-fee" },

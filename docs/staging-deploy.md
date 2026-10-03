@@ -255,6 +255,7 @@ Plain env (not Secret Manager):
 | --- | --- | --- |
 | `AUTH_TRUST_HOST` | `true` | Not in SM. Auth.js already `trustHost: true`; set the env anyway |
 | `CDP_NETWORK` | `base-sepolia` | Mainnet refused without `CDP_ALLOW_MAINNET=1` |
+| `BASE_BUILDER_CODE` | omit | Optional plain env. Public base.dev code (`^[a-z0-9_]{1,32}$`). When set, payout, refund, and fee-withdraw calldata gets an ERC-8021 Schema 0 suffix. Unset sends a plain USDC transfer. Not a secret. |
 | `NODE_ENV` | `production` | |
 | `PORT` | `8080` | Cloud Run |
 | `PUBLIC_BASE_URL` | omit | Optional env after live origin (GitHub URL helpers) |

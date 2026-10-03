@@ -4,6 +4,7 @@ import type { EnvMap } from "../auth/env";
 import type { Database } from "../db/client";
 import { isUniqueViolation } from "../db/errors";
 import { feeWithdrawals, withdrawConfirmTokens } from "../db/schema";
+import { BuilderCodeError, readBuilderCode, sendUsdcTransfer } from "../escrow/builder-code";
 import { isMainnetNetwork } from "../escrow/env";
 import { USDC_BASE_MAINNET, USDC_BASE_SEPOLIA } from "../lib/constants";
 import { atomicToUsdc } from "../lib/money";
@@ -406,6 +407,14 @@ async function executeFeeWithdrawInner(input: {
   now?: Date;
 }): Promise<{ txHash: string; amountUsdc: string; destination: string; network: string }> {
   assertWithdrawEnabled(input.env);
+  try {
+    readBuilderCode(input.env);
+  } catch (err) {
+    if (err instanceof BuilderCodeError) {
+      throw new AdminError(500, "builder_code_invalid", err.message);
+    }
+    throw err;
+  }
   const now = input.now ?? new Date();
   const claims = readWithdrawToken(input.confirmToken, tokenSecret(input.env), now.getTime());
   if (!claims) {
@@ -433,7 +442,7 @@ async function executeFeeWithdrawInner(input: {
   }
   const balance = await input.readBalance(accounts.feeAddress);
   assertWithinBalance(amountAtomic, balance);
-  if (!accounts.fee.transfer) {
+  if (!accounts.fee.sendTransaction) {
     throw new AdminError(500, "fee_transfer_missing", "Fee account cannot transfer.");
   }
 
@@ -452,12 +461,13 @@ async function executeFeeWithdrawInner(input: {
 
   try {
     // One send. Do not retry. A timeout stays `unknown` until the row is reconciled.
-    const sent = await accounts.fee.transfer({
+    const sent = await sendUsdcTransfer(accounts.fee.sendTransaction, {
       to: destination,
-      amount: amountAtomic,
-      token: isMainnetNetwork(network) ? USDC_BASE_MAINNET : USDC_BASE_SEPOLIA,
+      amountAtomic,
+      token: (isMainnetNetwork(network) ? USDC_BASE_MAINNET : USDC_BASE_SEPOLIA) as `0x${string}`,
       network: transferNetwork(network),
       idempotencyKey: claimed.idempotencyKey,
+      env: input.env,
     });
     const txHash = sent.transactionHash?.trim() ?? "";
     if (!txHash) {

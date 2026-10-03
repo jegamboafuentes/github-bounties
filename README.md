@@ -112,6 +112,7 @@ Plain env, not Secret Manager. Empty placeholders live in `apps/web/.env.example
 | `ADMIN_REFUND_ENABLED` | Exactly `1` enables admin refunds (dashboard, `/api/v1/admin/*`, admin MCP). Anything else keeps them off. Does not enable public fund, cancel, or refund. |
 | `ADMIN_WITHDRAW_ENABLED` | Exactly `1` enables fee-wallet withdraw. A preview writes an audit row and mints a 5-minute single-use confirm token. It does not send USDC, and it is not read-only. `API_MONEY_ENABLED` does not enable it. |
 | `FEE_WALLET_ADDRESS` | Expected `gb-fee` address. Withdraw aborts when it is unset or when `getAccount({ name: "gb-fee" })` does not match it. |
+| `BASE_BUILDER_CODE` | Optional public [base.dev](https://www.base.dev/) builder code (`^[a-z0-9_]{1,32}$`). When set, server-sent escrow and fee USDC transfers append an ERC-8021 Schema 0 suffix. Unset sends the same plain `transfer` calldata as before. Not a secret. |
 
 ## Money path
 
@@ -126,6 +127,8 @@ The product money path **is wired**. PROD moves real USDC. Early V0-A “no prod
 | Claim-lock | Exclusive 72h lock is **retired** and **never moved money**. Optional **Working on this** is a non-exclusive signal. |
 | Fund UX | x402 `exact` to `gb-escrow` + WalletConnect / Pay face. Paste-hash stays under Advanced. Hosted checkout is off. |
 | Refund / cancel | Full **F** to the funder. No fee, no pool. |
+
+Outbound escrow payouts, refunds, and admin fee withdraws are ERC-20 `transfer` calls from the CDP server wallet. When `BASE_BUILDER_CODE` is set, that calldata carries an ERC-8021 Schema 0 suffix so Base can attribute the transaction. Unset, the calldata is the transfer alone. Those sends use `account.sendTransaction` and pass the persisted idempotency key. `account.transfer()` in `@coinbase/cdp-sdk` 1.55–1.57 dropped that key, so CDP was not de-duplicating them. x402 funding is unchanged.
 
 Decisions, sequences, and failure modes:
 

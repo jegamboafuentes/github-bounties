@@ -132,6 +132,7 @@ gcloud secrets versions add PROD_AUTH_URL --data-file=- --project=experiment-jeg
 | `PUBLIC_BASE_URL` | `https://githubbounties.xyz` | GitHub URL helpers + WalletConnect metadata origin |
 | `CDP_NETWORK` | `base` | Also accepts `base-mainnet` / `eip155:8453` |
 | `CDP_ALLOW_MAINNET` | `1` | Required. Client + rail stay Sepolia if this is unset |
+| `BASE_BUILDER_CODE` | omit until DEV checks pass | Optional plain env. Public code. Same suffix as DEV. Set only after a Sepolia payout shows the Schema 0 suffix and an idempotency-key retry behaves as expected. |
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | Reown project id | Public; not SM. Apex must be allowlisted |
 | `PORT` | `8080` | Cloud Run |
 
@@ -162,7 +163,8 @@ the allow flag:
     "network": "base",
     "missing": [],
     "hosted_checkout": { "enabled": false },
-    "mainnet_refused": false
+    "mainnet_refused": false,
+    "builderCode": null
   }
 }
 ```
