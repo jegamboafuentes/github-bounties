@@ -14,6 +14,9 @@
 # skipped and sync stays a no-op. API_MONEY_ENABLED, API_PER_TX_CAP_USDC, and
 # API_DAILY_CAP_USDC are plain env, not secrets. Money defaults off when
 # CDP_NETWORK=base.
+# HF_OAUTH_CLIENT_ID and HF_OAUTH_CLIENT_SECRET are WEB_OPTIONAL_SECRETS.
+# They are not required. deploy-web.sh attaches each only when Secret Manager
+# has an enabled version and skips it when absent.
 #
 # Always tags :$BUILD_ID and :latest so manual `gcloud builds submit` works.
 # $COMMIT_SHA is empty on manual submit unless you pass

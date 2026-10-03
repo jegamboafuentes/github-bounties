@@ -1046,7 +1046,8 @@ export const webhookDeliveries = pgTable(
 
 /**
  * Hugging Face account link. Mirrors `github_links`, plus `unlinked_at`.
- * Unused until the connect flow. One row per user and per `hf_sub`.
+ * One row per user and per `hf_sub`. Disconnect deletes the row.
+ * Access tokens are not stored.
  */
 export const hfLinks = pgTable(
   "hf_links",

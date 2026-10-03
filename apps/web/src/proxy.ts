@@ -119,7 +119,8 @@ function notFound(robots: boolean): NextResponse {
 /**
  * Next.js 16 proxy (replaces middleware.ts).
  * Unauthenticated callers cannot hit /settings, /bounties/new, GitHub install
- * return pages, /api/me, or /api/github/connect. Webhooks are not session-gated.
+ * return pages, the Hugging Face connect return, /api/me, /api/github/connect,
+ * or /api/huggingface/connect and /disconnect. Webhooks are not session-gated.
  *
  * `/api/v1`, `/api/docs`, and `/mcp` do not run the Auth.js wrapper, so a fake
  * session cookie is not decoded and responses do not set Auth.js cookies.

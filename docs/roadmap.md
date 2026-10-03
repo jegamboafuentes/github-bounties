@@ -49,7 +49,7 @@ Related polish on PROD: board complexity/language badges + filters, Settings/Pos
 
 ### V4 — API + MCP
 
-**DONE, LIVE on PROD 2026-09-25.** `/api/v1` (OpenAPI) + `/mcp`, version 4.7.0, 26 operations, 27 tools ([#76](https://github.com/jegamboafuentes/github-bounties/pull/76) [#79](https://github.com/jegamboafuentes/github-bounties/pull/79) [#80](https://github.com/jegamboafuentes/github-bounties/pull/80) [#81](https://github.com/jegamboafuentes/github-bounties/pull/81) [#78](https://github.com/jegamboafuentes/github-bounties/pull/78)). API money is OFF on PROD. On the site: [MCP](https://githubbounties.xyz/mcp) (`/mcp`).
+**DONE, LIVE on PROD 2026-09-25.** `/api/v1` (OpenAPI) + `/mcp`, version 4.8.0, 26 operations, 27 tools ([#76](https://github.com/jegamboafuentes/github-bounties/pull/76) [#79](https://github.com/jegamboafuentes/github-bounties/pull/79) [#80](https://github.com/jegamboafuentes/github-bounties/pull/80) [#81](https://github.com/jegamboafuentes/github-bounties/pull/81) [#78](https://github.com/jegamboafuentes/github-bounties/pull/78)). API money is OFF on PROD. On the site: [MCP](https://githubbounties.xyz/mcp) (`/mcp`).
 
 ### V5 — MCP page, unfunded edits, admin
 
@@ -59,7 +59,7 @@ Related polish on PROD: board complexity/language badges + filters, Settings/Pos
 
 ### V6 — Hugging Face
 
-Bounties on Hugging Face discussions and PRs. In progress. No ship date. Every bounty has `provider`: `github` or `huggingface` (existing rows stay `github`). REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. No env change. GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
+Bounties on Hugging Face discussions and PRs. In progress. No ship date. Every bounty has `provider`: `github` or `huggingface` (existing rows stay `github`). REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. A signed-in Google user can connect Hugging Face when `HF_OAUTH_CLIENT_ID` and `HF_OAUTH_CLIENT_SECRET` are set. Those secrets are optional. GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
 
 ## Next
 

@@ -274,6 +274,13 @@ const meSchema = z
     email: z.string(),
     walletAddress: z.string().nullable(),
     githubLogin: z.string().nullable(),
+    huggingface: z
+      .object({
+        username: z.string(),
+        linkedAt: z.string().datetime(),
+      })
+      .nullable()
+      .describe("Hugging Face username and linkedAt when an hf_links row exists. Null when not linked."),
     apiKey: z.object({
       id: z.string().uuid(),
       name: z.string(),
@@ -702,6 +709,13 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
           linkedAt: z.string().datetime(),
         })
         .nullable(),
+      huggingface: z
+        .object({
+          username: z.string(),
+          linkedAt: z.string().datetime(),
+        })
+        .nullable()
+        .describe("Null when this user has no hf_links row. Linking and unlinking stay on Settings."),
       wallet: z.object({
         address: z.string().nullable().describe("Saved payout address. Read-only. Change it on the Settings page."),
       }),
@@ -784,9 +798,9 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     method: "get",
     path: "/api/v1/me/linked-accounts",
     operationId: "listLinkedAccounts",
-    summary: "Linked Google, GitHub, and saved wallet",
+    summary: "Linked Google, GitHub, Hugging Face, and saved wallet",
     description:
-      "Scope read. GitHub login, id, and linkedAt when a github_links row exists. Google email is the full signup address Settings shows. The saved wallet address is read-only. There is no link, unlink, or wallet change on this API.",
+      "Scope read. GitHub login, id, and linkedAt when a github_links row exists. huggingface is {username, linkedAt} when an hf_links row exists, otherwise null. Google email is the full signup address Settings shows. The saved wallet address is read-only. There is no link, unlink, or wallet change on this API.",
     security: bearer,
     responses: {
       200: { description: "Linked accounts.", content: json(linkedAccountsSchema) },
