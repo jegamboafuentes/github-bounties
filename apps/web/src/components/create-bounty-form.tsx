@@ -8,7 +8,7 @@ import { useFundWallet } from "@/wallet/providers";
 
 const initial: BountyActionState = { ok: true };
 
-export function CreateBountyForm() {
+export function CreateBountyForm({ hfEnabled }: { hfEnabled: boolean }) {
   const [state, action, pending] = useActionState(createBountyAction, initial);
   const [amountUsdc, setAmountUsdc] = useState("");
   const fund = useFundWallet();
@@ -45,8 +45,8 @@ export function CreateBountyForm() {
           https://huggingface.co/owner/repo/discussions/1
         </code>
         , or a <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">datasets/</code> or{" "}
-        <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">spaces/</code> path. Creation stays off until{" "}
-        <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">HF_BOUNTIES_ENABLED=1</code>.
+        <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">spaces/</code> path.
+        {hfEnabled ? null : " Discussion bounties are not available yet."}
       </p>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         Submit stores <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">pending_fund</code>.

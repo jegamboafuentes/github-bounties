@@ -11,6 +11,8 @@ export type GitHubHttp = (
 ) => Promise<{
   ok: boolean;
   status: number;
+  /** Present on live fetches. Tests may omit it. */
+  headers?: Headers | Record<string, string>;
   json: () => Promise<unknown>;
 }>;
 

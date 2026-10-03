@@ -8,6 +8,9 @@ import type { AccessDeps } from "../api/access/deps";
 import { handleCreateBounty, resultFromError, type ApiPrincipal } from "../api/access/handlers";
 import type { McpAccess } from "../api/access/http";
 import { PUBLIC_API_VERSION } from "../api/public/version";
+import { apiResultResponse } from "../api/access/http";
+import { HuggingFaceReadError } from "../providers/huggingface";
+import { bountyErrorForHuggingFace } from "./hf-create";
 import { BountyError } from "./errors";
 import { createBountyFromIssueUrl } from "./create";
 
@@ -32,6 +35,24 @@ function textOf(result: { content: unknown }): string {
   const first = content[0] as { text?: string };
   return first.text ?? "";
 }
+
+describe("Hugging Face rate limit errors", () => {
+  it("includes Retry-After on the API error when Hugging Face sent it", async () => {
+    const err = bountyErrorForHuggingFace(
+      new HuggingFaceReadError("hf_rate_limited", 429, "slow", "30"),
+      "stanfordnlp/imdb#9",
+    );
+    assert.equal(err.code, "hf_rate_limited");
+    assert.equal(err.details?.retryAfter, "30");
+    assert.equal(err.message.includes("HF_BOT_TOKEN"), false);
+    const result = resultFromError(err);
+    assert.equal(result.status, 429);
+    const body = result.body as { error: { details: { retryAfter?: string } } };
+    assert.equal(body.error.details.retryAfter, "30");
+    const response = apiResultResponse(result);
+    assert.equal(response.headers.get("retry-after"), "30");
+  });
+});
 
 describe("Hugging Face create flag", () => {
   it("returns hf_disabled before amount checks on the website path", async () => {
@@ -121,7 +142,31 @@ describe("Hugging Face create flag", () => {
           },
           { db: {} as never, env: { HF_BOUNTIES_ENABLED: "1" } },
         ),
-      (err: unknown) => err instanceof BountyError && err.code === "invalid_issue_url",
+      (err: unknown) => {
+        assert.ok(err instanceof BountyError);
+        assert.equal(err.code, "invalid_issue_url");
+        assert.match(err.message, /huggingface\.co\/datasets\/owner\/repo\/discussions\/1/);
+        assert.match(err.message, /huggingface\.co\/spaces\/owner\/repo\/discussions\/1/);
+        assert.match(err.message, /github\.com\/owner\/repo\/issues\/123/);
+        return true;
+      },
+    );
+    await assert.rejects(
+      () =>
+        createBountyFromIssueUrl(
+          {
+            posterUserId: "user-1",
+            issueUrl: "https://example.com/not-a-bounty",
+            amountUsdc: "5",
+          },
+          { db: {} as never, env: {} },
+        ),
+      (err: unknown) => {
+        assert.ok(err instanceof BountyError);
+        assert.equal(err.code, "invalid_issue_url");
+        assert.equal(err.message.includes("huggingface.co"), false);
+        return true;
+      },
     );
     await assert.rejects(
       () =>

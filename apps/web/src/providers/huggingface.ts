@@ -31,12 +31,15 @@ export type HuggingFaceReadCode =
 export class HuggingFaceReadError extends Error {
   readonly code: HuggingFaceReadCode;
   readonly status: number;
+  /** Upstream Retry-After header, when Hugging Face sent one. */
+  readonly retryAfter: string | null;
 
-  constructor(code: HuggingFaceReadCode, status: number, message: string) {
+  constructor(code: HuggingFaceReadCode, status: number, message: string, retryAfter: string | null = null) {
     super(message);
     this.name = "HuggingFaceReadError";
     this.code = code;
     this.status = status;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -111,7 +114,11 @@ function hfMessage(body: unknown): string {
   return "";
 }
 
-export function classifyHuggingFaceStatus(status: number, body: unknown): HuggingFaceReadError | null {
+export function classifyHuggingFaceStatus(
+  status: number,
+  body: unknown,
+  retryAfter: string | null = null,
+): HuggingFaceReadError | null {
   if (status >= 200 && status < 300) return null;
   const message = hfMessage(body);
   if (status === 404) {
@@ -121,11 +128,13 @@ export function classifyHuggingFaceStatus(status: number, body: unknown): Huggin
       message || "Hugging Face discussion was not found.",
     );
   }
-  if (status === 429 || /rate limit/i.test(message)) {
+  // Only a real upstream 429. A 5xx body that mentions "rate limit" stays hf_unavailable.
+  if (status === 429) {
     return new HuggingFaceReadError(
       "hf_rate_limited",
       status,
       message || "Hugging Face rate limit reached.",
+      retryAfter,
     );
   }
   if (status === 401 || status === 403) {
@@ -151,10 +160,16 @@ function defaultHttp(
   input: string,
   init?: { method?: string; headers?: Record<string, string>; body?: string },
 ) {
-  return fetch(input, { ...init, signal: AbortSignal.timeout(HF_DISCUSSION_TIMEOUT_MS) });
+  return fetch(input, { ...init, signal: AbortSignal.timeout(HF_DISCUSSION_TIMEOUT_MS) }).then((res) => ({
+    ok: res.ok,
+    status: res.status,
+    headers: res.headers,
+    json: () => res.json() as Promise<unknown>,
+  }));
 }
 
-function discussionHeaders(env: NodeJS.ProcessEnv | undefined): Record<string, string> {
+/** Bearer token for every Hub read (discussion, pull request, and any later repo read). */
+export function huggingFaceHubHeaders(env: NodeJS.ProcessEnv | undefined): Record<string, string> {
   const headers: Record<string, string> = {
     accept: "application/json",
     "user-agent": "github-bounties",
@@ -162,6 +177,54 @@ function discussionHeaders(env: NodeJS.ProcessEnv | undefined): Record<string, s
   const token = readHfBotToken(env);
   if (token) headers.authorization = `Bearer ${token}`;
   return headers;
+}
+
+function hubPath(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url.split("?")[0] ?? url;
+  }
+}
+
+function headerEntries(headers: Headers | Record<string, string> | undefined): Array<[string, string]> {
+  if (!headers) return [];
+  if (typeof (headers as Headers).forEach === "function") {
+    const rows: Array<[string, string]> = [];
+    (headers as Headers).forEach((value, key) => rows.push([key, value]));
+    return rows;
+  }
+  return Object.entries(headers);
+}
+
+function headerValue(headers: Headers | Record<string, string> | undefined, name: string): string | null {
+  const found = headerEntries(headers).find(([key]) => key.toLowerCase() === name.toLowerCase());
+  const value = found?.[1]?.trim();
+  return value || null;
+}
+
+const DIAGNOSTIC_HEADER = /^(ratelimit(?:-.+)?|retry-after|x-error-code|x-error-message)$/i;
+
+/** Structured Cloud Run line. Path only: no query string and no bearer token. */
+export function logHuggingFaceHubFailure(args: {
+  status: number;
+  url: string;
+  botToken: boolean;
+  headers?: Headers | Record<string, string>;
+}): void {
+  const rateLimit: Record<string, string> = {};
+  for (const [key, value] of headerEntries(args.headers)) {
+    if (DIAGNOSTIC_HEADER.test(key)) rateLimit[key.toLowerCase()] = value;
+  }
+  console.error(
+    JSON.stringify({
+      event: "hf_hub_read",
+      status: args.status,
+      path: hubPath(args.url),
+      botToken: args.botToken,
+      rateLimit,
+    }),
+  );
 }
 
 function firstCommentBody(events: unknown): string | null {
@@ -270,9 +333,10 @@ export async function fetchHuggingFaceDiscussion(
   }
   const http: GitHubHttp = opts.http ?? defaultHttp;
   const url = `${HF_API}/${apiPrefix(type)}/${ref.owner}/${ref.repo}/discussions/${ref.issueNumber}`;
-  let res: { ok: boolean; status: number; json: () => Promise<unknown> };
+  const botToken = Boolean(readHfBotToken(opts.env));
+  let res: Awaited<ReturnType<GitHubHttp>>;
   try {
-    res = await http(url, { headers: discussionHeaders(opts.env) });
+    res = await http(url, { headers: huggingFaceHubHeaders(opts.env) });
   } catch (err) {
     if (isHuggingFaceReadError(err)) throw err;
     if (isTimeout(err)) {
@@ -295,7 +359,11 @@ export async function fetchHuggingFaceDiscussion(
   } catch {
     body = null;
   }
-  const failed = classifyHuggingFaceStatus(res.status, body);
+  if (!res.ok) {
+    logHuggingFaceHubFailure({ status: res.status, url, botToken, headers: res.headers });
+  }
+  const retryAfter = headerValue(res.headers, "retry-after");
+  const failed = classifyHuggingFaceStatus(res.status, body, retryAfter);
   if (failed) throw failed;
   const payload = (asRecord(body) ?? {}) as DiscussionPayload;
   const repo = canonicalRepo(ref, payload);

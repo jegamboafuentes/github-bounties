@@ -297,19 +297,20 @@ function asApiError(err: unknown): PublicApiError {
   if (isClaimError(err)) {
     return new PublicApiError(err.code, err.message, null, statusForDomainCode(err.code));
   }
-  if (isBountyError(err) || isEscrowError(err)) {
-    if (isEscrowError(err) && err.httpStatus === 410) {
+  if (isBountyError(err)) {
+    return new PublicApiError(err.code, err.message, err.details, statusForDomainCode(err.code));
+  }
+  if (isEscrowError(err)) {
+    if (err.httpStatus === 410) {
       return new PublicApiError("not_found", "Bounty not found.", null, 410);
     }
     const details =
-      isEscrowError(err) && (err.missing || err.details)
-        ? { missing: err.missing ?? null, ...err.details }
-        : null;
+      err.missing || err.details ? { missing: err.missing ?? null, ...err.details } : null;
     return new PublicApiError(
       err.code,
       err.message,
       details,
-      isEscrowError(err) && err.httpStatus ? err.httpStatus : statusForDomainCode(err.code),
+      err.httpStatus ? err.httpStatus : statusForDomainCode(err.code),
     );
   }
   console.error(

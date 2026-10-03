@@ -239,7 +239,7 @@ Accepted URLs:
 
 The repo row is `provider=huggingface`, `connection_kind=public_reference`, `github_repo_id` null, and `provider_repo_id` `{model|dataset|space}:{owner}/{repo}`. The discussion number is stored in `github_issue_number`. No new migration.
 
-A pull-request discussion is `hf_not_a_discussion`. A closed or merged discussion is `hf_discussion_closed`. A missing discussion is `hf_discussion_not_found`. `HF_BOT_TOKEN` is optional. When set, discussion reads send `Authorization: Bearer`. Public discussions work without it.
+A pull-request discussion is `hf_not_a_discussion`. A closed or merged discussion is `hf_discussion_closed`. A missing discussion is `hf_discussion_not_found`. `HF_BOT_TOKEN` is optional. When set, every Hub read (create and submit) sends `Authorization: Bearer`. Public discussions work without it. A non-2xx Hub response logs `hf_hub_read` with the upstream status, the API path (no query string and no token), whether the bot token was sent, and the `RateLimit*`, `Retry-After`, `x-error-code`, and `x-error-message` headers. `hf_rate_limited` is only an upstream **429**. The API error includes `details.retryAfter` and a `Retry-After` header when Hugging Face sent one.
 
 Claiming an HF bounty returns `provider_not_supported`. Merge detection and payouts are not in this release. The board can filter `provider=huggingface`. The intelligence card and the public merge poller skip these bounties.
 
@@ -260,7 +260,7 @@ The pull request URL is `https://huggingface.co/{owner}/{repo}/discussions/{n}`,
 | `already_submitted` | This user already has a submission, or this pull request number is already stored. **409**. |
 | `provider_not_supported` | The bounty is GitHub. Submissions are not the GitHub claim flow. **501**, same as claim. |
 
-`HF_BOT_TOKEN` is optional on the pull-request read, the same as discussion create. Migration `0018_hf_submission_author` adds `hf_author`. Apply on DEV before remount.
+The pull-request read uses the same Hub client and the same optional `HF_BOT_TOKEN` bearer as create. Migration `0018_hf_submission_author` adds `hf_author` and one active submission per user per bounty. Apply on DEV before remount.
 
 A public discussion to try on DEV: `https://huggingface.co/datasets/stanfordnlp/imdb/discussions/9`.
 

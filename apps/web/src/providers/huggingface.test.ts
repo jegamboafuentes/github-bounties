@@ -170,7 +170,15 @@ describe("fetch Hugging Face discussions", () => {
     assert.equal(classifyHuggingFaceStatus(401, { error: "unauthorized" })?.code, "hf_discussion_inaccessible");
     assert.equal(classifyHuggingFaceStatus(403, {})?.code, "hf_discussion_inaccessible");
     assert.equal(classifyHuggingFaceStatus(429, { error: "slow down" })?.code, "hf_rate_limited");
+    assert.equal(
+      classifyHuggingFaceStatus(429, { error: "slow down" }, "12")?.retryAfter,
+      "12",
+    );
     assert.equal(classifyHuggingFaceStatus(500, { message: "boom" })?.code, "hf_unavailable");
+    assert.equal(
+      classifyHuggingFaceStatus(503, { error: "rate limit exceeded for this IP" })?.code,
+      "hf_unavailable",
+    );
 
     const ref = huggingfaceProvider.parseIssueUrl(
       "https://huggingface.co/datasets/stanfordnlp/imdb/discussions/999999",
@@ -195,6 +203,58 @@ describe("fetch Hugging Face discussions", () => {
         }),
       (err: unknown) => err instanceof HuggingFaceReadError && err.code === "hf_timeout",
     );
+  });
+
+  it("logs a 429 with the path and rate-limit headers and does not log the token", async () => {
+    const ref = huggingfaceProvider.parseIssueUrl(
+      "https://huggingface.co/datasets/stanfordnlp/imdb/discussions/9?token=secret",
+    );
+    assert.ok(ref);
+    const lines: string[] = [];
+    const original = console.error;
+    console.error = (line?: unknown) => {
+      if (typeof line === "string") lines.push(line);
+    };
+    try {
+      await assert.rejects(
+        () =>
+          huggingfaceProvider.fetchIssue(ref, {
+            env: { HF_BOT_TOKEN: "bot-token" },
+            http: async (url, init) => {
+              assert.equal(init?.headers?.authorization, "Bearer bot-token");
+              assert.match(url, /\/discussions\/9$/);
+              return {
+                ok: false,
+                status: 429,
+                headers: {
+                  "RateLimit-Limit": "500",
+                  "Retry-After": "30",
+                  "x-error-code": "RateLimited",
+                  "x-error-message": "slow down",
+                },
+                json: async () => ({ error: "slow down" }),
+              };
+            },
+          }),
+        (err: unknown) =>
+          err instanceof HuggingFaceReadError &&
+          err.code === "hf_rate_limited" &&
+          err.retryAfter === "30",
+      );
+    } finally {
+      console.error = original;
+    }
+    const logged = lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+    const row = logged.find((item) => item.event === "hf_hub_read");
+    assert.ok(row);
+    assert.equal(row.status, 429);
+    assert.equal(row.path, "/api/datasets/stanfordnlp/imdb/discussions/9");
+    assert.equal(row.botToken, true);
+    assert.equal((row.rateLimit as Record<string, string>)["retry-after"], "30");
+    assert.equal((row.rateLimit as Record<string, string>)["ratelimit-limit"], "500");
+    assert.equal((row.rateLimit as Record<string, string>)["x-error-code"], "RateLimited");
+    assert.equal(JSON.stringify(row).includes("bot-token"), false);
+    assert.equal(JSON.stringify(row).includes("token=secret"), false);
   });
 
   it("parses a pull request URL and still refuses merge and closing-pull reads", () => {

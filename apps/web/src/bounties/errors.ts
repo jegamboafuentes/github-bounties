@@ -42,11 +42,13 @@ export type BountyErrorCode =
 
 export class BountyError extends Error {
   readonly code: BountyErrorCode;
+  readonly details: Record<string, unknown> | null;
 
-  constructor(code: BountyErrorCode, message: string) {
+  constructor(code: BountyErrorCode, message: string, details: Record<string, unknown> | null = null) {
     super(message);
     this.name = "BountyError";
     this.code = code;
+    this.details = details;
   }
 }
 

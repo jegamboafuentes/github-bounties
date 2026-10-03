@@ -175,18 +175,26 @@ async function readJsonBody(request: Request): Promise<unknown> {
   }
 }
 
+function retryAfterHeader(result: ApiResult): string | null {
+  if (result.status !== 429 || !result.body || typeof result.body !== "object" || !("error" in result.body)) {
+    return null;
+  }
+  const details = (result.body as { error?: { details?: { windowSeconds?: number; retryAfter?: unknown } } }).error
+    ?.details;
+  if (typeof details?.windowSeconds === "number") return String(details.windowSeconds);
+  const retryAfter = details?.retryAfter;
+  if (typeof retryAfter === "number" && Number.isFinite(retryAfter)) return String(Math.ceil(retryAfter));
+  if (typeof retryAfter === "string" && retryAfter.trim()) return retryAfter.trim();
+  return null;
+}
+
 export function apiResultResponse(result: ApiResult): Response {
   const headers = new Headers({ "cache-control": "no-store", "content-type": "application/json; charset=utf-8" });
   for (const [key, value] of Object.entries(PUBLIC_API_CORS_HEADERS)) headers.set(key, value);
   for (const [key, value] of Object.entries(result.headers ?? {})) headers.set(key, value);
   if (result.status === 401) headers.set("WWW-Authenticate", "Bearer");
-  const retryAfter =
-    result.status === 429 &&
-    result.body &&
-    typeof result.body === "object" &&
-    "error" in result.body &&
-    (result.body as { error?: { details?: { windowSeconds?: number } } }).error?.details?.windowSeconds;
-  if (typeof retryAfter === "number") headers.set("Retry-After", String(retryAfter));
+  const retryAfter = retryAfterHeader(result);
+  if (retryAfter) headers.set("Retry-After", retryAfter);
   const payload = typeof result.rawBody === "string" ? result.rawBody : JSON.stringify(result.body);
   return new Response(payload, { status: result.status, headers });
 }
