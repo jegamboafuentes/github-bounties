@@ -1,4 +1,5 @@
 import type { BoardKeyset, BoardListSort } from "../../bounties/list";
+import { containsControlChars } from "../../http/control-chars";
 import { isUuid, UUID_RE } from "../../ids";
 import { PublicApiError, zodErrorDetails } from "./errors";
 import { listBountiesInputSchema, type ListBountiesInput } from "./schemas";
@@ -59,6 +60,12 @@ export function coerceListSearchParams(params: URLSearchParams): Record<string, 
   const take = (key: string) => {
     const value = params.get(key);
     if (value == null) return;
+    // Keep control characters so acceptListInput rejects them. trim() would
+    // drop a leading newline and the value would reach Postgres.
+    if (containsControlChars(value)) {
+      out[key] = value;
+      return;
+    }
     const trimmed = value.trim();
     if (!trimmed) return;
     out[key] = trimmed;
@@ -88,7 +95,20 @@ export function coerceListSearchParams(params: URLSearchParams): Record<string, 
   return out;
 }
 
+const FREE_TEXT_LIST_KEYS = ["repo", "language"] as const;
+
 export function acceptListInput(input: unknown): ListBountiesInput & { cursorValue: BoardCursor | null } {
+  if (input && typeof input === "object") {
+    const row = input as Record<string, unknown>;
+    for (const key of FREE_TEXT_LIST_KEYS) {
+      const value = row[key];
+      if (typeof value === "string" && containsControlChars(value)) {
+        throw new PublicApiError("validation_failed", "Invalid bounty list query.", [
+          { path: key, message: "Cannot include control characters." },
+        ]);
+      }
+    }
+  }
   const parsed = listBountiesInputSchema.safeParse(input);
   if (!parsed.success) {
     throw new PublicApiError(

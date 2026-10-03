@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { readBalanceReport, type BalanceReport } from "@/admin/balances";
 import { listAdminBounties, parseAdminBountyStatus, type AdminBountyRow } from "@/admin/bounties";
+import { SearchValidationNotice } from "@/components/search-validation-notice";
+import { containsControlChars, controlCharMessage } from "@/http/control-chars";
 import { requireAdminPageUser } from "@/admin/gate";
 import { bpsToPercent, readPlatformSettings } from "@/admin/settings";
 import { adminRefundEnabled } from "@/admin/refund";
@@ -117,7 +119,9 @@ export default async function AdminPage({
   searchParams: Promise<{ as?: string; step?: string; q?: string; status?: string; page?: string }>;
 }) {
   const query = await searchParams;
-  const search = query.q?.trim() ?? "";
+  const rawSearch = query.q ?? "";
+  const searchError = containsControlChars(rawSearch) ? controlCharMessage("Search") : null;
+  const search = searchError ? "" : rawSearch.trim();
   let status = "";
   try {
     status = parseAdminBountyStatus(query.status) ?? "";
@@ -126,7 +130,12 @@ export default async function AdminPage({
   }
   if (fixtureEnabled()) {
     if (query.as === "denied") notFound();
-    return <AdminDashboard data={fixtureData(query.step, search, status)} />;
+    return (
+      <>
+        <SearchValidationNotice message={searchError} />
+        <AdminDashboard data={fixtureData(query.step, search, status)} />
+      </>
+    );
   }
 
   const admin = await requireAdminPageUser();
@@ -134,12 +143,14 @@ export default async function AdminPage({
   const settings = await readPlatformSettings(db);
   const report = await readBalanceReport(db, process.env);
   const page = Math.max(1, Number.parseInt(query.page ?? "1", 10) || 1);
-  const listed = await listAdminBounties(db, {
-    search,
-    status,
-    limit: PAGE_SIZE,
-    offset: (page - 1) * PAGE_SIZE,
-  });
+  const listed = searchError
+    ? { bounties: [] as AdminBountyRow[], total: 0, limit: PAGE_SIZE, offset: 0 }
+    : await listAdminBounties(db, {
+        search,
+        status,
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
+      });
   const pageCount = Math.max(1, Math.ceil(listed.total / PAGE_SIZE));
 
   const data: AdminDashboardData = {
@@ -166,5 +177,10 @@ export default async function AdminPage({
     },
     statusOptions: bountyStatusValues.map((value) => ({ value, label: bountyStatusLabel(value) })),
   };
-  return <AdminDashboard data={data} />;
+  return (
+    <>
+      <SearchValidationNotice message={searchError} />
+      <AdminDashboard data={data} />
+    </>
+  );
 }

@@ -2,6 +2,7 @@ import { and, desc, eq, ilike, isNotNull, or, sql, type SQL } from "drizzle-orm"
 import type { Database } from "../db/client";
 import { PublicApiError } from "../api/public/errors";
 import { marketingContacts, type MarketingContactSource } from "../db/schema";
+import { rejectControlChars } from "../http/control-chars";
 import { toCsv } from "./csv";
 import { parseContactSource } from "./normalize";
 import { sanitizeUtmValue } from "./utm";
@@ -97,7 +98,9 @@ export function parseContactListQuery(input: {
   limit?: number | string | null;
   offset?: number | string | null;
 }): ContactListQuery {
-  const search = input.search?.trim() ?? "";
+  const rawSearch = input.search ?? "";
+  rejectControlChars(rawSearch, "Search");
+  const search = rawSearch.trim();
   if (search.length > 200) {
     throw new PublicApiError("validation_failed", "Search must be 200 characters or fewer.");
   }
