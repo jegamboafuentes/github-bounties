@@ -18,5 +18,9 @@ describe("admin hosts", () => {
     assert.equal(adminPage.robots, true);
     assert.equal(classifyHostRequest("localhost:3000", "/admin").action, "next");
     assert.equal(classifyHostRequest("admin-dev.githubbounties.xyz", "/").robots, true);
+    assert.equal(classifyHostRequest("githubbounties.xyz", "/admin/contacts").action, "not_found");
+    assert.equal(classifyHostRequest("admin.githubbounties.xyz", "/admin/contacts").action, "next");
+    assert.equal(classifyHostRequest("dev.githubbounties.xyz", "/api/webhooks/resend").action, "next");
+    assert.equal(classifyHostRequest("dev.githubbounties.xyz", "/api/jobs/sync-contacts").action, "next");
   });
 });

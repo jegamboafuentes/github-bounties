@@ -78,6 +78,8 @@ SECRETS=(
   GEMINI_API_KEY
   RESEND_API_KEY
   API_KEY_HMAC_SECRET
+  RESEND_AUDIENCE_ID
+  RESEND_WEBHOOK_SECRET
 )
 
 # First-deploy --set-secrets (Ops: enabled versions present).
@@ -125,8 +127,13 @@ WEB_SKIP_SECRETS=(
 # a remount does not fail the rest of the deploy. PROD can stay without it
 # until keys are turned on there. Money stays off on mainnet unless
 # API_MONEY_ENABLED is explicitly set (plain env, not this list).
+# RESEND_AUDIENCE_ID and RESEND_WEBHOOK_SECRET: campaign list sync. Optional.
+# Attach when an enabled version exists; skip when absent so contact sync stays
+# a no-op and a remount does not fail. Not required for sign-in.
 WEB_OPTIONAL_SECRETS=(
   GEMINI_API_KEY
   RESEND_API_KEY
   API_KEY_HMAC_SECRET
+  RESEND_AUDIENCE_ID
+  RESEND_WEBHOOK_SECRET
 )

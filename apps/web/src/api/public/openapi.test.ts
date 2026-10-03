@@ -28,6 +28,8 @@ const WRITE = [
   "/api/v1/me/profile",
   "/api/v1/me/notification-preferences",
   "/api/v1/me/linked-accounts",
+  "/api/v1/admin/contacts",
+  "/api/v1/admin/contacts/count",
 ];
 
 describe("OpenAPI document", () => {
@@ -36,7 +38,7 @@ describe("OpenAPI document", () => {
     await SwaggerParser.validate(document);
     assert.equal(document.openapi, "3.1.0");
     assert.equal(document.info.title, "GitHub Bounties API");
-    assert.equal(document.info.version, "4.6.0");
+    assert.equal(document.info.version, "4.7.0");
     assert.equal(document.info.version, PUBLIC_API_VERSION);
     assert.match(document.info.description ?? "", /60 requests per minute/);
     assert.match(PUBLIC_API_DESCRIPTION, /Cloud Run instance/);
@@ -103,13 +105,14 @@ describe("OpenAPI document", () => {
         operationIds.add(operation.operationId ?? "");
       }
     }
-    assert.equal(operationIds.size, 24);
+    assert.equal(operationIds.size, 26);
     assert.deepEqual(
       [...operationIds].sort(),
       [
         "cancelBounty",
         "claimBounty",
         "clearWorkSignal",
+        "countContacts",
         "createBounty",
         "fundBounty",
         "getBounty",
@@ -122,6 +125,7 @@ describe("OpenAPI document", () => {
         "listBounties",
         "listBountyClaims",
         "listBountyFunders",
+        "listContacts",
         "listLinkedAccounts",
         "listMyBounties",
         "listMyClaims",
