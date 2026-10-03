@@ -1,3 +1,4 @@
+import { BUILDER_CODE, declareBuilderCodeExtension } from "@x402/extensions/builder-code";
 import {
   BASE_MAINNET_CAIP2,
   BASE_SEPOLIA_CAIP2,
@@ -10,6 +11,7 @@ import {
   USDC_EIP712_VERSION,
 } from "../lib/constants";
 import { usdcToAtomic } from "../lib/money";
+import { readBuilderCode } from "./builder-code";
 import type { EnvMap } from "./env";
 
 export const X402_VERSION = 2;
@@ -47,7 +49,19 @@ export type X402PaymentRequired = {
   error: string;
   resource: X402ResourceInfo;
   accepts: X402ExactRequirements[];
+  /** Present only when BASE_BUILDER_CODE is set. Omitted entirely when unset. */
+  extensions?: Record<string, unknown>;
 };
+
+/**
+ * Schema 2 declaration for the 402 challenge and the seller route.
+ * Missing or blank is unset (undefined). A non-blank invalid code throws.
+ */
+export function x402BuilderCodeExtensions(env: EnvMap = process.env): Record<string, unknown> | undefined {
+  const code = readBuilderCode(env);
+  if (!code) return undefined;
+  return { [BUILDER_CODE]: declareBuilderCodeExtension(code) };
+}
 
 export function publicOrigin(env: EnvMap = process.env, requestOrigin?: string): string {
   const configured = env.PUBLIC_BASE_URL?.trim() || env.AUTH_URL?.trim() || "";
@@ -103,10 +117,12 @@ export function buildX402ExactChallenge(input: {
   network: string;
   maxTimeoutSeconds?: number;
   description?: string;
+  env?: EnvMap;
 }): X402PaymentRequired {
   const amount = usdcToAtomic(input.faceUsdc).toString();
   const url = x402ResourceUrl(input.bountyId, input.origin);
   const network = x402NetworkCaip2(input.network);
+  const extensions = x402BuilderCodeExtensions(input.env);
   return {
     x402Version: X402_VERSION,
     error: "Payment required",
@@ -128,6 +144,7 @@ export function buildX402ExactChallenge(input: {
         extra: x402UsdcEip712Extra(input.network),
       },
     ],
+    ...(extensions ? { extensions } : {}),
   };
 }
 
@@ -158,6 +175,7 @@ export function x402ChallengeResponseBody(
     resource: challenge.resource,
     accepts: challenge.accepts,
     x402Version: challenge.x402Version,
+    ...(challenge.extensions ? { extensions: challenge.extensions } : {}),
   };
 }
 

@@ -1,6 +1,17 @@
 import Link from "next/link";
 import { publicSurfaceCounts } from "@/api/public/surface-counts";
-import { roadmapWithSurface, ROADMAP_STATUS_LABEL, type RoadmapStatus } from "@/home/roadmap";
+import {
+  roadmapTextSegments,
+  roadmapWithSurface,
+  ROADMAP_STATUS_LABEL,
+  type RoadmapStatus,
+} from "@/home/roadmap";
+
+function RoadmapText({ text }: { text: string }) {
+  return roadmapTextSegments(text).map((segment, index) =>
+    segment.kind === "code" ? <code key={index}>{segment.text}</code> : <span key={index}>{segment.text}</span>,
+  );
+}
 
 function statusClass(status: RoadmapStatus): string {
   if (status === "shipped") {
@@ -33,8 +44,12 @@ export async function PublicRoadmap() {
                 {ROADMAP_STATUS_LABEL[item.status]}
               </span>
             </div>
-            <h2 className="mt-1 font-medium">{item.title}</h2>
-            <p className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{item.summary}</p>
+            <h2 className="mt-1 font-medium">
+              <RoadmapText text={item.title} />
+            </h2>
+            <p className="mt-1 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+              <RoadmapText text={item.summary} />
+            </p>
             {"href" in item && item.href ? (
               <p className="mt-2 text-sm">
                 <Link href={item.href} className="font-medium underline underline-offset-4">

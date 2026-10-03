@@ -5,7 +5,14 @@ import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { PUBLIC_API_VERSION } from "../api/public/version";
 import { publicSurfaceCounts, surfaceCountPhrase } from "../api/public/surface-counts";
-import { PUBLIC_ROADMAP, ROADMAP_INTRO, roadmapWithSurface, ROADMAP_STATUS_LABEL, ROADMAP_STATUSES } from "./roadmap";
+import {
+  PUBLIC_ROADMAP,
+  ROADMAP_INTRO,
+  roadmapTextSegments,
+  roadmapWithSurface,
+  ROADMAP_STATUS_LABEL,
+  ROADMAP_STATUSES,
+} from "./roadmap";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const docsRoadmap = readFileSync(join(repoRoot, "docs/roadmap.md"), "utf8");
@@ -82,8 +89,17 @@ describe("public roadmap", () => {
     assert.equal(byId.v4?.status, "shipped");
     assert.equal(byId.v4?.title, "API + MCP");
     assert.equal(byId.v4?.href, "/mcp");
-    assert.match(byId.v4?.summary ?? "", /DONE, LIVE on PROD 2026-09-25/);
-    assert.match(byId.v4?.summary ?? "", new RegExp(PUBLIC_API_VERSION.replace(/\./g, "\\.")));
+    assert.match(byId.v4?.summary ?? "", /LIVE on PROD 2026-09-25/);
+    assert.match(byId.v4?.summary ?? "", /PROD serves 4\.5\.0/);
+    assert.match(
+      byId.v4?.summary ?? "",
+      new RegExp(`${PUBLIC_API_VERSION.replace(/\./g, "\\.")} is the DEV and main API version`),
+    );
+    assert.match(byId.v4?.summary ?? "", /adds the provider field/);
+    assert.doesNotMatch(
+      byId.v4?.summary ?? "",
+      new RegExp(`version ${PUBLIC_API_VERSION.replace(/\./g, "\\.")}`),
+    );
     assert.doesNotMatch(byId.v4?.summary ?? "", /23 operations, 24 tools/);
     assert.match(byId.v4?.summary ?? "", /API money is OFF on PROD/);
     assert.doesNotMatch(byId.v4?.summary ?? "", /In planning/);
@@ -109,7 +125,11 @@ describe("public roadmap", () => {
     assert.equal(byId.v7?.status, "next");
     assert.equal(byId.v7?.version, "V7");
     assert.equal(byId.v7?.title, "/bounty command");
-    assert.match(byId.v7?.summary ?? "", /\/bounty/);
+    assert.match(byId.v7?.summary ?? "", /`\/bounty`/);
+    assert.deepEqual(
+      roadmapTextSegments(byId.v7?.summary ?? "").filter((segment) => segment.kind === "code"),
+      [{ kind: "code", text: "/bounty" }],
+    );
     assert.match(byId.v7?.summary ?? "", /GitHub and Hugging Face/);
     assert.match(byId.v7?.summary ?? "", /Nothing is built/);
     assert.equal(byId.v8?.status, "then");
@@ -195,8 +215,13 @@ describe("public roadmap", () => {
     assert.match(surfaced?.summary ?? "", new RegExp(PUBLIC_API_VERSION.replace(/\./g, "\\.")));
     assert.match(docsRoadmap, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.match(readme, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-    assert.match(docsRoadmap, /version 4\.7\.0/);
-    assert.match(readme, /version 4\.7\.0/);
+    const version = PUBLIC_API_VERSION.replace(/\./g, "\\.");
+    assert.match(docsRoadmap, /PROD serves 4\.5\.0/);
+    assert.match(readme, /PROD serves 4\.5\.0/);
+    assert.match(docsRoadmap, new RegExp(`${version} is the DEV and main API version`));
+    assert.match(readme, new RegExp(`${version} is the DEV and main API version`));
+    assert.doesNotMatch(docsRoadmap, new RegExp(`version ${version}`));
+    assert.doesNotMatch(readme, new RegExp(`version ${version}`));
     assert.doesNotMatch(docsRoadmap, /23 operations, 24 tools/);
     assert.doesNotMatch(readme, /23 operations, 24 tools/);
   });

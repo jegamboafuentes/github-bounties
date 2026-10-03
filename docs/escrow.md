@@ -33,7 +33,7 @@ Fee is computed from **face**, never from “amount received after Coinbase fees
 | Mode | When | What happens |
 | --- | --- | --- |
 | **mock** | any of `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, `CDP_WALLET_SECRET` missing | Lock/settle/refund persist `mock:0x…` hashes and list the **exact** missing env names. Not a silent on-chain lock. |
-| **cdp** | all three secrets present and network is safe | `getOrCreateAccount` for `gb-escrow` / `gb-fee`. Transfers use the same idempotency key we persist. |
+| **cdp** | all three secrets present and network is safe | `getOrCreateAccount` for `gb-escrow` / `gb-fee`. Outbound USDC uses `sendTransaction` and the idempotency key we persist. `account.transfer()` in `@coinbase/cdp-sdk` 1.55–1.57 dropped that key. |
 | **refused** | `CDP_NETWORK=base` (or other mainnet alias) without `CDP_ALLOW_MAINNET=1` | No transfers. Default network is `base-sepolia`. |
 
 Hosted checkout create/capture is **not implemented**. See [open Q](#hosted-checkout-disabled).
@@ -62,12 +62,19 @@ CDP_NETWORK=base-sepolia          # default
 # CDP_ALLOW_MAINNET=1             # required in addition to CDP_NETWORK=base
 # CDP_DRY_RUN=1                   # documented dry-run (default in .env.example)
 # CDP_DRY_RUN_LIVE=1              # Sepolia faucet + live transfers only
+# BASE_BUILDER_CODE=bc_u97ii222   # optional public code; unset means no suffix and no x402 extension
 
 # Public Reown / WalletConnect project id (not Secret Manager).
 # NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 ```
 
-`GET /api/health` → `escrow.walletconnect.configured` is `true` when that public id is set (value is never returned). `intelligence.configured` is `true` when `GEMINI_API_KEY` is set (boolean only).
+`GET /api/health` → `escrow.walletconnect.configured` is `true` when that public id is set (value is never returned). `intelligence.configured` is `true` when `GEMINI_API_KEY` is set (boolean only). `escrow.builderCode` is the public `BASE_BUILDER_CODE` or `null`. The same value is copied onto `escrow.x402_exact` and `escrow.walletconnect`. An invalid code fails health and blocks the send.
+
+## Builder code
+
+`BASE_BUILDER_CODE` is optional and not a secret. It must match `^[a-z0-9_]{1,32}$`. The registered code is `bc_u97ii222`. Ops sets `BASE_BUILDER_CODE=bc_u97ii222` on DEV first, then on PROD on Enrique's GO. When it is set, payout, refund, and admin fee-withdraw calldata is the ERC-20 `transfer(to, amount)` plus an ERC-8021 Schema 0 suffix from `Attribution.toDataSuffix` (`ox/erc8021`). The suffix ends in `8021` repeated eight times. Contracts ignore the extra bytes. The same code is declared on the x402 `exact` 402 challenge (`extensions["builder-code"]`, Schema 2). The browser payer echoes `a`. The CDP facilitator reads that echo and appends `{ a, w }` on the fund transaction. A payer that does not echo it still settles. When the variable is unset or blank, the calldata is the 68-byte transfer and the 402 has no builder-code extension.
+
+The USDC contract is still the rail network: Base Sepolia on DEV, Base mainnet on PROD.
 
 ## Sepolia dry-run (after Ops stashes CDP_*)
 
@@ -163,7 +170,8 @@ Winner Claim (`scope=winner_and_fee`, default) transfers **FEE_OUT + WINNER_PAYO
 
 ## Idempotency + recon
 
-- One deterministic UUID per `(bounty_id, kind)` for V1 (`FUND_IN`, `HUNTER_PAYOUT` / `WINNER_PAYOUT`, `FEE_OUT`, `REFUND_OUT`). V2-3 adds a distinct key per `POOL_PAYOUT` participant. Passed through as the CDP idempotency key when the live rail runs.
+- One deterministic UUID per `(bounty_id, kind)` for V1 (`FUND_IN`, `HUNTER_PAYOUT` / `WINNER_PAYOUT`, `FEE_OUT`, `REFUND_OUT`). V2-3 adds a distinct key per `POOL_PAYOUT` participant. Live payout, refund, and fee withdraw pass that value as `idempotencyKey` on `account.sendTransaction` (`X-Idempotency-Key`). `account.transfer()` did not: `@coinbase/cdp-sdk` 1.55–1.57 `TransferOptions` has no such field, so those sends were not de-duplicated by CDP.
+- CDP de-duplicates a key it actually receives for about 24 hours and errors if the same key is reused with a different body. A retry of a leg whose first attempt failed at CDP inside that window can return the cached failure. Confirm that on DEV before relying on it in PROD.
 - Our rows (not CDP’s 24h window) are the long-lived store. Winner/fee hashes also live on `escrows.payout_tx_hash` / `fee_tx_hash`; pool hashes on `allocation_ledger`.
 - SettledPartial: retry **remaining legs only** with the same per-leg keys. Never reverse a confirmed transfer.
 - Recon hook (`reconcileBountyNotes`): attributed escrow = face − confirmed winner − confirmed pool − confirmed fee − refund. Open bounties must equal face; `settled` / `refunded` must equal 0. Nightly: `sum(open attributed) == gb-escrow` on-chain USDC (allow in-flight). This ticket ships the notes; it does not run a chain indexer.

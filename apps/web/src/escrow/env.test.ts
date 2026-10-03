@@ -155,6 +155,10 @@ describe("CDP env + mainnet refuse", () => {
     assert.equal(health.walletconnect.configured, false);
     assert.equal(health.walletconnect.env, "NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID");
     assert.equal(health.walletconnect.hostedCheckout, "disabled");
+    assert.equal(health.builderCode, null);
+    assert.equal(health.x402_exact.builderCode, null);
+    assert.equal(health.walletconnect.builderCode, null);
+    assert.equal(escrowHealth({ BASE_BUILDER_CODE: "bc_b7k3p9da" }).builderCode, "bc_b7k3p9da");
   });
 
   it("derives stable idempotency keys per bounty+kind", () => {
