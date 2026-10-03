@@ -2,6 +2,7 @@ import { POOL_ROSTER_NOT_FROZEN_MESSAGE } from "../../claims/errors";
 import { getProvider } from "../../providers/registry";
 import type { ProviderIdentity } from "../../providers/types";
 import { PublicApiError } from "../public/errors";
+import { statusForDomainCode } from "./policy";
 import type { ClaimAuthContext, ClaimKind } from "./deps";
 
 export function githubLoginsMatch(left: string | null | undefined, right: string | null | undefined): boolean {
@@ -25,6 +26,14 @@ function identitiesMatch(ctx: ClaimAuthContext, otherLogin: string | null | unde
 export function authorizeClaimCaller(actorUserId: string, kind: ClaimKind, ctx: ClaimAuthContext): void {
   if (!ctx.bounty) {
     throw new PublicApiError("not_found", "Bounty not found.");
+  }
+  if (ctx.bounty.provider === "huggingface") {
+    throw new PublicApiError(
+      "provider_not_supported",
+      "Claiming a Hugging Face bounty is not supported yet.",
+      null,
+      statusForDomainCode("provider_not_supported"),
+    );
   }
   if (!ctx.githubLogin?.trim()) {
     throw new PublicApiError(

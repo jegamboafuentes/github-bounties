@@ -16,7 +16,7 @@ export function CreateBountyForm() {
   return (
     <form action={action} className="flex flex-col gap-4">
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium">GitHub issue URL</span>
+        <span className="font-medium">GitHub issue or Hugging Face discussion URL</span>
         <input
           name="issueUrl"
           type="url"
@@ -39,6 +39,15 @@ export function CreateBountyForm() {
           className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
         />
       </label>
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        Hugging Face discussions use{" "}
+        <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">
+          https://huggingface.co/owner/repo/discussions/1
+        </code>
+        , or a <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">datasets/</code> or{" "}
+        <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">spaces/</code> path. Creation stays off until{" "}
+        <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">HF_BOUNTIES_ENABLED=1</code>.
+      </p>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         Submit stores <code className="rounded bg-zinc-100 px-1 dark:bg-zinc-800">pending_fund</code>.
         The form is the draft — the schema has no draft status. {fundLockCopy(fund.chainName)}

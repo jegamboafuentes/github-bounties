@@ -8,6 +8,7 @@ const COMPLEXITY_HINT: Record<"S" | "M" | "L", string> = {
 };
 
 export function BountyIntelligenceCard({ intelligence }: { intelligence: IntelligenceView }) {
+  if (intelligence.status === "unavailable" && intelligence.reason === "skipped") return null;
   const unavailable =
     intelligence.status === "unavailable"
       ? intelligenceUnavailableCopy(intelligence)

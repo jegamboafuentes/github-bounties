@@ -21,6 +21,11 @@ export type BountyIssueBody = {
   installationId: bigint | null;
 };
 
+/** GitHub issue bodies refresh. Hugging Face keeps the snapshot from create. */
+export function refreshesIssueBodyFromProvider(provider: string): boolean {
+  return provider !== "huggingface";
+}
+
 export function shouldRefreshIssueBody(args: {
   snapshot: string | null;
   syncedAt: Date | null;
@@ -91,6 +96,17 @@ export async function loadBountyIssueBody(
     .limit(1);
 
   if (!row) return null;
+
+  if (!refreshesIssueBodyFromProvider(row.provider)) {
+    return {
+      markdown: row.descriptionSnapshot,
+      title: row.title,
+      refreshed: false,
+      repoFullName: row.repoFullName,
+      githubIssueNumber: row.githubIssueNumber,
+      installationId: row.installationId,
+    };
+  }
 
   const now = opts.now ?? new Date();
   const needsFetch = shouldRefreshIssueBody({

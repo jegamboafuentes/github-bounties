@@ -25,8 +25,9 @@ export default async function NewBountyPage() {
           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">V1-4</p>
           <h1 className="text-3xl font-semibold tracking-tight">Post a bounty</h1>
           <p className="text-zinc-600 dark:text-zinc-400">
-            Paste any public GitHub issue URL. Google session required.
-            Closed issues are rejected. Merge is still truth.
+            Paste any public GitHub issue URL, or a Hugging Face discussion URL. Google session required.
+            Closed issues and closed discussions are rejected. GitHub merge is still truth.
+            Hugging Face payouts are not available yet, and discussion bounties stay off until HF_BOUNTIES_ENABLED=1.
           </p>
         </div>
 

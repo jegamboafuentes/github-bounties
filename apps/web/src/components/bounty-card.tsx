@@ -9,6 +9,7 @@ import {
 import type { BoardBounty } from "@/bounties/list";
 import { FunderAvatarStack } from "@/components/funder-avatar-stack";
 import { GitHubAvatar } from "@/components/github-avatar";
+import { ProviderBadge } from "@/components/provider-badge";
 
 const COMPLEXITY_BADGE: Record<"S" | "M" | "L", string> = {
   S: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100",
@@ -36,8 +37,11 @@ export function BountyCard({ bounty }: { bounty: BoardBounty }) {
     <article className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wide text-zinc-500">
-            {bounty.repoFullName} · #{bounty.githubIssueNumber}
+          <p className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-zinc-500">
+            <span>
+              {bounty.repoFullName} · #{bounty.githubIssueNumber}
+            </span>
+            <ProviderBadge provider={bounty.provider} />
           </p>
           <h2 className="mt-1 text-lg font-semibold tracking-tight">
             <Link href={`/bounties/${bounty.id}`} className="underline-offset-4 hover:underline">
@@ -118,7 +122,7 @@ export function BountyCard({ bounty }: { bounty: BoardBounty }) {
           Posted by {bounty.posterDisplayName}
           {" · "}
           <a href={bounty.url} className="underline underline-offset-4" target="_blank" rel="noreferrer">
-            GitHub issue
+            {bounty.provider === "huggingface" ? "Discussion" : "GitHub issue"}
           </a>
         </span>
       </p>

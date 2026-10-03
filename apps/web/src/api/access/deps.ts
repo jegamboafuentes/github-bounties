@@ -91,6 +91,7 @@ export type MoneyBounty = {
   title: string;
   issueUrl: string;
   deletedAt?: Date | null;
+  provider?: "github" | "huggingface";
 };
 
 export type MoneyGate = { wallet: boolean; github: boolean };

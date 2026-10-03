@@ -267,11 +267,21 @@ describe("GithubProvider", () => {
 });
 
 describe("getProvider", () => {
-  it("returns the GitHub adapter and a Hugging Face stub that refuses", () => {
+  it("returns the GitHub adapter and a Hugging Face reader that still refuses merge", () => {
     assert.equal(getProvider("github"), githubProvider);
     assert.equal(getProvider("huggingface"), huggingfaceProvider);
+    const parsed = huggingfaceProvider.parseIssueUrl("https://huggingface.co/org/model/discussions/1");
+    assert.equal(parsed?.provider, "huggingface");
+    assert.equal(parsed?.hfRepoType, "model");
     assert.throws(
-      () => huggingfaceProvider.parseIssueUrl("https://huggingface.co/org/model/discussions/1"),
+      () => huggingfaceProvider.verifyMerge(parsed ? { ...parsed, prNumber: parsed.issueNumber } : {
+        provider: "huggingface",
+        owner: "org",
+        repo: "model",
+        fullName: "org/model",
+        prNumber: 1,
+        url: "https://huggingface.co/org/model/discussions/1",
+      }),
       (err: unknown) => err instanceof ProviderNotSupportedError && err.code === "provider_not_supported",
     );
     assert.throws(

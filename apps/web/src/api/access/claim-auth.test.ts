@@ -24,6 +24,25 @@ function ctx(rosterFrozen: boolean, pool: ClaimAuthContext["pool"]): ClaimAuthCo
   };
 }
 
+describe("Hugging Face claim auth", () => {
+  it("returns provider_not_supported before github_not_linked", () => {
+    assert.throws(
+      () =>
+        authorizeClaimCaller("user", "winner", {
+          ...ctx(false, null),
+          githubLogin: null,
+          bounty: { ...bounty, provider: "huggingface" },
+        }),
+      (err: unknown) => {
+        assert.ok(err instanceof PublicApiError);
+        assert.equal(err.code, "provider_not_supported");
+        assert.equal(err.status, 501);
+        return true;
+      },
+    );
+  });
+});
+
 describe("pool claim auth order", () => {
   it("returns pool_not_ready before not_pool_member when the roster is not frozen", () => {
     assert.throws(
