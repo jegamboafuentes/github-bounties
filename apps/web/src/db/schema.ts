@@ -17,7 +17,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { FEE_BPS, POOL_BPS_OF_POST_FEE } from "../lib/constants";
 
-/** Repo host. GitHub is the only provider that creates bounties today. */
+/** Repo host. GitHub creates bounties by default. Hugging Face create is flag-gated. */
 export const bountyProviderValues = ["github", "huggingface"] as const;
 export type BountyProvider = (typeof bountyProviderValues)[number];
 

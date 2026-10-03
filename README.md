@@ -34,12 +34,12 @@ As of **2026-10-03**. No invented ship dates. `/roadmap`, About, and [docs/roadm
 - **FE epic** — LIVE on PROD 2026-09-20. Homepage stats, public roadmap, and vs-Lightning differentiators. Same aggregates as GET /api/stats. Bounty pages include the payout split charts.
 - **V3 wave** — LIVE on PROD 2026-09-21. Full GitHub issue + Gemini about/stack/complexity (AI estimates, cached). Related polish: board badges/filters, Settings/Post connected-only, homepage motion/roadmap refresh.
 - **Funding wave** — LIVE on PROD 2026-09-24. Crowdfunding (#61): USDC top-ups on already-funded bounties. Fund any public issue (#64) without installing the GitHub App, with Claim running through the public merge poller. Funder avatars (#65 to #67) on the board cards and on the bounty page Funders list.
-- **V4 — API + MCP.** DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version 4.7.0, 24 operations, 25 tools (#76 #79 #80 #81 #78). API money is OFF on PROD. [MCP](https://githubbounties.xyz/mcp).
+- **V4 — API + MCP.** DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version 4.8.0, 24 operations, 25 tools (#76 #79 #80 #81 #78). API money is OFF on PROD. [MCP](https://githubbounties.xyz/mcp).
 - **V5 — MCP page, unfunded edits, admin.** DONE. `/mcp` is the MCP server endpoint and its docs page. Posters edit an unfunded bounty amount on the web, REST, and MCP (`update_bounty_amount`). The admin dashboard on admin hosts sets fee and pool, lists bounties with trash and refund, gates refunds on `ADMIN_REFUND_ENABLED`, and gates fee-wallet withdraws on `ADMIN_WITHDRAW_ENABLED` with a single-use confirm token and a duplicate guard. Admin actions write an admin audit log. No recorded PROD date.
 
 ### In progress
 
-- **V6 — Hugging Face.** Bounties on Hugging Face discussions and PRs. In progress. No ship date. Every bounty has `provider`: `github` or `huggingface` (existing rows stay `github`). REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. A signed-in Google user can connect a Hugging Face account when `HF_OAUTH_CLIENT_ID` and `HF_OAUTH_CLIENT_SECRET` are set. Those secrets are optional. GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
+- **V6 — Hugging Face.** Bounties on Hugging Face discussions and PRs. In progress. No ship date. Every bounty has `provider`: `github` or `huggingface` (existing rows stay `github`). REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. A signed-in Google user can connect a Hugging Face account when `HF_OAUTH_CLIENT_ID` and `HF_OAUTH_CLIENT_SECRET` are set. Those secrets are optional. Creating a bounty from a public discussion requires `HF_BOUNTIES_ENABLED=1` (off by default). Claim, merge detection, and payouts are not in this release. GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
 
 ### Next
 
@@ -163,7 +163,7 @@ GitHub issue, pull request, and merge calls go through `RepoProvider` via `getPr
 
 ## Hugging Face
 
-Product login stays **Google**. Hugging Face is a second linked account, the same idea as Connect GitHub. It is off until both OAuth secrets are set. Settings hides **Connect Hugging Face** in that case, and `GET`/`POST /api/huggingface/connect`, `GET /huggingface/callback`, and `POST /api/huggingface/disconnect` return **503** `hf_not_configured`. GitHub connect is unchanged.
+Product login stays **Google**. Hugging Face is a second linked account, the same idea as Connect GitHub. It is off until both OAuth secrets are set. Settings hides **Connect Hugging Face** in that case. `GET`/`POST /api/huggingface/connect`, `GET /huggingface/callback`, and `POST /api/huggingface/disconnect` check the session first and return **401** `unauthorized` when no one is signed in. A signed-in caller then gets **404** `hf_not_configured` when either secret is missing. That body does not name the secrets. GitHub connect is unchanged. Public REST `GET /api/v1/me` and `GET /api/v1/me/linked-accounts`, and MCP `get_me` and `list_linked_accounts`, stay read-only: they return `huggingface: null` when nothing is linked and do not report `hf_not_configured`. Linking and unlinking are not REST or MCP tools.
 
 A signed-in user opens **Settings → Connect Hugging Face**. The app starts an OAuth authorization-code flow with PKCE (`S256`) and scope `openid profile` only. The callback writes one `hf_links` row: Hugging Face user id (`sub`), username (`preferred_username`), https avatar, and `linked_at`. One Hugging Face account per user and one user per Hugging Face account. A second user who tries to link an account that is already linked is refused. **Disconnect** deletes that user's `hf_links` row and does not sign out of Google. Access tokens are not stored.
 
@@ -182,6 +182,26 @@ Register these redirect URIs on the Hugging Face OAuth app. The path is fixed.
 | DEV | `https://dev.githubbounties.xyz/huggingface/callback` |
 | PROD | `https://githubbounties.xyz/huggingface/callback` |
 | Local | `http://localhost:3000/huggingface/callback` |
+
+## Hugging Face bounties
+
+Posting a bounty from a public Hugging Face discussion uses the same amount rules, fee snapshot, and x402 fund path as a GitHub issue. It is off unless `HF_BOUNTIES_ENABLED=1`. When the flag is off, the website create action, `POST /api/v1/bounties`, and MCP `create_bounty` return `hf_disabled` (**403** on REST) before the amount is checked and before any Hugging Face request. The flag value must be exactly `1`.
+
+Accepted URLs:
+
+| Repo | URL |
+| --- | --- |
+| Model | `https://huggingface.co/{owner}/{repo}/discussions/{n}` or `https://huggingface.co/models/{owner}/{repo}/discussions/{n}` |
+| Dataset | `https://huggingface.co/datasets/{owner}/{repo}/discussions/{n}` |
+| Space | `https://huggingface.co/spaces/{owner}/{repo}/discussions/{n}` |
+
+The repo row is `provider=huggingface`, `connection_kind=public_reference`, `github_repo_id` null, and `provider_repo_id` `{model|dataset|space}:{owner}/{repo}`. The discussion number is stored in `github_issue_number`. No new migration.
+
+A pull-request discussion is `hf_not_a_discussion`. A closed or merged discussion is `hf_discussion_closed`. A missing discussion is `hf_discussion_not_found`. `HF_BOT_TOKEN` is optional. When set, discussion reads send `Authorization: Bearer`. Public discussions work without it.
+
+Claiming an HF bounty returns `provider_not_supported`. Merge detection, submissions, and payouts are not in this release. The board can filter `provider=huggingface`. The intelligence card and the public merge poller skip these bounties.
+
+A public discussion to try on DEV: `https://huggingface.co/datasets/stanfordnlp/imdb/discussions/9`.
 
 ## Local development
 

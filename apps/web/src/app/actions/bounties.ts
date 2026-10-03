@@ -27,6 +27,7 @@ import {
 } from "@/escrow";
 import { redactDatabaseText } from "@/http/redact-error";
 import { isUuid } from "@/ids";
+import { ProviderNotSupportedError } from "@/providers/types";
 import { INVALID_BASE_ADDRESS_MESSAGE, normalizeBaseAddress } from "@/lib/address";
 import { setUserWalletAddress } from "@/auth/users";
 
@@ -37,6 +38,9 @@ export type BountyActionState = {
 };
 
 function fail(err: unknown): BountyActionState {
+  if (err instanceof ProviderNotSupportedError) {
+    return { ok: false, error: err.code, message: redactDatabaseText(err.message) };
+  }
   if (isBountyError(err) || isClaimError(err) || isEscrowError(err)) {
     return { ok: false, error: err.code, message: redactDatabaseText(err.message) };
   }
@@ -316,22 +320,22 @@ export async function clearWorkSignalAction(formData: FormData): Promise<void> {
 }
 
 function redirectBountyError(bountyId: string, err: unknown): never {
-  const code = isBountyError(err)
-    ? err.code
-    : isClaimError(err)
+  const code =
+    err instanceof ProviderNotSupportedError
       ? err.code
-      : isEscrowError(err)
+      : isBountyError(err)
         ? err.code
-        : "unknown";
-  const raw = isBountyError(err)
-    ? err.message
-    : isClaimError(err)
+        : isClaimError(err)
+          ? err.code
+          : isEscrowError(err)
+            ? err.code
+            : "unknown";
+  const raw =
+    err instanceof ProviderNotSupportedError || isBountyError(err) || isClaimError(err) || isEscrowError(err)
       ? err.message
-      : isEscrowError(err)
+      : err instanceof Error
         ? err.message
-        : err instanceof Error
-          ? err.message
-          : "Something went wrong.";
+        : "Something went wrong.";
   const message = redactDatabaseText(raw, "Something went wrong.");
   refreshBounty(bountyId);
   redirect(`/bounties/${bountyId}?error=${encodeURIComponent(`${code}: ${message}`)}`);

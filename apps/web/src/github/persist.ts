@@ -70,6 +70,7 @@ export async function findActiveRepoByFullName(
     .where(
       and(
         sql`lower(${repos.fullName}) = ${fullName.toLowerCase()}`,
+        eq(repos.provider, "github"),
         eq(repos.isActive, true),
       ),
     )

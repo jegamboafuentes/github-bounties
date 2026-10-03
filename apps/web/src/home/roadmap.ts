@@ -88,7 +88,8 @@ export const PUBLIC_ROADMAP = [
     id: "v6",
     version: "V6",
     title: "Hugging Face",
-    summary: "Bounties on Hugging Face discussions and PRs. In progress. No ship date.",
+    summary:
+      "Bounties on Hugging Face discussions and PRs. In progress. No ship date. Creating a discussion bounty requires HF_BOUNTIES_ENABLED=1.",
     status: "in_progress",
   },
   {

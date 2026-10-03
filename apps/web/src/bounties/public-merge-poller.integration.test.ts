@@ -167,4 +167,82 @@ describe("public merge poller", () => {
       await sql.end({ timeout: 5 });
     }
   });
+
+  it("does not scan a funded Hugging Face discussion", async () => {
+    const { db, sql } = createDb();
+    const suffix = randomUUID().slice(0, 8);
+    const posterId = randomUUID();
+    const hfRepoId = randomUUID();
+    const hfBountyId = randomUUID();
+    const githubRepoId = randomUUID();
+    const githubBountyId = randomUUID();
+    try {
+      await db.insert(users).values({
+        id: posterId,
+        googleSub: `poll-hf-${suffix}`,
+        email: `poll-hf-${suffix}@example.com`,
+        displayName: "Poster",
+      });
+      await db.insert(repos).values([
+        {
+          id: hfRepoId,
+          githubRepoId: null,
+          provider: "huggingface",
+          providerRepoId: `dataset:stanfordnlp/imdb-${suffix}`,
+          hfRepoType: "dataset",
+          fullName: `stanfordnlp/imdb-${suffix}`,
+          installationId: null,
+          connectionKind: "public_reference",
+          connectedByUserId: posterId,
+          isActive: true,
+        },
+        {
+          id: githubRepoId,
+          githubRepoId: BigInt(77_000_000 + Number.parseInt(suffix.slice(0, 6), 16)),
+          fullName: `octo/public-${suffix}`,
+          installationId: null,
+          connectionKind: "public_reference",
+          connectedByUserId: posterId,
+          isActive: true,
+        },
+      ]);
+      await db.insert(bounties).values([
+        {
+          id: hfBountyId,
+          repoId: hfRepoId,
+          provider: "huggingface",
+          githubIssueNumber: 9,
+          url: `https://huggingface.co/datasets/stanfordnlp/imdb-${suffix}/discussions/9`,
+          posterUserId: posterId,
+          amountUsdc: "10.000000",
+          status: "funded",
+          title: "hf discussion",
+        },
+        {
+          id: githubBountyId,
+          repoId: githubRepoId,
+          githubIssueNumber: 4,
+          url: `https://github.com/octo/public-${suffix}/issues/4`,
+          posterUserId: posterId,
+          amountUsdc: "10.000000",
+          status: "funded",
+          title: "github issue",
+        },
+      ]);
+      const seen: string[] = [];
+      const result = await pollPublicMerges(db, {
+        listClosingPulls: async (target) => {
+          seen.push(target.bountyId);
+          return [];
+        },
+        fetchPullRequests: async () => [],
+        log: () => {},
+      });
+      assert.equal(result.errors.length, 0);
+      assert.equal(seen.includes(hfBountyId), false);
+      assert.ok(seen.includes(githubBountyId));
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+  });
 });

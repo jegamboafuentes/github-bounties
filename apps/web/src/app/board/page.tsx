@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AppHeader } from "@/components/header";
 import { BountyCard } from "@/components/bounty-card";
 import { listBoardBounties, LOCK_NOT_MONEY_COPY } from "@/bounties";
-import { bountyStatusValues } from "@/db/schema";
+import { bountyProviderValues, bountyStatusValues } from "@/db/schema";
 import { getRuntimeDb } from "@/db/runtime";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +15,7 @@ export default async function BoardPage({
     status?: string;
     complexity?: string;
     language?: string;
+    provider?: string;
   }>;
 }) {
   const params = await searchParams;
@@ -22,10 +23,18 @@ export default async function BoardPage({
   const status = params.status ?? "all";
   const complexity = params.complexity ?? "all";
   const language = params.language ?? "";
+  const provider =
+    params.provider === "github" || params.provider === "huggingface" ? params.provider : undefined;
   let bounties: Awaited<ReturnType<typeof listBoardBounties>> = [];
   let loadError: string | null = null;
   try {
-    bounties = await listBoardBounties(getRuntimeDb(), { repo, status, complexity, language });
+    bounties = await listBoardBounties(getRuntimeDb(), {
+      repo,
+      status,
+      complexity,
+      language,
+      provider,
+    });
   } catch (err) {
     loadError = err instanceof Error ? err.message : "Could not load the board.";
   }
@@ -58,6 +67,21 @@ export default async function BoardPage({
               placeholder="owner/repo"
               className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
             />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs uppercase tracking-wide text-zinc-500">Provider</span>
+            <select
+              name="provider"
+              defaultValue={provider ?? "all"}
+              className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+            >
+              <option value="all">All</option>
+              {bountyProviderValues.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-xs uppercase tracking-wide text-zinc-500">Status</span>

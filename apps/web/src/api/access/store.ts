@@ -362,6 +362,7 @@ export function createAccessDeps(
           title: bounties.title,
           issueUrl: bounties.url,
           deletedAt: bounties.deletedAt,
+          provider: bounties.provider,
         })
         .from(bounties)
         .where(eq(bounties.id, bountyId))
@@ -494,6 +495,7 @@ export function createAccessDeps(
               status: bounty.status,
               amountUsdc: bounty.amountUsdc,
               posterUserId: bounty.posterUserId,
+              provider: bounty.provider === "huggingface" ? "huggingface" : "github",
             }
           : null,
         walletAddress: user?.walletAddress ?? null,

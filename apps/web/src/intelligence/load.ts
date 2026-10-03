@@ -38,6 +38,11 @@ export type IntelligenceView =
       reason: "missing_key" | "error";
       errorReason?: string;
       estimateLabel: string;
+    }
+  | {
+      status: "unavailable";
+      reason: "skipped";
+      estimateLabel: string;
     };
 
 export type IntelligenceCachePort = {
@@ -161,6 +166,9 @@ export async function loadBountyIntelligence(args: {
 }): Promise<IntelligenceView> {
   const env = args.env ?? process.env;
   const estimateLabel = INTELLIGENCE_ESTIMATE_LABEL;
+  if (args.provider === "huggingface") {
+    return { status: "unavailable", reason: "skipped", estimateLabel };
+  }
   const cache = args.cache ?? { read: readIntelligenceCache, write: writeIntelligenceCache };
   if (!hasGeminiApiKey(env)) {
     return { status: "unavailable", reason: "missing_key", errorReason: "missing_key", estimateLabel };

@@ -4,8 +4,10 @@ import { isUniqueViolation } from "../db/errors";
 import { type GitHubHttp, type GitHubIssueSnapshot } from "../github/api";
 import { findActiveRepoByFullName, upsertPublicReferenceRepo } from "../github/persist";
 import { isPublicGitHubError, PublicGitHubError } from "../github/public-read";
+import { hfBountiesEnabled } from "../providers/huggingface";
 import { getProvider } from "../providers/registry";
 import { toGitHubIssueSnapshot } from "../providers/github";
+import { createHuggingFaceBounty } from "./hf-create";
 import { readPlatformSettings } from "../admin/settings";
 import { DEFAULT_CHAIN, DEFAULT_CURRENCY } from "../lib/constants";
 import { normalizeBountyAmountUsdc } from "./amount";
@@ -57,6 +59,18 @@ export async function createBountyFromIssueUrl(
 ): Promise<CreatedBounty> {
   if (!input.posterUserId) {
     throw new BountyError("unauthorized", "Sign in with Google to post a bounty.");
+  }
+
+  const env = opts.env ?? process.env;
+  const hfRef = getProvider("huggingface").parseIssueUrl(input.issueUrl);
+  if (hfRef) {
+    if (!hfBountiesEnabled(env)) {
+      throw new BountyError(
+        "hf_disabled",
+        "Hugging Face bounties are disabled. Set HF_BOUNTIES_ENABLED=1 to post a discussion bounty.",
+      );
+    }
+    return createHuggingFaceBounty(input, hfRef, { ...opts, env });
   }
 
   const parsed = getProvider("github").parseIssueUrl(input.issueUrl);

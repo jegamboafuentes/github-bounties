@@ -253,6 +253,31 @@ describe("loadBountyIntelligence", () => {
   });
 });
 
+describe("Hugging Face intelligence", () => {
+  it("skips Gemini for a Hugging Face bounty even when a key is set", async () => {
+    let gemini = 0;
+    const view = await loadBountyIntelligence({
+      bountyId: BOUNTY_ID,
+      repoFullName: "stanfordnlp/imdb",
+      provider: "huggingface",
+      githubIssueNumber: 9,
+      issueTitle: "License",
+      issueBody: "Which license?",
+      installationId: null,
+      db: {} as never,
+      env: { GEMINI_API_KEY: "test-key" },
+      githubHttp: silentGithub(),
+      geminiHttp: async () => {
+        gemini += 1;
+        return { ok: false, status: 500, json: async () => ({}) };
+      },
+    });
+    assert.equal(view.status, "unavailable");
+    if (view.status === "unavailable") assert.equal(view.reason, "skipped");
+    assert.equal(gemini, 0);
+  });
+});
+
 describe("readCachedBountyIntelligence", () => {
   it("returns the stored row and does not call Gemini or write", async () => {
     let reads = 0;

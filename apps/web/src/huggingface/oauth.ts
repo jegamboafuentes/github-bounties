@@ -54,7 +54,7 @@ export async function exchangeHfAuthorizationCode(args: {
 }): Promise<HfIdentity> {
   const { clientId, clientSecret } = readHfOAuthEnv(args.env ?? process.env);
   if (!clientId || !clientSecret) {
-    throw new Error("Hugging Face OAuth requires HF_OAUTH_CLIENT_ID and HF_OAUTH_CLIENT_SECRET");
+    throw new Error("Hugging Face connect is not available.");
   }
   const http = args.http ?? defaultHttp;
   const body = new URLSearchParams({

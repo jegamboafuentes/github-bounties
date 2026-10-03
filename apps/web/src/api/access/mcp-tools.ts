@@ -197,7 +197,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Post a bounty",
       description:
-        "Requires API key (write scope). Creates pending_fund only, using the same create path as the website. Body is issueUrl and amountUsdc. Do not send an address.",
+        "Requires API key (write scope). Creates pending_fund only, using the same create path as the website. Body is issueUrl and amountUsdc. issueUrl may be a public GitHub issue or a public Hugging Face discussion (model, datasets/, or spaces/). Hugging Face create requires HF_BOUNTIES_ENABLED=1 and returns hf_disabled when that flag is off. Do not send an address.",
       inputSchema: looseCreate,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },

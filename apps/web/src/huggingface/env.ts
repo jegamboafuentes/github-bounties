@@ -47,19 +47,18 @@ export function readHfOAuthEnv(env: EnvMap = process.env): {
   };
 }
 
-export function hfNotConfiguredBody(missing: string[] = missingHfOAuthEnv()) {
+/** Signed-in caller, connect not set up. 404 so a missing optional secret is not a 5xx. */
+export function hfNotConfiguredBody() {
   return {
     ok: false as const,
     error: "hf_not_configured" as const,
-    missing,
-    message:
-      "Hugging Face connect is off until HF_OAUTH_CLIENT_ID and HF_OAUTH_CLIENT_SECRET are set. Product login stays Google.",
+    message: "Hugging Face connect is not available. Product login stays Google.",
   };
 }
 
-export function hfNotConfiguredResponse(missing: string[] = missingHfOAuthEnv()): Response {
-  return Response.json(hfNotConfiguredBody(missing), {
-    status: 503,
+export function hfNotConfiguredResponse(): Response {
+  return Response.json(hfNotConfiguredBody(), {
+    status: 404,
     headers: { "cache-control": "no-store" },
   });
 }
