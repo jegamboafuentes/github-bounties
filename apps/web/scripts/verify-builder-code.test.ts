@@ -14,8 +14,11 @@ const TO = getAddress("0x1111111111111111111111111111111111111111");
 describe("verify:builder-code", () => {
   it("defaults the expected code to the registered builder code", () => {
     assert.equal(expectedBuilderCode([]), CODE);
-    assert.equal(expectedBuilderCode([], { BASE_BUILDER_CODE: "bc_other" }), "bc_other");
-    assert.equal(expectedBuilderCode(["--code", "bc_flag"], { BASE_BUILDER_CODE: "bc_other" }), "bc_flag");
+    assert.equal(expectedBuilderCode([], { NODE_ENV: "test", BASE_BUILDER_CODE: "bc_other" }), "bc_other");
+    assert.equal(
+      expectedBuilderCode(["--code", "bc_flag"], { NODE_ENV: "test", BASE_BUILDER_CODE: "bc_other" }),
+      "bc_flag",
+    );
   });
 
   it("finds Schema 0 on an ERC-20 transfer and Schema 2 on transferWithAuthorization", () => {

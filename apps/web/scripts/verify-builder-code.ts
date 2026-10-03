@@ -22,7 +22,7 @@ export type BuilderCodeInspection = {
   network: string;
   selector: string;
   kind: "schema0-transfer" | "schema2-transferWithAuthorization" | "unknown";
-  schema0?: { codes: string[]; id?: number };
+  schema0?: { codes: readonly string[]; id?: number };
   schema2?: { a?: string; w?: string; s?: string | string[] };
   contains: boolean;
   expected: string;
