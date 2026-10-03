@@ -127,7 +127,23 @@ describe("x402 exact inbound → Lock without paste-hash", () => {
         `https://dev.githubbounties.xyz/api/bounties/${created.id}/x402`,
       );
       assert.equal(body.resourceUrl, `https://dev.githubbounties.xyz/api/bounties/${created.id}/x402`);
+      assert.equal((unpaid.body as { extensions?: unknown }).extensions, undefined);
       assert.ok(unpaid.headers["PAYMENT-REQUIRED"]);
+
+      const attributed = await handleX402Fund(
+        new Request(`https://dev.githubbounties.xyz/api/bounties/${created.id}/x402`),
+        created.id,
+        {
+          db,
+          rail: mockRail,
+          env: { PUBLIC_BASE_URL: "https://dev.githubbounties.xyz", BASE_BUILDER_CODE: "bc_u97ii222" },
+        },
+      );
+      assert.equal(attributed.status, 402);
+      const attributedBody = attributed.body as {
+        extensions?: { "builder-code"?: { info?: { a?: string } } };
+      };
+      assert.equal(attributedBody.extensions?.["builder-code"]?.info?.a, "bc_u97ii222");
 
       const mockPaid = await handleX402Fund(
         new Request(`https://dev.githubbounties.xyz/api/bounties/${created.id}/x402`, {

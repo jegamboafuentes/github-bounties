@@ -27,6 +27,10 @@ web_plain_env_pairs() {
   if [[ -n "${EMAIL_FROM:-}" ]]; then
     pairs+=("EMAIL_FROM=${EMAIL_FROM}")
   fi
+  # Public Base builder code. Not a secret. Omitted when unset so calldata stays a plain transfer.
+  if [[ -n "${BASE_BUILDER_CODE:-}" ]]; then
+    pairs+=("BASE_BUILDER_CODE=${BASE_BUILDER_CODE}")
+  fi
   local IFS=","
   echo "${pairs[*]}"
 }
@@ -136,6 +140,8 @@ web_print_secret_map() {
   echo "    PORT=8080 (Cloud Run). PUBLIC_BASE_URL optional after live origin."
   echo "    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID  (optional; Reown Cloud project id,"
   echo "      not SM. Export before deploy-web.sh so WalletConnect QR works on DEV.)"
+  echo "    BASE_BUILDER_CODE  (optional plain env; public base.dev code, not SM."
+  echo "      Export before deploy-web.sh. Unset means no ERC-8021 suffix.)"
   echo "    EMAIL_FROM  (optional plain env; verified Resend sender. Not SM."
   echo "      Unset uses the app default. DEV only — not wired on PROD.)"
   echo "    API_MONEY_ENABLED  (optional plain env. Unset: on for base-sepolia,"
