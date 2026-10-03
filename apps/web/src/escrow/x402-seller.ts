@@ -1,3 +1,4 @@
+import { builderCodeResourceServerExtension } from "@x402/extensions/builder-code";
 import { BASE_MAINNET_CAIP2 } from "../lib/constants";
 import { usdcToAtomic } from "../lib/money";
 import type { MoneyAction } from "./actor-log";
@@ -14,6 +15,7 @@ import {
   x402DollarPrice,
   x402FailureFromChallenge,
   x402NetworkCaip2,
+  x402BuilderCodeExtensions,
   x402ResourceUrl,
   x402UsdcAsset,
   x402UsdcEip712Extra,
@@ -165,12 +167,15 @@ export async function processLiveX402Exact(input: {
   moneyAction?: MoneyAction;
 }): Promise<X402SellerResult> {
   const caip2 = x402SellerNetworkCaip2(input.network, input.env);
+  // Invalid BASE_BUILDER_CODE throws before any facilitator call. Unset is omitted.
+  const builderExtensions = x402BuilderCodeExtensions(input.env);
 
   let createCdpFacilitatorClient: () => unknown;
-  type ResourceServer = {
-    register(network: string, scheme: unknown): ResourceServer;
-    initialize(): Promise<void>;
-  };
+type ResourceServer = {
+  register(network: string, scheme: unknown): ResourceServer;
+  registerExtension(extension: { key: string }): ResourceServer;
+  initialize(): Promise<void>;
+};
   let x402ResourceServer: new (facilitator: unknown) => ResourceServer;
   let x402HTTPResourceServer: new (server: unknown, routes: unknown) => HttpServer;
   let ExactEvmScheme: new () => unknown;
@@ -209,6 +214,7 @@ export async function processLiveX402Exact(input: {
       input.description ??
       `GitHub Bounties fund lock: exact face to gb-escrow (${input.bountyId})`,
     mimeType: "application/json",
+    ...(builderExtensions ? { extensions: builderExtensions } : {}),
   };
   const routes = {
     [`GET ${path}`]: route,
@@ -222,6 +228,11 @@ export async function processLiveX402Exact(input: {
       caip2,
       new ExactEvmScheme(),
     );
+    // The hosted CDP facilitator already appends Schema 2 `w`. This registration
+    // is the resource-server half of that extension, on the same facilitator client.
+    if (builderExtensions) {
+      resourceServer.registerExtension(builderCodeResourceServerExtension);
+    }
     await resourceServer.initialize();
     httpServer = new x402HTTPResourceServer(resourceServer, routes);
     await httpServer.initialize();

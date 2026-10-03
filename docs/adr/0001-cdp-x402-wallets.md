@@ -171,7 +171,7 @@ LedgerEntry
   tx_hash               0x… | null
   checkout_id           string | null          // Business Checkouts id if inbound used it
   x402_payment_id       string | null          // facilitator / PAYMENT-RESPONSE if any
-  idempotency_key       uuid v4                // our key; also sent as X-Idempotency-Key
+  idempotency_key       uuid v4                // our key; sent as X-Idempotency-Key on sendTransaction
   status                pending | submitted | confirmed | failed
   created_at            timestamptz
   confirmed_at          timestamptz | null
@@ -306,6 +306,8 @@ sequenceDiagram
   Note over App,Ledger: If fee tx fails: SettledPartial; retry FEE_OUT only.
 ```
 
+Outbound USDC is `account.sendTransaction` of an ERC-20 `transfer`, not `account.transfer()`. The idempotency key in the diagram is the `idempotencyKey` argument (`X-Idempotency-Key`). `transfer()` in `@coinbase/cdp-sdk` 1.55–1.57 dropped that argument. When `BASE_BUILDER_CODE` is set, the calldata also carries an ERC-8021 Schema 0 suffix. x402 fund settlements then carry Schema 2 `{ a, w }` because the 402 declares the code and the payer echoes it. The registered code is `bc_u97ii222`. CDP returns the transaction hash the same way; this path does not add a separate receipt poll.
+
 ### Refund / expiry
 
 ```mermaid
@@ -352,10 +354,9 @@ cdp_transfer | checkout_refund` on the row.
 ### Idempotency keys
 
 1. Generate UUID v4 per **ledger row** at insert time (`pending`).
-2. Pass that value as `X-Idempotency-Key` on CDP POST (transfers, account create, checkout create).
-3. CDP dedupes for **~24 hours** and errors if the same key is reused with a different body.
-4. Retries of the **same** body reuse the same key; a genuinely new attempt (new checkout,
-   new payout after confirmed failure with no tx) gets a new UUID.
+2. Pass that value as `X-Idempotency-Key` on CDP calls that accept it (account create, checkout create, and outbound USDC via `sendTransaction`). `EvmServerAccount.transfer()` does not: through `@coinbase/cdp-sdk` 1.57 its options are only `to`, `amount`, `token`, and `network`, and the SDK drops `idempotencyKey`. Payout, refund, and fee withdraw therefore call `sendTransaction`.
+3. When the header is sent, CDP de-duplicates for **~24 hours** and errors if the same key is reused with a different body.
+4. Retries of the **same** body reuse the same key. A retry of a leg whose first CDP attempt failed inside that window can return the cached failure; confirm that on DEV before PROD. A genuinely new attempt (new checkout, new payout after a confirmed failure with no tx) gets a new UUID.
 
 ### Reconciliation
 
@@ -439,7 +440,7 @@ Wallet secret: CDP Portal → Wallets → Security.
 - Hybrid inbound means two possible rails to recon (checkout vs x402 vs direct).
 - Checkouts sandbox **does not return `x402_url`** today — agent tests need testnet
   `exact` or a tiny live checkout (forbidden here: no prod spend).
-- CDP idempotency is only 24h; we must persist `tx_hash` ourselves.
+- CDP idempotency is only 24h, and only for requests that send the key (`sendTransaction`, not `transfer()`). We must persist `tx_hash` ourselves.
 - Hosted-checkout merchant fees are **unconfirmed**; V1 must measure `netAmount`.
 
 ## Accepted — still no prod-wire of escrow into product UI until V1 tickets

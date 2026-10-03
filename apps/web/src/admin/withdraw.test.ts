@@ -64,7 +64,7 @@ function client(opts?: { mismatch?: boolean; calls?: string[] }): NamedAccountCl
       const address = name === "gb-fee" ? (opts?.mismatch ? DEST : FEE) : ESCROW;
       return {
         address,
-        transfer: async () => ({ transactionHash: "0xfeed" }),
+        sendTransaction: async () => ({ transactionHash: "0xfeed" }),
       };
     },
     async getOrCreateAccount() {
@@ -196,10 +196,14 @@ describe("fee withdraw guards", () => {
     assert.equal(withdrawSource.includes("transferUsdc"), false);
     assert.equal(withdrawSource.includes("getOrCreateAccount"), false);
     const consumeAt = withdrawSource.indexOf("usedAt: input.now");
-    const transferAt = withdrawSource.indexOf("accounts.fee.transfer");
+    const transferAt = withdrawSource.indexOf("sendUsdcTransfer(");
     assert.ok(consumeAt > 0 && transferAt > consumeAt);
-    assert.equal(withdrawSource.match(/await accounts\.fee\.transfer\(/g)?.length, 1);
+    assert.equal(withdrawSource.match(/sendUsdcTransfer\(/g)?.length, 1);
+    assert.equal(withdrawSource.includes("accounts.fee.transfer"), false);
     assert.equal(/for\s*\(|while\s*\(/.test(withdrawSource.slice(transferAt)), false);
+    const feeSource = readFileSync(join(dir, "fee-account.ts"), "utf8");
+    assert.match(feeSource, /account\.sendTransaction\.bind/);
+    assert.equal(feeSource.includes("account.transfer"), false);
   });
 
   it("treats a gas rejection as a failed send and a timeout as unknown", () => {
@@ -211,6 +215,38 @@ describe("fee withdraw guards", () => {
     assert.equal(timeout.status, "unknown");
     assert.equal(timeout.code, "withdraw_outcome_unknown");
     assert.match(timeout.message, /not retried/);
+  });
+
+  it("rejects an invalid builder code before loading the fee account", async () => {
+    let loaded = false;
+    const accounts: NamedAccountClient = {
+      async getAccount() {
+        loaded = true;
+        return { address: FEE, sendTransaction: async () => ({ transactionHash: "0xfeed" }) };
+      },
+    };
+    const err = await executeFeeWithdraw({
+      db: memoryDb() as never,
+      env: {
+        ADMIN_WITHDRAW_ENABLED: "1",
+        CDP_NETWORK: "base-sepolia",
+        FEE_WALLET_ADDRESS: FEE,
+        AUTH_SECRET: SECRET,
+        BASE_BUILDER_CODE: "NOT-A-CODE",
+      },
+      actorEmail: "ada@example.com",
+      confirmToken: "unused",
+      confirmation: DEST,
+      client: accounts,
+      readBalance: async () => 1n,
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    assert.ok(err instanceof AdminError);
+    assert.equal(err.status, 500);
+    assert.equal(err.code, "builder_code_invalid");
+    assert.equal(loaded, false);
   });
 
   it("aborts when the fee account address does not match FEE_WALLET_ADDRESS", async () => {

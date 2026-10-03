@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { describe, it } from "node:test";
 import { eq } from "drizzle-orm";
-import { getAddress } from "viem";
+import { encodeFunctionData, erc20Abi, getAddress } from "viem";
 import { createDb, type Database } from "../db/client";
 import { isUniqueViolation } from "../db/errors";
 import { loadDotenvFiles } from "../db/load-dotenv";
 import { feeWithdrawals, withdrawConfirmTokens } from "../db/schema";
+import { USDC_BASE_MAINNET, USDC_BASE_SEPOLIA } from "../lib/constants";
 import { AdminError } from "./errors";
 import type { NamedAccount, NamedAccountClient } from "./fee-account";
 import { executeFeeWithdraw, previewFeeWithdraw } from "./withdraw";
@@ -24,10 +25,10 @@ const ENV = {
   AUTH_SECRET: SECRET,
 };
 
-function client(transfer: NonNullable<NamedAccount["transfer"]>): NamedAccountClient {
+function client(sendTransaction: NonNullable<NamedAccount["sendTransaction"]>): NamedAccountClient {
   return {
     async getAccount({ name }) {
-      return { address: name === "gb-fee" ? FEE : ESCROW, transfer };
+      return { address: name === "gb-fee" ? FEE : ESCROW, sendTransaction };
     },
   };
 }
@@ -91,7 +92,7 @@ describe("fee withdraw single use", { concurrency: 1 }, () => {
     const a = createDb();
     const b = createDb();
     let calls = 0;
-    const transfer: NonNullable<NamedAccount["transfer"]> = async () => {
+    const transfer: NonNullable<NamedAccount["sendTransaction"]> = async () => {
       calls += 1;
       return { transactionHash: "0xonce" };
     };
@@ -163,7 +164,7 @@ describe("fee withdraw single use", { concurrency: 1 }, () => {
     const started = new Promise<void>((resolve) => {
       markStarted = resolve;
     });
-    const transfer: NonNullable<NamedAccount["transfer"]> = async () => {
+    const transfer: NonNullable<NamedAccount["sendTransaction"]> = async () => {
       calls += 1;
       markStarted();
       await hold;
@@ -251,7 +252,7 @@ describe("fee withdraw single use", { concurrency: 1 }, () => {
   it("consumes the token when the send fails and does not retry it", async () => {
     const { db, sql } = createDb();
     let calls = 0;
-    const transfer: NonNullable<NamedAccount["transfer"]> = async () => {
+    const transfer: NonNullable<NamedAccount["sendTransaction"]> = async () => {
       calls += 1;
       if (calls === 1) throw new Error("Insufficient balance");
       return { transactionHash: "0xfunded" };
@@ -330,7 +331,7 @@ describe("fee withdraw single use", { concurrency: 1 }, () => {
   it("blocks the same amount and destination for 10 minutes unless sendAgain is set", async () => {
     const { db, sql } = createDb();
     let calls = 0;
-    const transfer: NonNullable<NamedAccount["transfer"]> = async () => {
+    const transfer: NonNullable<NamedAccount["sendTransaction"]> = async () => {
       calls += 1;
       return { transactionHash: `0xdup${calls}` };
     };
@@ -412,7 +413,7 @@ describe("fee withdraw single use", { concurrency: 1 }, () => {
   it("records an unknown send and does not retry or start another withdraw", async () => {
     const { db, sql } = createDb();
     let calls = 0;
-    const transfer: NonNullable<NamedAccount["transfer"]> = async () => {
+    const transfer: NonNullable<NamedAccount["sendTransaction"]> = async () => {
       calls += 1;
       throw new Error("The request timed out");
     };
@@ -473,6 +474,58 @@ describe("fee withdraw single use", { concurrency: 1 }, () => {
       assert.equal(blocked.status, 409);
       assert.equal(blocked.code, "withdraw_in_flight");
       assert.equal(calls, 1);
+    } finally {
+      await cleanup(db).catch(() => undefined);
+      await sql.end({ timeout: 5 });
+    }
+  });
+
+  it("forwards the withdraw idempotency key and sepolia USDC calldata", async () => {
+    const { db, sql } = createDb();
+    const seen: { idempotencyKey: string; to: string; data: string; network: string }[] = [];
+    const sendTransaction: NonNullable<NamedAccount["sendTransaction"]> = async (args) => {
+      seen.push({
+        idempotencyKey: args.idempotencyKey,
+        to: args.transaction.to,
+        data: args.transaction.data,
+        network: args.network,
+      });
+      return { transactionHash: "0xkeyed" };
+    };
+    try {
+      await cleanup(db);
+      const preview = await previewFeeWithdraw({
+        db,
+        env: ENV,
+        actorEmail: "ada@example.com",
+        amountUsdc: "6.000006",
+        destination: DEST,
+        client: client(sendTransaction),
+        readBalance: async () => 10_000_000n,
+      });
+      const sent = await executeFeeWithdraw({
+        db,
+        env: ENV,
+        actorEmail: "ada@example.com",
+        confirmToken: preview.confirmToken,
+        confirmation: DEST,
+        client: client(sendTransaction),
+        readBalance: async () => 10_000_000n,
+      });
+      assert.equal(sent.txHash, "0xkeyed");
+      assert.equal(seen.length, 1);
+      assert.equal(seen[0]?.network, "base-sepolia");
+      assert.equal(seen[0]?.to, USDC_BASE_SEPOLIA);
+      const [row] = await db.select().from(feeWithdrawals).where(eq(feeWithdrawals.amountAtomic, "6000006"));
+      assert.equal(seen[0]?.idempotencyKey, row?.idempotencyKey);
+      assert.equal(seen[0]?.idempotencyKey, row?.tokenId);
+      const plain = encodeFunctionData({
+        abi: erc20Abi,
+        functionName: "transfer",
+        args: [DEST, 6_000_006n],
+      });
+      assert.equal(seen[0]?.data, plain);
+      assert.notEqual(seen[0]?.to, USDC_BASE_MAINNET);
     } finally {
       await cleanup(db).catch(() => undefined);
       await sql.end({ timeout: 5 });

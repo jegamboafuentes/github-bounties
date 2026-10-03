@@ -6,6 +6,7 @@ import {
   USDC_BASE_MAINNET,
   USDC_BASE_SEPOLIA,
 } from "../lib/constants";
+import { sendUsdcTransfer, type UsdcSendRequest } from "./builder-code";
 import { EscrowError } from "./errors";
 import {
   assertFacilitatorSettlementMatches,
@@ -123,13 +124,7 @@ export function createMockRail(
 
 type LiveAccount = {
   address: string;
-  transfer?: (args: {
-    to: string;
-    amount: bigint;
-    token: string;
-    network: string;
-    idempotencyKey?: string;
-  }) => Promise<{ transactionHash?: string }>;
+  sendTransaction?: (args: UsdcSendRequest) => Promise<{ transactionHash?: string }>;
 };
 
 type CdpSdkModule = {
@@ -155,6 +150,49 @@ type CdpSdkModule = {
  */
 async function loadCdpSdk(): Promise<CdpSdkModule> {
   return (await import("@coinbase/cdp-sdk")) as unknown as CdpSdkModule;
+}
+
+/**
+ * Outbound USDC from a CDP EOA. Encodes ERC-20 `transfer` and sends it with
+ * `sendTransaction`, which forwards `idempotencyKey`. `account.transfer()`
+ * dropped that key. CDP returns `{ transactionHash }` the same way `transfer()`
+ * did: no extra receipt poll on this path.
+ */
+export async function transferUsdcFromAccount(
+  account: LiveAccount,
+  input: RailTransferInput,
+  opts: { network: string; unsafeNetwork: boolean; env?: EnvMap },
+): Promise<RailTransferResult> {
+  if (typeof account.sendTransaction !== "function") {
+    throw new EscrowError(
+      "rail_failed",
+      "CDP escrow account has no sendTransaction() — check @coinbase/cdp-sdk version.",
+    );
+  }
+  try {
+    const sent = await sendUsdcTransfer(account.sendTransaction.bind(account), {
+      to: input.to,
+      amountAtomic: input.amountAtomic,
+      token: configuredUsdcContract(opts.network),
+      network: opts.unsafeNetwork ? "base" : "base-sepolia",
+      idempotencyKey: input.idempotencyKey,
+      env: opts.env,
+    });
+    const txHash = sent.transactionHash?.trim();
+    if (!txHash) {
+      throw new EscrowError(
+        "rail_failed",
+        `CDP ${input.purpose} transfer returned no transaction hash. Do not assume the wallet moved. Recon before retrying.`,
+      );
+    }
+    return { txHash };
+  } catch (err) {
+    if (err instanceof EscrowError) throw err;
+    throw new EscrowError(
+      "rail_failed",
+      err instanceof Error ? err.message : `CDP ${input.purpose} transfer failed`,
+    );
+  }
 }
 
 /**
@@ -241,8 +279,8 @@ export function createCdpRail(env: EnvMap = process.env, probe = probeCdpEnv(env
         // The facilitator response (network, payTo, asset, amount) is checked
         // when settle returns, before this hash is stored. A later Lock only
         // has the stored hash. This path does not fetch the transaction
-        // receipt: no RPC client is on the lock hot path, and CDP transfer()
-        // is an outbound send, not a fund receipt.
+        // receipt: no RPC client is on the lock hot path, and CDP
+        // sendTransaction() is an outbound send, not a fund receipt.
         return { ...wallets, txHash: pasted };
       }
       if (isDryRunLive(env) && !probe.unsafeNetwork) {
@@ -262,35 +300,11 @@ export function createCdpRail(env: EnvMap = process.env, probe = probeCdpEnv(env
     },
     async transferUsdc(input) {
       const wallets = await loadWallets();
-      if (typeof wallets.escrow.transfer !== "function") {
-        throw new EscrowError(
-          "rail_failed",
-          "CDP escrow account has no transfer() — check @coinbase/cdp-sdk version.",
-        );
-      }
-      try {
-        const sent = await wallets.escrow.transfer({
-          to: input.to,
-          amount: input.amountAtomic,
-          token: configuredUsdcContract(probe.network),
-          network: probe.unsafeNetwork ? "base" : "base-sepolia",
-          idempotencyKey: input.idempotencyKey,
-        });
-        const txHash = sent.transactionHash?.trim();
-        if (!txHash) {
-          throw new EscrowError(
-            "rail_failed",
-            `CDP ${input.purpose} transfer returned no transaction hash. Do not assume the wallet moved. Recon before retrying.`,
-          );
-        }
-        return { txHash };
-      } catch (err) {
-        if (err instanceof EscrowError) throw err;
-        throw new EscrowError(
-          "rail_failed",
-          err instanceof Error ? err.message : `CDP ${input.purpose} transfer failed`,
-        );
-      }
+      return transferUsdcFromAccount(wallets.escrow, input, {
+        network: probe.network,
+        unsafeNetwork: probe.unsafeNetwork,
+        env,
+      });
     },
   };
 }

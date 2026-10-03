@@ -259,6 +259,7 @@ Plain env (not Secret Manager):
 | --- | --- | --- |
 | `AUTH_TRUST_HOST` | `true` | Not in SM. Auth.js already `trustHost: true`; set the env anyway |
 | `CDP_NETWORK` | `base-sepolia` | Mainnet refused without `CDP_ALLOW_MAINNET=1` |
+| `BASE_BUILDER_CODE` | `bc_u97ii222` on DEV first | Optional plain env. Public code, not a secret. Unset is a no-op. Set `BASE_BUILDER_CODE=bc_u97ii222` on DEV and check a Sepolia fund plus a payout or refund before PROD. PROD waits for Enrique's GO. |
 | `NODE_ENV` | `production` | |
 | `PORT` | `8080` | Cloud Run |
 | `PUBLIC_BASE_URL` | omit | Optional env after live origin (GitHub URL helpers) |

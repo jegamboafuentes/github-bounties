@@ -1,17 +1,12 @@
 import { getAddress } from "viem";
 import type { EnvMap } from "../auth/env";
+import type { UsdcSendRequest } from "../escrow/builder-code";
 import { CDP_ESCROW_ACCOUNT_NAME, CDP_FEE_ACCOUNT_NAME } from "../lib/constants";
 import { AdminError } from "./errors";
 
 export type NamedAccount = {
   address: string;
-  transfer?: (args: {
-    to: string;
-    amount: bigint;
-    token: string;
-    network: string;
-    idempotencyKey: string;
-  }) => Promise<{ transactionHash?: string }>;
+  sendTransaction?: (args: UsdcSendRequest) => Promise<{ transactionHash?: string }>;
 };
 
 /** Named lookup only. Callers pass getAccount, never a create-or-load helper. */
@@ -63,7 +58,7 @@ export async function cdpNamedAccountClient(): Promise<NamedAccountClient> {
       const account = await cdp.evm.getAccount(args);
       return {
         address: account.address,
-        transfer: account.transfer.bind(account) as NamedAccount["transfer"],
+        sendTransaction: account.sendTransaction.bind(account) as NamedAccount["sendTransaction"],
       };
     },
   };
