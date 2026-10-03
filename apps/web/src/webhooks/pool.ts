@@ -14,11 +14,9 @@ import {
   fetchPoolPullRequests,
   poolPullRequestFromWebhook,
 } from "../github/pool-snapshot";
-import {
-  findActiveRepoByFullName,
-  findGithubLinkByIdOrLogin,
-  findGithubLinkByUserId,
-} from "../github/persist";
+import { findActiveRepoByFullName } from "../github/persist";
+import { getProvider } from "../providers/registry";
+import type { ProviderIdentity } from "../providers/types";
 import { referencedIssueNumbersForRepo } from "../lib/issue-refs";
 import {
   evaluatePoolEligibility,
@@ -319,10 +317,10 @@ export async function ingestLiveRoster(
       continue;
     }
 
-    const link = await findGithubLinkByIdOrLogin(db, {
-      githubId: withCommits.authorId,
-      githubLogin: withCommits.authorLogin,
-    });
+    const link = await getProvider("github").findLinkedUser(
+      db,
+      githubIdentity(withCommits.authorId, withCommits.authorLogin),
+    );
     await upsertCandidate(db, {
       bountyId: bounty.id,
       githubId: withCommits.authorId,
@@ -430,11 +428,22 @@ async function countParticipants(db: Database, bountyId: string): Promise<number
 }
 
 async function posterActor(db: Database, posterUserId: string): Promise<PoolActor> {
-  const link = await findGithubLinkByUserId(posterUserId, db);
-  if (!link) return { login: "", githubId: 0 };
+  const identity = await getProvider("github").identityForUser(db, posterUserId);
+  if (!identity) return { login: "", githubId: 0 };
   return {
-    login: link.githubLogin,
-    githubId: Number(link.githubId),
+    login: identity.login ?? "",
+    githubId: identity.providerUserId ? Number(identity.providerUserId) : 0,
+  };
+}
+
+function githubIdentity(
+  id: number | bigint | null | undefined,
+  login: string | null | undefined,
+): ProviderIdentity {
+  return {
+    provider: "github",
+    providerUserId: id == null ? null : id.toString(),
+    login: login ?? null,
   };
 }
 
@@ -462,10 +471,10 @@ async function upsertFrozenParticipant(
   row: ReturnType<typeof frozenParticipantsFromEligibility>["rows"][number],
   frozenAt: Date,
 ): Promise<void> {
-  const link = await findGithubLinkByIdOrLogin(db, {
-    githubId: row.githubId,
-    githubLogin: row.githubLogin,
-  });
+  const link = await getProvider("github").findLinkedUser(
+    db,
+    githubIdentity(row.githubId, row.githubLogin),
+  );
   const values = {
     bountyId,
     githubId: BigInt(row.githubId),
@@ -574,10 +583,10 @@ async function attachLinkedUsers(db: Database, bountyId: string): Promise<void> 
     .from(poolParticipants)
     .where(and(eq(poolParticipants.bountyId, bountyId), isNull(poolParticipants.userId)));
   for (const row of rows) {
-    const link = await findGithubLinkByIdOrLogin(db, {
-      githubId: row.githubId,
-      githubLogin: row.githubLogin,
-    });
+    const link = await getProvider("github").findLinkedUser(
+      db,
+      githubIdentity(row.githubId, row.githubLogin),
+    );
     if (!link) continue;
     const nextSkip =
       row.skipReason === CLAIM_SKIP.hunterNotLinked ? null : row.skipReason;

@@ -92,6 +92,7 @@ export default async function BountyDetailPage({
   const intelligence = await loadBountyIntelligence({
     bountyId: bounty.id,
     repoFullName: bounty.repoFullName,
+    provider: bounty.provider,
     githubIssueNumber: bounty.githubIssueNumber,
     issueTitle: issue?.title || bounty.title,
     issueBody: issue?.markdown ?? null,

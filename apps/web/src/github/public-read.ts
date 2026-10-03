@@ -35,6 +35,12 @@ export type ResolvedPublicIssue = {
   defaultBranch: string;
   private: boolean;
   issue: GitHubIssueSnapshot;
+  /** Same repo payload fields used for anti-spam. Not a second request. */
+  createdAt: string | null;
+  stars: number | null;
+  ownerId: string | null;
+  ownerLogin: string | null;
+  description: string | null;
 };
 
 export type PublicClosingPull = {
@@ -49,6 +55,8 @@ export type PublicClosingPull = {
   htmlUrl?: string;
   mergedAt?: string | null;
   mergeCommitSha?: string | null;
+  mergedByLogin?: string;
+  mergedById?: number;
   mergeCommitMessage?: string;
   commitMessages?: string[];
   closingIssueNumbers?: number[];
@@ -146,6 +154,10 @@ export async function resolvePublicIssue(
     full_name?: string;
     private?: boolean;
     default_branch?: string;
+    description?: string | null;
+    created_at?: string | null;
+    stargazers_count?: number | null;
+    owner?: { id?: number | null; login?: string | null } | null;
   };
   if (repoBody.private) {
     throw new PublicGitHubError(
@@ -170,6 +182,7 @@ export async function resolvePublicIssue(
     html_url?: string;
     state?: string;
     pull_request?: unknown;
+    user?: { login?: string | null; id?: number | null } | null;
   };
   if (issueBody.pull_request) {
     throw new PublicGitHubError(
@@ -187,6 +200,11 @@ export async function resolvePublicIssue(
     fullName: repoBody.full_name,
     defaultBranch: repoBody.default_branch ?? "main",
     private: false,
+    createdAt: repoBody.created_at?.trim() || null,
+    stars: typeof repoBody.stargazers_count === "number" ? repoBody.stargazers_count : null,
+    ownerId: typeof repoBody.owner?.id === "number" ? String(repoBody.owner.id) : null,
+    ownerLogin: repoBody.owner?.login?.trim() || null,
+    description: repoBody.description?.trim() || null,
     issue: {
       title: issueBody.title,
       body: issueBody.body ?? null,
@@ -194,6 +212,8 @@ export async function resolvePublicIssue(
         issueBody.html_url ?? `https://github.com/${repoBody.full_name}/issues/${issueNumber}`,
       state: issueBody.state ?? "open",
       pullRequest: false,
+      authorLogin: issueBody.user?.login?.trim() || null,
+      authorId: typeof issueBody.user?.id === "number" ? String(issueBody.user.id) : null,
     },
   };
 }
@@ -291,6 +311,42 @@ export async function listPublicClosingPulls(args: {
     .slice(0, MAX_PULLS);
 }
 
+/**
+ * One pull request, merged or not. Same REST read as the closing-pull list.
+ * Missing pulls return null. Private repos and HTTP failures throw.
+ */
+export async function fetchPublicPull(args: {
+  owner: string;
+  repo: string;
+  prNumber: number;
+  http?: GitHubHttp;
+  env?: NodeJS.ProcessEnv;
+}): Promise<PublicClosingPull | null> {
+  const http = args.http ?? defaultHttp;
+  const headers = publicGitHubHeaders(readGitHubPublicReadToken(args.env));
+  const repoRes = await readJson(http, `${GITHUB_API}/repos/${args.owner}/${args.repo}`, {
+    headers,
+  });
+  throwIfFailed(repoRes);
+  const repoBody = repoRes.body as { default_branch?: string; private?: boolean; full_name?: string };
+  if (repoBody.private) {
+    throw new PublicGitHubError(
+      "inaccessible",
+      200,
+      `${repoBody.full_name ?? `${args.owner}/${args.repo}`} is private`,
+    );
+  }
+  return readPull(
+    http,
+    headers,
+    args.owner,
+    args.repo,
+    args.prNumber,
+    repoBody.default_branch ?? "main",
+    true,
+  );
+}
+
 async function timelinePullNumbers(
   http: GitHubHttp,
   headers: Record<string, string>,
@@ -362,6 +418,7 @@ async function readPull(
   repo: string,
   number: number,
   defaultBranch: string,
+  includeUnmerged = false,
 ): Promise<PublicClosingPull | null> {
   const res = await readJson(http, `${GITHUB_API}/repos/${owner}/${repo}/pulls/${number}`, {
     headers,
@@ -376,38 +433,44 @@ async function readPull(
     html_url?: string | null;
     merge_commit_sha?: string | null;
     user?: { login?: string | null; id?: number | null } | null;
+    merged_by?: { login?: string | null; id?: number | null } | null;
     base?: { ref?: string | null } | null;
   };
-  if (body.number == null || !body.merged) return null;
+  if (body.number == null) return null;
+  const merged = Boolean(body.merged);
+  if (!merged && !includeUnmerged) return null;
   const authorLogin = body.user?.login?.trim() ?? "";
   let mergeCommitMessage: string | undefined;
-  if (body.merge_commit_sha) {
-    const commit = await readJson(
+  let commitMessages: string[] = [];
+  if (merged) {
+    if (body.merge_commit_sha) {
+      const commit = await readJson(
+        http,
+        `${GITHUB_API}/repos/${owner}/${repo}/commits/${body.merge_commit_sha}`,
+        { headers },
+      );
+      if (commit.ok) {
+        const message = (commit.body as { commit?: { message?: string } } | null)?.commit?.message;
+        if (message) mergeCommitMessage = message;
+      }
+    }
+    const commitsRes = await readJson(
       http,
-      `${GITHUB_API}/repos/${owner}/${repo}/commits/${body.merge_commit_sha}`,
+      `${GITHUB_API}/repos/${owner}/${repo}/pulls/${number}/commits?per_page=30`,
       { headers },
     );
-    if (commit.ok) {
-      const message = (commit.body as { commit?: { message?: string } } | null)?.commit?.message;
-      if (message) mergeCommitMessage = message;
-    }
+    commitMessages = Array.isArray(commitsRes.body)
+      ? commitsRes.body
+          .map((row) => (row as { commit?: { message?: string } }).commit?.message)
+          .filter((message): message is string => Boolean(message))
+      : [];
   }
-  const commitsRes = await readJson(
-    http,
-    `${GITHUB_API}/repos/${owner}/${repo}/pulls/${number}/commits?per_page=30`,
-    { headers },
-  );
-  const commitMessages = Array.isArray(commitsRes.body)
-    ? commitsRes.body
-        .map((row) => (row as { commit?: { message?: string } }).commit?.message)
-        .filter((message): message is string => Boolean(message))
-    : [];
 
   return {
     number: body.number,
     title: body.title ?? "",
     body: body.body ?? "",
-    merged: true,
+    merged,
     authorLogin,
     authorId: typeof body.user?.id === "number" ? body.user.id : undefined,
     baseRef: body.base?.ref ?? "",
@@ -415,6 +478,8 @@ async function readPull(
     htmlUrl: body.html_url ?? undefined,
     mergedAt: body.merged_at ?? null,
     mergeCommitSha: body.merge_commit_sha ?? null,
+    mergedByLogin: body.merged_by?.login?.trim() || undefined,
+    mergedById: typeof body.merged_by?.id === "number" ? body.merged_by.id : undefined,
     mergeCommitMessage,
     commitMessages: commitMessages.length ? commitMessages : undefined,
   };

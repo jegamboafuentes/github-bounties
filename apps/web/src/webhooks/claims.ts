@@ -1,7 +1,7 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { notifyPullRequestWon, type DomainEmailDeps } from "../email/events";
-import { findGithubLinkByIdOrLogin } from "../github/persist";
+import { getProvider } from "../providers/registry";
 import { bounties, claims, repos, webhookDeliveries } from "../db/schema";
 import { CLAIM_SKIP } from "./outcome";
 import type { ClaimWriteResult, EligibilityDecision, GitHubWebhookPayload } from "./types";
@@ -273,9 +273,10 @@ async function findHunter(
   db: Database,
   decision: EligibilityDecision,
 ): Promise<{ userId: string } | null> {
-  const link = await findGithubLinkByIdOrLogin(db, {
-    githubId: decision.winnerId,
-    githubLogin: decision.winnerLogin,
+  const link = await getProvider("github").findLinkedUser(db, {
+    provider: "github",
+    providerUserId: decision.winnerId != null ? String(decision.winnerId) : null,
+    login: decision.winnerLogin ?? null,
   });
   return link ? { userId: link.userId } : null;
 }

@@ -1,11 +1,20 @@
 import { POOL_ROSTER_NOT_FROZEN_MESSAGE } from "../../claims/errors";
+import { getProvider } from "../../providers/registry";
+import type { ProviderIdentity } from "../../providers/types";
 import { PublicApiError } from "../public/errors";
 import type { ClaimAuthContext, ClaimKind } from "./deps";
 
 export function githubLoginsMatch(left: string | null | undefined, right: string | null | undefined): boolean {
-  const a = left?.trim().toLowerCase() ?? "";
-  const b = right?.trim().toLowerCase() ?? "";
-  return a.length > 0 && a === b;
+  return getProvider("github").identitiesMatch(githubIdentity(left), githubIdentity(right));
+}
+
+function githubIdentity(login: string | null | undefined): ProviderIdentity {
+  return { provider: "github", providerUserId: null, login: login ?? null };
+}
+
+function identitiesMatch(ctx: ClaimAuthContext, otherLogin: string | null | undefined): boolean {
+  const provider = getProvider(ctx.bounty?.provider ?? "github");
+  return provider.identitiesMatch(githubIdentity(ctx.githubLogin), githubIdentity(otherLogin));
 }
 
 /**
@@ -35,7 +44,7 @@ export function authorizeClaimCaller(actorUserId: string, kind: ClaimKind, ctx: 
   }
   if (kind === "winner") {
     const winner = ctx.winner;
-    const loginOk = githubLoginsMatch(ctx.githubLogin, winner?.prAuthorLogin);
+    const loginOk = identitiesMatch(ctx, winner?.prAuthorLogin);
     const ownerOk = winner?.hunterUserId === actorUserId;
     if (!winner || !loginOk || !ownerOk) {
       throw new PublicApiError(
@@ -59,7 +68,7 @@ export function authorizeClaimCaller(actorUserId: string, kind: ClaimKind, ctx: 
     throw new PublicApiError("pool_not_ready", POOL_ROSTER_NOT_FROZEN_MESSAGE, null, 409);
   }
   const pool = ctx.pool;
-  const loginOk = Boolean(pool) && githubLoginsMatch(ctx.githubLogin, pool?.githubLogin);
+  const loginOk = Boolean(pool) && identitiesMatch(ctx, pool?.githubLogin);
   const ownerOk = Boolean(pool) && (pool?.userId === actorUserId || pool?.userId == null);
   if (!pool || !loginOk || !ownerOk) {
     throw new PublicApiError(

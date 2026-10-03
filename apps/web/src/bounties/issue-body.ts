@@ -1,12 +1,9 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { bounties, repos } from "../db/schema";
-import {
-  fetchIssue,
-  type GitHubHttp,
-  type GitHubIssueSnapshot,
-} from "../github/api";
-import { resolvePublicIssue } from "../github/public-read";
+import { type GitHubHttp, type GitHubIssueSnapshot } from "../github/api";
+import { toGitHubIssueSnapshot } from "../providers/github";
+import { getProvider } from "../providers/registry";
 import {
   clipIssueBody,
   looksLegacyClippedBody,
@@ -86,6 +83,7 @@ export async function loadBountyIssueBody(
       githubIssueNumber: bounties.githubIssueNumber,
       repoFullName: repos.fullName,
       installationId: repos.installationId,
+      provider: bounties.provider,
     })
     .from(bounties)
     .innerJoin(repos, eq(repos.id, bounties.repoId))
@@ -126,6 +124,7 @@ export async function loadBountyIssueBody(
 
   try {
     const snapshot = await loadIssueSnapshot(owner, repo, row.githubIssueNumber, {
+      provider: row.provider,
       installationId: row.installationId,
       http: opts.http,
       jwt: opts.jwt,
@@ -164,17 +163,25 @@ async function loadIssueSnapshot(
   owner: string,
   repo: string,
   issueNumber: number,
-  opts: { installationId: bigint | null; http?: GitHubHttp; jwt?: string },
+  opts: { provider: string; installationId: bigint | null; http?: GitHubHttp; jwt?: string },
 ): Promise<GitHubIssueSnapshot> {
-  if (opts.installationId != null) {
-    return fetchIssue(owner, repo, issueNumber, {
+  const provider = getProvider(opts.provider);
+  const fetched = await provider.fetchIssue(
+    {
+      provider: provider.id,
+      owner,
+      repo,
+      fullName: `${owner}/${repo}`,
+      issueNumber,
+      url: `https://github.com/${owner}/${repo}/issues/${issueNumber}`,
+    },
+    {
       installationId: opts.installationId,
       http: opts.http,
       jwt: opts.jwt,
-    });
-  }
-  const resolved = await resolvePublicIssue(owner, repo, issueNumber, { http: opts.http });
-  return resolved.issue;
+    },
+  );
+  return toGitHubIssueSnapshot(fetched);
 }
 
 export function splitFullName(fullName: string): [string, string] | [null, null] {
