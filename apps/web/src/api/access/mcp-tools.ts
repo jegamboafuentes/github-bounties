@@ -12,15 +12,18 @@ import {
   handleGetNotificationPreferences,
   handleGetProfile,
   handleLinkedAccounts,
+  handleListSubmissions,
   handleMe,
   handleMyBounties,
   handleMyClaims,
   handleRefund,
   handleUpdateBountyAmount,
   handleUpdateNotificationPreferences,
+  handleSubmitPr,
   handleUpdateProfile,
   handleUsage,
   handleTopUp,
+  handleWithdrawSubmission,
   handleWorkSignal,
   requirePrincipal,
   resultFromError,
@@ -36,6 +39,7 @@ import { handleCountContacts, handleListContactsArgs } from "../../contacts/http
 import {
   bountyClaimsToolSchema,
   cancelToolSchema,
+  submitPrToolSchema,
   claimToolSchema,
   createBountyToolSchema,
   fundToolSchema,
@@ -55,6 +59,7 @@ const looseFund = fundToolSchema.passthrough();
 const looseTopUp = topUpToolSchema.passthrough();
 const looseClaim = claimToolSchema.passthrough();
 const looseClaims = bountyClaimsToolSchema.passthrough();
+const looseSubmitPr = submitPrToolSchema.passthrough();
 
 /** Unknown keys are a validation_failed for this tool's rate class, not a JSON-RPC -32602. */
 export function rejectUnknownToolArgs(args: object, allowed: readonly string[]): void {
@@ -503,6 +508,55 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       guarded(access, "read", "tool:list_linked_accounts", null, () => {
         rejectUnknownToolArgs(args, []);
         return handleLinkedAccounts(requirePrincipal(access?.principal), access!.deps);
+      }),
+  );
+
+  server.registerTool(
+    "list_submissions",
+    {
+      title: "List Hugging Face submissions",
+      description:
+        "Requires API key (read scope). Pull requests submitted to one Hugging Face bounty. Each row has status submitted. GitHub bounties return provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns hf_disabled when that flag is off.",
+      inputSchema: looseClaims,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) =>
+      guarded(access, "read", `tool:list_submissions ${args.id}`, args.id, () => {
+        rejectUnknownToolArgs(args, ["id"]);
+        return handleListSubmissions(requirePrincipal(access?.principal), args.id, access!.deps);
+      }),
+  );
+
+  server.registerTool(
+    "submit_pr",
+    {
+      title: "Submit a Hugging Face pull request",
+      description:
+        "Requires API key (write scope). Submits a Hugging Face pull request URL for an open funded Hugging Face bounty. The key owner must have linked Hugging Face, and the pull request author must be that username. One active submission per user. GitHub bounties return provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns hf_disabled when that flag is off. Do not send an address.",
+      inputSchema: looseSubmitPr,
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+    },
+    async (args) =>
+      guarded(access, "write", `tool:submit_pr ${args.id}`, args.id, () => {
+        rejectUnknownToolArgs(args, ["id", "prUrl"]);
+        assertNoAddress(args);
+        return handleSubmitPr(requirePrincipal(access?.principal), args.id, { prUrl: args.prUrl }, access!.deps);
+      }),
+  );
+
+  server.registerTool(
+    "withdraw_submission",
+    {
+      title: "Withdraw a Hugging Face submission",
+      description:
+        "Requires API key (write scope). Deletes the caller's active submission while the bounty is unpaid. GitHub bounties return provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns hf_disabled when that flag is off.",
+      inputSchema: looseClaims,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    },
+    async (args) =>
+      guarded(access, "write", `tool:withdraw_submission ${args.id}`, args.id, () => {
+        rejectUnknownToolArgs(args, ["id"]);
+        return handleWithdrawSubmission(requirePrincipal(access?.principal), args.id, access!.deps);
       }),
   );
 

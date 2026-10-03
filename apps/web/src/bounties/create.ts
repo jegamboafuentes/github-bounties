@@ -75,10 +75,11 @@ export async function createBountyFromIssueUrl(
 
   const parsed = getProvider("github").parseIssueUrl(input.issueUrl);
   if (!parsed) {
-    throw new BountyError(
-      "invalid_issue_url",
-      "Enter a GitHub issue URL like https://github.com/owner/repo/issues/123.",
-    );
+    const github = "https://github.com/owner/repo/issues/123";
+    const message = hfBountiesEnabled(env)
+      ? `Enter a GitHub issue URL like ${github}, or a Hugging Face discussion like https://huggingface.co/owner/repo/discussions/1, https://huggingface.co/datasets/owner/repo/discussions/1, or https://huggingface.co/spaces/owner/repo/discussions/1.`
+      : `Enter a GitHub issue URL like ${github}.`;
+    throw new BountyError("invalid_issue_url", message);
   }
 
   const amountUsdc = normalizeBountyAmountUsdc(input.amountUsdc);

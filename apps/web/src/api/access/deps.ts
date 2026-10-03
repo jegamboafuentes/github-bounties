@@ -1,4 +1,5 @@
 import type { Database } from "../../db/client";
+import type { GitHubHttp } from "../../github/api";
 import type { ApiKeyEnv, ApiKeyScope, ApiSpendKind, ApiSpendStatus } from "../../db/schema";
 import type {
   AccountProfile,
@@ -291,4 +292,6 @@ export type AccessDeps = {
     apiKeyId: string;
   }) => Promise<PerformedRefund>;
   listClaims: (userId: string, bountyId: string | null) => Promise<ClaimLegView[]>;
+  /** Test double for Hugging Face discussion reads. Production uses fetch. */
+  hfHttp?: GitHubHttp;
 };

@@ -1073,8 +1073,9 @@ export const hfLinks = pgTable(
 );
 
 /**
- * Hunter-submitted PR for a bounty. Unused until the HF submit flow.
- * Unique per bounty and PR number. `user_id` is the submitter.
+ * Hunter-submitted pull request for a bounty. One row with status `submitted`
+ * per user per bounty. Withdraw deletes that row. `hf_author` is the Hugging
+ * Face username checked at submit time. `pr_author_provider_id` is the Hub user id.
  */
 export const bountySubmissions = pgTable(
   "bounty_submissions",
@@ -1090,6 +1091,7 @@ export const bountySubmissions = pgTable(
     prNumber: integer("pr_number").notNull(),
     prUrl: text("pr_url").notNull(),
     prAuthorProviderId: text("pr_author_provider_id"),
+    hfAuthor: text("hf_author"),
     status: text("status").notNull().default("submitted"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
@@ -1097,6 +1099,9 @@ export const bountySubmissions = pgTable(
   },
   (table) => [
     uniqueIndex("bounty_submissions_bounty_pr_uidx").on(table.bountyId, table.prNumber),
+    uniqueIndex("bounty_submissions_active_user_uidx")
+      .on(table.bountyId, table.userId)
+      .where(sql`${table.status} = 'submitted'`),
     index("bounty_submissions_bounty_id_idx").on(table.bountyId),
     index("bounty_submissions_user_id_idx").on(table.userId),
     check("bounty_submissions_provider", sql`${table.provider} in ('github', 'huggingface')`),

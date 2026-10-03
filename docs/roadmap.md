@@ -49,7 +49,7 @@ Related polish on PROD: board complexity/language badges + filters, Settings/Pos
 
 ### V4 — API + MCP
 
-**LIVE on PROD 2026-09-25.** `/api/v1` (OpenAPI) + `/mcp` ([#76](https://github.com/jegamboafuentes/github-bounties/pull/76) [#79](https://github.com/jegamboafuentes/github-bounties/pull/79) [#80](https://github.com/jegamboafuentes/github-bounties/pull/80) [#81](https://github.com/jegamboafuentes/github-bounties/pull/81) [#78](https://github.com/jegamboafuentes/github-bounties/pull/78)). API money is OFF on PROD. PROD serves 4.5.0. 4.9.1 is the DEV and main API version (26 operations, 27 tools) and adds the provider field. On the site: [MCP](https://githubbounties.xyz/mcp) (`/mcp`).
+**LIVE on PROD 2026-09-25.** `/api/v1` (OpenAPI) + `/mcp` ([#76](https://github.com/jegamboafuentes/github-bounties/pull/76) [#79](https://github.com/jegamboafuentes/github-bounties/pull/79) [#80](https://github.com/jegamboafuentes/github-bounties/pull/80) [#81](https://github.com/jegamboafuentes/github-bounties/pull/81) [#78](https://github.com/jegamboafuentes/github-bounties/pull/78)). API money is OFF on PROD. PROD serves 4.5.0. 4.10.0 is the DEV and main API version (29 operations, 30 tools) and adds the provider field. On the site: [MCP](https://githubbounties.xyz/mcp) (`/mcp`).
 
 ### V5 — MCP page, unfunded edits, admin
 
@@ -59,7 +59,7 @@ Related polish on PROD: board complexity/language badges + filters, Settings/Pos
 
 ### V6 — Hugging Face
 
-Bounties on Hugging Face discussions and PRs. In progress. No ship date. Every bounty has `provider`: `github` or `huggingface` (existing rows stay `github`). REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. A signed-in Google user can connect Hugging Face when `HF_OAUTH_CLIENT_ID` and `HF_OAUTH_CLIENT_SECRET` are set. Those secrets are optional. Connect, callback, and disconnect return **401** without a session and **404** `hf_not_configured` (no secret names in the body) when the secrets are missing. Creating a bounty from a public discussion requires `HF_BOUNTIES_ENABLED=1`. Claim, merge detection, and payouts are not in this release. GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
+Bounties on Hugging Face discussions and PRs. In progress. No ship date. Every bounty has `provider`: `github` or `huggingface` (existing rows stay `github`). REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. A signed-in Google user can connect Hugging Face when `HF_OAUTH_CLIENT_ID` and `HF_OAUTH_CLIENT_SECRET` are set. Those secrets are optional. Connect, callback, and disconnect return **401** without a session and **404** `hf_not_configured` (no secret names in the body) when the secrets are missing. Creating a bounty from a public discussion requires `HF_BOUNTIES_ENABLED=1`. A linked hunter can submit a pull request URL on an open funded discussion bounty (website, REST, and MCP). Claim, merge detection, and payouts are not in this release. GitHub bounties return `provider_not_supported` for submissions and keep the claim flow. GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
 
 ## Next
 
