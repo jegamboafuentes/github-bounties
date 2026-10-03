@@ -1,7 +1,7 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
 import { PublicApiError } from "../public/errors";
-import type { ApiKeyEnv, ApiKeyScope, ApiSpendKind } from "../../db/schema";
+import { API_KEY_SCOPES, type ApiKeyEnv, type ApiKeyScope, type ApiSpendKind } from "../../db/schema";
 
 export type { ApiKeyEnv, ApiKeyScope, ApiSpendKind };
 
@@ -353,17 +353,27 @@ export function decideIdempotency(
   };
 }
 
+const STORED_SCOPES = new Set<string>(API_KEY_SCOPES);
+
+/** Keep every stored scope, including admin. Unknown values are dropped. */
+export function storedApiKeyScopes(scopes: readonly string[] | null | undefined): ApiKeyScope[] {
+  return (scopes ?? []).filter((scope): scope is ApiKeyScope => STORED_SCOPES.has(scope));
+}
+
 export function parseScopes(raw: unknown, opts?: { allowAdmin?: boolean }): ApiKeyScope[] {
   const values = Array.isArray(raw) ? raw : [];
   const allowAdmin = opts?.allowAdmin === true;
-  const allowed = new Set<string>(allowAdmin ? ["read", "write", "money", "admin"] : ["read", "write", "money"]);
+  const allowed = new Set<string>(allowAdmin ? API_KEY_SCOPES : API_KEY_SCOPES.filter((scope) => scope !== "admin"));
   const scopes: ApiKeyScope[] = [];
   for (const value of values) {
     if (value === "admin" && !allowAdmin) {
       throw new PublicApiError("validation_failed", "The admin scope cannot be granted.");
     }
     if (typeof value !== "string" || !allowed.has(value)) {
-      throw new PublicApiError("validation_failed", "Scopes must be read, write, or money.");
+      throw new PublicApiError(
+        "validation_failed",
+        allowAdmin ? "Scopes must be read, write, money, or admin." : "Scopes must be read, write, or money.",
+      );
     }
     const scope = value as ApiKeyScope;
     if (!scopes.includes(scope)) scopes.push(scope);

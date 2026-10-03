@@ -198,3 +198,62 @@ describe("shown-once API key secret", () => {
     assert.equal(moneyText.includes("200.000000"), false);
   });
 });
+
+describe("admin scope checkbox", () => {
+  let root: Root;
+
+  afterEach(() => {
+    act(() => root.unmount());
+  });
+
+  it("submits admin with the default read scope", async () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    let scopes: Record<string, FormDataEntryValue | null> = {};
+    act(() => {
+      root.render(
+        createElement(ApiKeysPanel, {
+          keys: [],
+          ceilings,
+          keyEnv: "test",
+          moneyEligible: false,
+          walletSet: true,
+          githubLinked: false,
+          canGrantAdmin: true,
+          refresh: () => {},
+          async createKey(formData: FormData) {
+            scopes = {
+              scopeRead: formData.get("scopeRead"),
+              scopeWrite: formData.get("scopeWrite"),
+              scopeMoney: formData.get("scopeMoney"),
+              scopeAdmin: formData.get("scopeAdmin"),
+            };
+            return {
+              ok: true,
+              message: "Copy this key now. It is shown once.",
+              token: tokenFor("admin"),
+              prefix: "gb_test_admin",
+              keyId: "id-admin",
+            };
+          },
+        }) as ReactNode,
+      );
+    });
+    const admin = host.querySelector('input[name="scopeAdmin"]') as HTMLInputElement;
+    assert.ok(admin);
+    admin.checked = true;
+    const input = host.querySelector('input[name="name"]') as HTMLInputElement;
+    input.value = "admin-agent";
+    const form = host.querySelector("form") as HTMLFormElement;
+    await act(async () => {
+      form.requestSubmit();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    assert.equal(scopes.scopeRead, "1");
+    assert.equal(scopes.scopeAdmin, "1");
+    assert.equal(scopes.scopeWrite, null);
+    assert.equal(scopes.scopeMoney, null);
+    assert.match(host.textContent ?? "", /admin checkbox grants the admin scope/);
+  });
+});

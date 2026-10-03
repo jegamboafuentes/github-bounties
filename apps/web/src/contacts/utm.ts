@@ -1,8 +1,12 @@
 /**
  * First-party first-touch attribution. The `gb_utm` cookie is set by the
- * Next.js proxy when a request carries any utm_* param. Sign-up copies it
- * onto the user and the marketing contact. There is no third-party analytics.
+ * Next.js proxy on a successful public HTML page navigation that carries any
+ * utm_* param. API, static, robots, sitemap, and admin routes do not set it.
+ * Sign-up copies it onto the user and the marketing contact. There is no
+ * third-party analytics.
  */
+
+import { isUuid } from "../ids";
 
 export const UTM_COOKIE_NAME = "gb_utm";
 export const UTM_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
@@ -111,9 +115,41 @@ export function utmCookieOptions(nodeEnv: string | undefined = process.env.NODE_
   };
 }
 
+const UTM_HTML_PATHS = new Set([
+  "/",
+  "/about",
+  "/roadmap",
+  "/board",
+  "/signin",
+  "/settings",
+  "/bounties/new",
+  "/github/setup",
+  "/github/callback",
+]);
+
+function htmlPathname(pathname: string): string {
+  if (pathname.length > 1) return pathname.replace(/\/+$/, "");
+  return pathname;
+}
+
 /**
- * First touch wins. An existing cookie is left alone. Params that sanitize
- * to nothing do not set a cookie, so a junk visit cannot block a later real one.
+ * Public HTML pages only. API, static, robots, sitemap, MCP, webhooks, and
+ * admin routes are not navigations that should take a first touch. An admin
+ * host never qualifies, including its redirects and rewrites.
+ */
+export function isUtmHtmlNavigation(input: { method: string; pathname: string; adminHost: boolean }): boolean {
+  if (input.adminHost) return false;
+  if (input.method !== "GET" && input.method !== "HEAD") return false;
+  const pathname = htmlPathname(input.pathname);
+  if (UTM_HTML_PATHS.has(pathname)) return true;
+  const bounty = /^\/bounties\/([^/]+)$/.exec(pathname);
+  return Boolean(bounty && isUuid(bounty[1]));
+}
+
+/**
+ * First touch wins when the stored cookie still parses. A missing cookie, or
+ * one that fails to parse or validate, does not block a later real touch.
+ * Params that sanitize to nothing do not set a cookie.
  */
 export function planUtmCookie(input: {
   existing: string | undefined;
@@ -122,7 +158,7 @@ export function planUtmCookie(input: {
   now?: Date;
   nodeEnv?: string;
 }): PlannedUtmCookie | null {
-  if (input.existing) return null;
+  if (parseUtmCookie(input.existing)) return null;
   const touch = utmTouchFromSearch(input.searchParams, input.pathname, input.now ?? new Date());
   if (!touch) return null;
   return {
@@ -130,4 +166,30 @@ export function planUtmCookie(input: {
     value: JSON.stringify(touch),
     options: utmCookieOptions(input.nodeEnv),
   };
+}
+
+/** Gate the proxy stamp: successful public HTML only, then the first-touch rules. */
+export function planUtmForNavigation(input: {
+  method: string;
+  pathname: string;
+  adminHost: boolean;
+  status: number;
+  rewritten: boolean;
+  existing: string | undefined;
+  searchParams: URLSearchParams;
+  now?: Date;
+  nodeEnv?: string;
+}): PlannedUtmCookie | null {
+  if (input.rewritten) return null;
+  if (input.status < 200 || input.status >= 300) return null;
+  if (!isUtmHtmlNavigation({ method: input.method, pathname: input.pathname, adminHost: input.adminHost })) {
+    return null;
+  }
+  return planUtmCookie({
+    existing: input.existing,
+    searchParams: input.searchParams,
+    pathname: input.pathname,
+    now: input.now,
+    nodeEnv: input.nodeEnv,
+  });
 }

@@ -49,7 +49,7 @@ Related polish on PROD: board complexity/language badges + filters, Settings/Pos
 
 ### V4 — API + MCP
 
-**LIVE on PROD 2026-09-25.** `/api/v1` (OpenAPI) + `/mcp` ([#76](https://github.com/jegamboafuentes/github-bounties/pull/76) [#79](https://github.com/jegamboafuentes/github-bounties/pull/79) [#80](https://github.com/jegamboafuentes/github-bounties/pull/80) [#81](https://github.com/jegamboafuentes/github-bounties/pull/81) [#78](https://github.com/jegamboafuentes/github-bounties/pull/78)). API money is OFF on PROD. PROD serves 4.5.0. 4.9.0 is the DEV and main API version (26 operations, 27 tools) and adds the provider field. On the site: [MCP](https://githubbounties.xyz/mcp) (`/mcp`).
+**LIVE on PROD 2026-09-25.** `/api/v1` (OpenAPI) + `/mcp` ([#76](https://github.com/jegamboafuentes/github-bounties/pull/76) [#79](https://github.com/jegamboafuentes/github-bounties/pull/79) [#80](https://github.com/jegamboafuentes/github-bounties/pull/80) [#81](https://github.com/jegamboafuentes/github-bounties/pull/81) [#78](https://github.com/jegamboafuentes/github-bounties/pull/78)). API money is OFF on PROD. PROD serves 4.5.0. 4.9.1 is the DEV and main API version (26 operations, 27 tools) and adds the provider field. On the site: [MCP](https://githubbounties.xyz/mcp) (`/mcp`).
 
 ### V5 — MCP page, unfunded edits, admin
 

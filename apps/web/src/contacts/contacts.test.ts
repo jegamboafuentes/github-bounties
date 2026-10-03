@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { AccessDeps } from "../api/access/deps";
@@ -12,7 +15,15 @@ import { handleCountContacts, handleListContacts } from "./http";
 import { planContactImport } from "./import";
 import { normalizeContactEmail, normalizeImportedEmail, splitDisplayName } from "./normalize";
 import { recordSignupContactSafe } from "./persist";
-import { planUtmCookie, sanitizeLandingPath, sanitizeUtmValue, UTM_MAX_AGE_SECONDS } from "./utm";
+import { adminContactsOutOfRange } from "./query";
+import {
+  isUtmHtmlNavigation,
+  planUtmCookie,
+  planUtmForNavigation,
+  sanitizeLandingPath,
+  sanitizeUtmValue,
+  UTM_MAX_AGE_SECONDS,
+} from "./utm";
 import {
   marketingSyncConfigured,
   pushContactToResend,
@@ -152,6 +163,80 @@ describe("signup attribution cookie", () => {
       })?.options.secure,
       false,
     );
+
+    const replaced = planUtmCookie({
+      existing: "not-json",
+      searchParams: new URLSearchParams("utm_source=later"),
+      pathname: "/board",
+      now,
+      nodeEnv: "development",
+    });
+    assert.equal(JSON.parse(replaced?.value ?? "{}").source, "later");
+    assert.equal(
+      planUtmCookie({
+        existing: '{"source":"@@@"}',
+        searchParams: new URLSearchParams("utm_campaign=real"),
+        pathname: "/",
+        now,
+        nodeEnv: "development",
+      })?.value.includes("real"),
+      true,
+    );
+  });
+
+  it("stamps gb_utm only on a successful public HTML navigation", () => {
+    const params = new URLSearchParams("utm_source=lb_email&utm_campaign=launch");
+    const now = new Date("2026-10-03T00:00:00.000Z");
+    const bountyId = "20bb5c8a-fd55-4f67-bb03-635611ef588c";
+    assert.equal(isUtmHtmlNavigation({ method: "GET", pathname: "/", adminHost: false }), true);
+    assert.equal(isUtmHtmlNavigation({ method: "GET", pathname: `/bounties/${bountyId}`, adminHost: false }), true);
+    assert.equal(isUtmHtmlNavigation({ method: "GET", pathname: "/bounties/not-a-uuid", adminHost: false }), false);
+    assert.equal(isUtmHtmlNavigation({ method: "POST", pathname: "/", adminHost: false }), false);
+    assert.equal(isUtmHtmlNavigation({ method: "GET", pathname: "/", adminHost: true }), false);
+    assert.equal(isUtmHtmlNavigation({ method: "GET", pathname: "/admin/contacts", adminHost: false }), false);
+    assert.equal(isUtmHtmlNavigation({ method: "GET", pathname: "/api/v1/me", adminHost: false }), false);
+    assert.equal(isUtmHtmlNavigation({ method: "GET", pathname: "/robots.txt", adminHost: false }), false);
+    assert.equal(isUtmHtmlNavigation({ method: "GET", pathname: "/sitemap.xml", adminHost: false }), false);
+    assert.equal(isUtmHtmlNavigation({ method: "GET", pathname: "/missing", adminHost: false }), false);
+
+    function planned(overrides: Partial<Parameters<typeof planUtmForNavigation>[0]>) {
+      return planUtmForNavigation({
+        method: "GET",
+        pathname: "/",
+        adminHost: false,
+        status: 200,
+        rewritten: false,
+        existing: undefined,
+        searchParams: params,
+        now,
+        nodeEnv: "test",
+        ...overrides,
+      });
+    }
+    assert.equal(JSON.parse(planned({})?.value ?? "{}").source, "lb_email");
+    assert.equal(planned({ pathname: "/api/v1/bounties" }), null);
+    assert.equal(planned({ pathname: "/robots.txt" }), null);
+    assert.equal(planned({ pathname: "/sitemap.xml" }), null);
+    assert.equal(planned({ pathname: "/admin" }), null);
+    assert.equal(planned({ pathname: "/no-such-page" }), null);
+    assert.equal(planned({ adminHost: true }), null);
+    assert.equal(planned({ status: 404 }), null);
+    assert.equal(planned({ status: 307 }), null);
+    assert.equal(planned({ rewritten: true }), null);
+    assert.equal(planned({ method: "POST" }), null);
+    assert.equal(planned({ existing: "%%%" })?.value.includes("lb_email"), true);
+    const proxy = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../proxy.ts"), "utf8");
+    assert.match(proxy, /planUtmForNavigation/);
+  });
+});
+
+describe("admin contacts page range", () => {
+  it("treats a later empty page and an offset past the cap as out of range", () => {
+    assert.equal(adminContactsOutOfRange(1, 0, 0), false);
+    assert.equal(adminContactsOutOfRange(1, 0, 3), false);
+    assert.equal(adminContactsOutOfRange(2, 50, 0), true);
+    assert.equal(adminContactsOutOfRange(2002, 100_050, 0), true);
+    assert.equal(adminContactsOutOfRange(2, 50, 4), false);
   });
 });
 

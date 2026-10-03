@@ -1,5 +1,11 @@
 import { requireAdminPageUser } from "@/admin/gate";
-import { countMarketingContacts, listMarketingContacts, parseContactListQuery } from "@/contacts/query";
+import {
+  adminContactsOutOfRange,
+  CONTACT_LIST_MAX_OFFSET,
+  countMarketingContacts,
+  listMarketingContacts,
+  parseContactListQuery,
+} from "@/contacts/query";
 import { PublicApiError } from "@/api/public/errors";
 import { MARKETING_CONTACT_SOURCES } from "@/db/schema";
 import { getRuntimeDb } from "@/db/runtime";
@@ -39,23 +45,28 @@ export default async function AdminContactsPage({
   const subscribed = raw.subscribed?.trim() ?? "";
   const utmCampaign = raw.utm_campaign?.trim() ?? "";
   const page = Math.max(1, Number.parseInt(raw.page ?? "1", 10) || 1);
+  const offset = (page - 1) * PAGE_SIZE;
   let error: string | null = null;
   let listed = { contacts: [] as Awaited<ReturnType<typeof listMarketingContacts>>["contacts"], total: 0 };
   const db = getRuntimeDb();
   const metrics = await countMarketingContacts(db);
-  try {
-    const query = parseContactListQuery({
-      search,
-      source,
-      subscribed,
-      utmCampaign,
-      limit: PAGE_SIZE,
-      offset: (page - 1) * PAGE_SIZE,
-    });
-    listed = await listMarketingContacts(db, query);
-  } catch (err) {
-    if (err instanceof PublicApiError) error = err.message;
-    else throw err;
+  let outOfRange = offset > CONTACT_LIST_MAX_OFFSET;
+  if (!outOfRange) {
+    try {
+      const query = parseContactListQuery({
+        search,
+        source,
+        subscribed,
+        utmCampaign,
+        limit: PAGE_SIZE,
+        offset,
+      });
+      listed = await listMarketingContacts(db, query);
+      outOfRange = adminContactsOutOfRange(page, offset, listed.contacts.length);
+    } catch (err) {
+      if (err instanceof PublicApiError) error = err.message;
+      else throw err;
+    }
   }
   const pageCount = Math.max(1, Math.ceil(listed.total / PAGE_SIZE));
   const filters = { search, source, subscribed, utmCampaign };
@@ -182,7 +193,7 @@ export default async function AdminContactsPage({
         </button>
       </form>
 
-      {error ? <p className="text-sm text-red-700 dark:text-red-300">{error}</p> : null}
+      {error && !outOfRange ? <p className="text-sm text-red-700 dark:text-red-300">{error}</p> : null}
 
       <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <table className="min-w-full text-left text-sm">
@@ -194,12 +205,23 @@ export default async function AdminContactsPage({
               <th className="px-3 py-2">Source</th>
               <th className="px-3 py-2">Campaign</th>
               <th className="px-3 py-2">Subscribed</th>
+              <th className="px-3 py-2">Created at</th>
+              <th className="px-3 py-2">Linked user</th>
             </tr>
           </thead>
           <tbody>
-            {listed.contacts.length === 0 ? (
+            {outOfRange ? (
               <tr>
-                <td className="px-3 py-4 text-zinc-500" colSpan={6}>
+                <td className="px-3 py-4 text-zinc-500" colSpan={8}>
+                  No results on this page.{" "}
+                  <a className="underline" href={hrefFor(filters)}>
+                    Back to page 1
+                  </a>
+                </td>
+              </tr>
+            ) : listed.contacts.length === 0 ? (
+              <tr>
+                <td className="px-3 py-4 text-zinc-500" colSpan={8}>
                   No contacts match.
                 </td>
               </tr>
@@ -212,6 +234,8 @@ export default async function AdminContactsPage({
                   <td className="px-3 py-2">{row.source}</td>
                   <td className="px-3 py-2 font-mono">{row.utmCampaign ?? "—"}</td>
                   <td className="px-3 py-2">{row.subscribed ? "yes" : "no"}</td>
+                  <td className="px-3 py-2 font-mono">{row.createdAt.slice(0, 16).replace("T", " ")} UTC</td>
+                  <td className="px-3 py-2 font-mono">{row.userId ?? "—"}</td>
                 </tr>
               ))
             )}
@@ -221,19 +245,29 @@ export default async function AdminContactsPage({
 
       <p className="flex items-center justify-between text-sm text-zinc-600 dark:text-zinc-400">
         <span>
-          {listed.total} matching · page {Math.min(page, pageCount)} of {pageCount}
+          {outOfRange
+            ? "No results on this page."
+            : `${listed.total} matching · page ${Math.min(page, pageCount)} of ${pageCount}`}
         </span>
         <span className="flex gap-3">
-          {page > 1 ? (
-            <a className="underline" href={hrefFor({ ...filters, page: page - 1 })}>
-              Previous
+          {outOfRange ? (
+            <a className="underline" href={hrefFor(filters)}>
+              Back to page 1
             </a>
-          ) : null}
-          {page < pageCount ? (
-            <a className="underline" href={hrefFor({ ...filters, page: page + 1 })}>
-              Next
-            </a>
-          ) : null}
+          ) : (
+            <>
+              {page > 1 ? (
+                <a className="underline" href={hrefFor({ ...filters, page: page - 1 })}>
+                  Previous
+                </a>
+              ) : null}
+              {page < pageCount ? (
+                <a className="underline" href={hrefFor({ ...filters, page: page + 1 })}>
+                  Next
+                </a>
+              ) : null}
+            </>
+          )}
         </span>
       </p>
     </main>

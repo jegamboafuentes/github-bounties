@@ -9,6 +9,13 @@ import { sanitizeUtmValue } from "./utm";
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
 const EXPORT_LIMIT = 5000;
+export const CONTACT_LIST_MAX_OFFSET = 100_000;
+
+/** Page 1 with no rows is an empty filter. A later empty page, or an offset past the cap, is out of range. */
+export function adminContactsOutOfRange(page: number, offset: number, contactCount: number): boolean {
+  if (offset > CONTACT_LIST_MAX_OFFSET) return true;
+  return page > 1 && contactCount === 0;
+}
 
 export type ContactListQuery = {
   search: string;
@@ -125,7 +132,7 @@ export function parseContactListQuery(input: {
     subscribed,
     utmCampaign,
     limit: parseBoundedInt(input.limit, DEFAULT_LIMIT, 1, MAX_LIMIT, "limit"),
-    offset: parseBoundedInt(input.offset, 0, 0, 100_000, "offset"),
+    offset: parseBoundedInt(input.offset, 0, 0, CONTACT_LIST_MAX_OFFSET, "offset"),
   };
 }
 

@@ -18,7 +18,6 @@ import {
   poolParticipants,
   users,
   type ApiKeyEnv,
-  type ApiKeyScope,
 } from "../../db/schema";
 import { lockEscrowFunds, refundEscrow } from "../../escrow/service";
 import { recordExactInbound } from "../../escrow/inbound";
@@ -38,7 +37,7 @@ import { PublicApiError } from "../public/errors";
 import { claimLegDestination } from "./claim-leg";
 import { refundApiSummary } from "./refund-summary";
 import type { AccessDeps, ApiKeyRecord, ClaimLegView, PoolLegAuth, SpendRow, WinnerLegAuth } from "./deps";
-import type { IdempotencyRow } from "./policy";
+import { storedApiKeyScopes, type IdempotencyRow } from "./policy";
 
 function asKey(row: typeof apiKeys.$inferSelect): ApiKeyRecord {
   return {
@@ -48,9 +47,7 @@ function asKey(row: typeof apiKeys.$inferSelect): ApiKeyRecord {
     env: row.env as ApiKeyEnv,
     prefix: row.prefix,
     keyHash: row.keyHash,
-    scopes: (row.scopes ?? []).filter((scope): scope is ApiKeyScope =>
-      scope === "read" || scope === "write" || scope === "money",
-    ),
+    scopes: storedApiKeyScopes(row.scopes),
     perTxCapUsdc: row.perTxCapUsdc,
     dailyCapUsdc: row.dailyCapUsdc,
     createdAt: row.createdAt,

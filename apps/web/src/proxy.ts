@@ -10,12 +10,15 @@ import { authConfig } from "@/auth/config";
 import { hasSessionSecret } from "@/auth/env";
 import { isProtectedApiPath, isProtectedPagePath } from "@/auth/paths";
 import { providerSignInLocation } from "@/auth/provider-signin-get";
-import { planUtmCookie, UTM_COOKIE_NAME } from "@/contacts/utm";
+import { planUtmForNavigation, UTM_COOKIE_NAME } from "@/contacts/utm";
 import { mappedHostHeader } from "@/lib/site-env";
 
 const { auth } = NextAuth(authConfig);
 
-function requestHost(req: { headers: Headers; nextUrl: URL }): string {
+function requestHost(req: {
+  headers: { get(name: string): string | null };
+  nextUrl: { host: string };
+}): string {
   return mappedHostHeader(req.headers) ?? req.nextUrl.host;
 }
 
@@ -92,16 +95,25 @@ export function malformedSignInPostStatus(req: {
 }
 
 type UtmRequest = {
+  method: string;
+  headers: { get(name: string): string | null };
   cookies: { get(name: string): { value: string } | undefined };
-  nextUrl: { pathname: string; searchParams: URLSearchParams };
+  nextUrl: { pathname: string; searchParams: URLSearchParams; host: string };
 };
 
-/** Stamp `gb_utm` on the response when this request is the first touch. */
+/**
+ * Stamp `gb_utm` only for a successful public HTML navigation.
+ * API, static, robots, sitemap, admin routes, redirects, and 404s do not.
+ */
 function stampUtm(response: NextResponse, req: UtmRequest): NextResponse {
-  const planned = planUtmCookie({
+  const planned = planUtmForNavigation({
+    method: req.method,
+    pathname: req.nextUrl.pathname,
+    adminHost: isAdminConsoleHost(requestHost(req)),
+    status: response.status,
+    rewritten: response.headers.has("x-middleware-rewrite"),
     existing: req.cookies.get(UTM_COOKIE_NAME)?.value,
     searchParams: req.nextUrl.searchParams,
-    pathname: req.nextUrl.pathname,
   });
   if (planned) response.cookies.set(planned.name, planned.value, planned.options);
   return response;
