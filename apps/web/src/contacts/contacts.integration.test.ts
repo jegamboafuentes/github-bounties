@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { describe, it } from "node:test";
 import { eq } from "drizzle-orm";
+import { handleV1Action } from "../api/access/http";
+import { createApiKey, listApiKeys } from "../api/access/handlers";
+import { createAccessDeps } from "../api/access/store";
+import { handleMcpHttp } from "../api/public/mcp-http";
 import { createDb } from "../db/client";
+import { closeRuntimeDb } from "../db/runtime";
 import { loadDotenvFiles } from "../db/load-dotenv";
 import { marketingContacts, users } from "../db/schema";
 import { importMarketingContacts, importMarketingContactsFromCsv } from "./import";
@@ -186,4 +191,128 @@ describe("marketing contacts", () => {
       await sql.end({ timeout: 5 });
     }
   });
+
+  it("keeps admin on a reloaded key for /me, REST contacts, and MCP contacts", async () => {
+    const { db, sql } = createDb();
+    const suffix = randomUUID().slice(0, 8);
+    const email = `ada-${suffix}@example.com`;
+    const userId = randomUUID();
+    const deps = createAccessDeps(
+      db,
+      {
+        ADMIN_EMAILS: email,
+        API_KEY_HMAC_SECRET: "test-hmac-secret-value",
+        CDP_NETWORK: "base-sepolia",
+      },
+      () => new Date("2026-10-03T00:00:00.000Z"),
+    );
+    try {
+      await db.insert(users).values({
+        id: userId,
+        googleSub: `google-admin-${suffix}`,
+        email,
+        displayName: "Ada Admin",
+      });
+      const adminKey = await createApiKey({ userId, name: "admin-agent", scopes: ["read", "admin"] }, deps);
+      const listed = await listApiKeys(userId, deps);
+      assert.deepEqual(listed.find((key) => key.id === adminKey.key.id)?.scopes, ["read", "admin"]);
+
+      const me = await handleV1Action(
+        new Request("https://dev.githubbounties.xyz/api/v1/me", {
+          headers: { authorization: `Bearer ${adminKey.token}` },
+        }),
+        { kind: "me" },
+        deps,
+      );
+      assert.equal(me.status, 200);
+      const meBody = (await me.json()) as { apiKey: { scopes: string[] } };
+      assert.deepEqual(meBody.apiKey.scopes, ["read", "admin"]);
+
+      const list = await handleV1Action(
+        new Request("https://dev.githubbounties.xyz/api/v1/admin/contacts", {
+          headers: { authorization: `Bearer ${adminKey.token}` },
+        }),
+        { kind: "admin-contacts" },
+        deps,
+      );
+      assert.equal(list.status, 200);
+      const listBody = (await list.json()) as { contacts: unknown[]; total: number };
+      assert.equal(Array.isArray(listBody.contacts), true);
+      assert.equal(typeof listBody.total, "number");
+
+      const count = await handleV1Action(
+        new Request("https://dev.githubbounties.xyz/api/v1/admin/contacts/count", {
+          headers: { authorization: `Bearer ${adminKey.token}` },
+        }),
+        { kind: "admin-contacts-count" },
+        deps,
+      );
+      assert.equal(count.status, 200);
+      const countBody = (await count.json()) as { total: number; bySource: { ghb: number } };
+      assert.equal(typeof countBody.total, "number");
+      assert.equal(typeof countBody.bySource.ghb, "number");
+
+      const listedContacts = await callContactsTool(adminKey.token, "list_contacts", deps);
+      assert.equal(listedContacts.isError, false);
+      assert.equal(Array.isArray((listedContacts.body as { contacts?: unknown[] }).contacts), true);
+      const counted = await callContactsTool(adminKey.token, "count_contacts", deps);
+      assert.equal(counted.isError, false);
+      assert.equal(typeof (counted.body as { total?: number }).total, "number");
+
+      const reader = await createApiKey({ userId, name: "reader", scopes: ["read"] }, deps);
+      for (const kind of ["admin-contacts", "admin-contacts-count"] as const) {
+        const denied = await handleV1Action(
+          new Request(`https://dev.githubbounties.xyz/api/v1/admin/contacts${kind === "admin-contacts-count" ? "/count" : ""}`, {
+            headers: { authorization: `Bearer ${reader.token}` },
+          }),
+          { kind },
+          deps,
+        );
+        assert.equal(denied.status, 403);
+        const body = (await denied.json()) as { error: { code: string } };
+        assert.equal(body.error.code, "forbidden_scope");
+      }
+      for (const name of ["list_contacts", "count_contacts"] as const) {
+        const denied = await callContactsTool(reader.token, name, deps);
+        assert.equal(denied.isError, true);
+        assert.equal((denied.body as { error: { code: string } }).error.code, "forbidden_scope");
+      }
+    } finally {
+      await closeRuntimeDb();
+      await sql.end({ timeout: 5 });
+    }
+  });
 });
+
+async function callContactsTool(
+  token: string,
+  name: "list_contacts" | "count_contacts",
+  deps: ReturnType<typeof createAccessDeps>,
+): Promise<{ isError: boolean; body: unknown }> {
+  const response = await handleMcpHttp(
+    new Request("https://dev.githubbounties.xyz/mcp", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: { name, arguments: {} },
+      }),
+    }),
+    deps,
+  );
+  assert.equal(response.status, 200);
+  const payload = (await response.json()) as {
+    result?: { isError?: boolean; content?: Array<{ text?: string }> };
+  };
+  const text = payload.result?.content?.[0]?.text ?? "";
+  return {
+    isError: payload.result?.isError === true,
+    body: text ? JSON.parse(text) : null,
+  };
+}
