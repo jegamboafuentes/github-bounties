@@ -78,6 +78,8 @@ SECRETS=(
   GEMINI_API_KEY
   RESEND_API_KEY
   API_KEY_HMAC_SECRET
+  HF_OAUTH_CLIENT_ID
+  HF_OAUTH_CLIENT_SECRET
 )
 
 # First-deploy --set-secrets (Ops: enabled versions present).
@@ -125,8 +127,14 @@ WEB_SKIP_SECRETS=(
 # a remount does not fail the rest of the deploy. PROD can stay without it
 # until keys are turned on there. Money stays off on mainnet unless
 # API_MONEY_ENABLED is explicitly set (plain env, not this list).
+# HF_OAUTH_CLIENT_ID / HF_OAUTH_CLIENT_SECRET: optional Hugging Face connect.
+# Not required. Attach each when an enabled SM version exists; skip when absent
+# so Cloud Build does not fail before the OAuth app exists. Connect stays off
+# until both are set. Not product login.
 WEB_OPTIONAL_SECRETS=(
   GEMINI_API_KEY
   RESEND_API_KEY
   API_KEY_HMAC_SECRET
+  HF_OAUTH_CLIENT_ID
+  HF_OAUTH_CLIENT_SECRET
 )

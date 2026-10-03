@@ -96,7 +96,10 @@ describe("public roadmap", () => {
       new RegExp(`${PUBLIC_API_VERSION.replace(/\./g, "\\.")} is the DEV and main API version`),
     );
     assert.match(byId.v4?.summary ?? "", /adds the provider field/);
-    assert.doesNotMatch(byId.v4?.summary ?? "", /version 4\.6\.0/);
+    assert.doesNotMatch(
+      byId.v4?.summary ?? "",
+      new RegExp(`version ${PUBLIC_API_VERSION.replace(/\./g, "\\.")}`),
+    );
     assert.doesNotMatch(byId.v4?.summary ?? "", /23 operations, 24 tools/);
     assert.match(byId.v4?.summary ?? "", /API money is OFF on PROD/);
     assert.doesNotMatch(byId.v4?.summary ?? "", /In planning/);
@@ -212,12 +215,13 @@ describe("public roadmap", () => {
     assert.match(surfaced?.summary ?? "", new RegExp(PUBLIC_API_VERSION.replace(/\./g, "\\.")));
     assert.match(docsRoadmap, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.match(readme, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    const version = PUBLIC_API_VERSION.replace(/\./g, "\\.");
     assert.match(docsRoadmap, /PROD serves 4\.5\.0/);
     assert.match(readme, /PROD serves 4\.5\.0/);
-    assert.match(docsRoadmap, /4\.6\.0 is the DEV and main API version/);
-    assert.match(readme, /4\.6\.0 is the DEV and main API version/);
-    assert.doesNotMatch(docsRoadmap, /version 4\.6\.0/);
-    assert.doesNotMatch(readme, /version 4\.6\.0/);
+    assert.match(docsRoadmap, new RegExp(`${version} is the DEV and main API version`));
+    assert.match(readme, new RegExp(`${version} is the DEV and main API version`));
+    assert.doesNotMatch(docsRoadmap, new RegExp(`version ${version}`));
+    assert.doesNotMatch(readme, new RegExp(`version ${version}`));
     assert.doesNotMatch(docsRoadmap, /23 operations, 24 tools/);
     assert.doesNotMatch(readme, /23 operations, 24 tools/);
   });

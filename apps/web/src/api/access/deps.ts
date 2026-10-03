@@ -1,6 +1,11 @@
 import type { Database } from "../../db/client";
 import type { ApiKeyEnv, ApiKeyScope, ApiSpendKind, ApiSpendStatus } from "../../db/schema";
-import type { AccountProfile, EmailNotificationPrefs, LinkedAccounts } from "../../profile/settings";
+import type {
+  AccountProfile,
+  EmailNotificationPrefs,
+  HuggingFaceAccount,
+  LinkedAccounts,
+} from "../../profile/settings";
 import type { MoneyAction } from "../../escrow/actor-log";
 import type { FacilitatorSettlementCheck } from "../../escrow/fund-hash";
 import type { X402SellerResult } from "../../escrow/x402-seller";
@@ -53,6 +58,7 @@ export type MeProfile = {
   email: string;
   walletAddress: string | null;
   githubLogin: string | null;
+  huggingface: HuggingFaceAccount | null;
 };
 
 export type MyBountyRow = {

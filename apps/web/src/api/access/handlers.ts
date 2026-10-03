@@ -463,6 +463,7 @@ export async function handleMe(principal: ApiPrincipal, deps: AccessDeps): Promi
       email: me.email,
       walletAddress: me.walletAddress,
       githubLogin: me.githubLogin,
+      huggingface: me.huggingface,
       apiKey: {
         id: principal.keyId,
         name: principal.name,

@@ -149,7 +149,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Current key owner",
       description:
-        "Requires API key (read scope). The human user that owns this API key. Does not include google_sub.",
+        "Requires API key (read scope). The human user that owns this API key. Includes huggingface {username, linkedAt} or null. Does not include google_sub.",
       inputSchema: emptyToolSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
@@ -494,7 +494,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Linked accounts",
       description:
-        "Requires API key (read scope). GitHub login, id, and linkedAt, the full Google email, and the saved wallet address. Read-only. Linking, unlinking, and wallet changes are not tools.",
+        "Requires API key (read scope). GitHub login, id, and linkedAt, huggingface {username, linkedAt} or null, the full Google email, and the saved wallet address. Read-only. Linking, unlinking, and wallet changes are not tools.",
       inputSchema: emptyToolSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },

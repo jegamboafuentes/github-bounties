@@ -2,8 +2,11 @@ import Link from "next/link";
 import { requirePageUser } from "@/auth/protect";
 import { AppHeader } from "@/components/header";
 import { ConnectGitHubButton } from "@/components/connect-github";
+import { ConnectHuggingFaceButton } from "@/components/connect-huggingface";
 import { DisconnectGitHubButton } from "@/components/disconnect-github";
+import { DisconnectHuggingFaceButton } from "@/components/disconnect-huggingface";
 import { GitHubAvatar } from "@/components/github-avatar";
+import { HuggingFaceAvatar } from "@/components/huggingface-avatar";
 import { WalletForm } from "@/components/wallet-form";
 import { signOutToHome } from "@/app/actions/auth";
 import { loadSettingsApiKeys } from "@/app/actions/api-keys";
@@ -12,6 +15,8 @@ import { isAdminIdentity } from "@/admin/identity";
 import { PRODUCT_NAME } from "@/lib/constants";
 import { getRuntimeDb } from "@/db/runtime";
 import { findGithubLinkByUserId } from "@/github/persist";
+import { hfOAuthConfigured } from "@/huggingface/env";
+import { findHfLinkByUserId } from "@/huggingface/persist";
 import { missingGitHubAppInstallEnv } from "@/webhooks/env";
 import { walletConnectConfigured } from "@/wallet/env";
 import { loadEmailNotificationPreferences } from "@/profile/settings";
@@ -28,6 +33,9 @@ export default async function SettingsPage({
   const query = await searchParams;
   const db = getRuntimeDb();
   const link = await findGithubLinkByUserId(user.id, db);
+  const hfLink = await findHfLinkByUserId(user.id, db);
+  const hfConnectEnabled = hfOAuthConfigured();
+  const showHuggingFace = hfConnectEnabled || Boolean(hfLink);
   const missingApp = missingGitHubAppInstallEnv();
   const apiKeys = await loadSettingsApiKeys(user.id, user.wallet_address);
   const emailPrefs = await loadEmailNotificationPreferences(db, user.id);
@@ -84,6 +92,21 @@ export default async function SettingsPage({
               )}
             </dd>
           </div>
+          {showHuggingFace ? (
+            <div className="grid gap-1 px-4 py-3 sm:grid-cols-3 sm:gap-4">
+              <dt className="text-xs uppercase tracking-wide text-zinc-500">Hugging Face</dt>
+              <dd className="sm:col-span-2">
+                {hfLink ? (
+                  <span className="inline-flex items-center gap-2 font-medium">
+                    <HuggingFaceAvatar username={hfLink.hfUsername} avatarUrl={hfLink.hfAvatarUrl} size={24} />
+                    {hfLink.hfUsername}
+                  </span>
+                ) : (
+                  <span className="text-zinc-500">Not linked</span>
+                )}
+              </dd>
+            </div>
+          ) : null}
         </dl>
 
         <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
@@ -250,6 +273,46 @@ export default async function SettingsPage({
             </p>
           ) : null}
         </section>
+
+        {showHuggingFace ? (
+          <section className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+              Hugging Face connection
+            </h2>
+            <p className="text-sm font-medium">
+              {hfLink ? (
+                <span className="inline-flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
+                  Connected
+                  <HuggingFaceAvatar username={hfLink.hfUsername} avatarUrl={hfLink.hfAvatarUrl} size={24} />
+                  <span>{hfLink.hfUsername}</span>
+                </span>
+              ) : (
+                <span className="text-zinc-500">Not connected</span>
+              )}
+            </p>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Product login stays Google. Connect stores the Hugging Face user id, username,
+              and avatar on <code>hf_links</code>. Scopes are <code>openid</code> and{" "}
+              <code>profile</code>. Access tokens are not stored.
+            </p>
+            {hfConnectEnabled ? (
+              <div className="flex flex-wrap items-center gap-3">
+                {hfLink ? <DisconnectHuggingFaceButton username={hfLink.hfUsername} /> : null}
+                <ConnectHuggingFaceButton />
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500">
+                Connect is off in this environment until Hugging Face OAuth is configured.
+              </p>
+            )}
+            {hfLink ? (
+              <p className="text-xs text-zinc-500">
+                Disconnect deletes this user&apos;s <code>hf_links</code> row only. It does
+                not sign out of Google or delete bounties and claims.
+              </p>
+            ) : null}
+          </section>
+        ) : null}
 
         <form action={signOutToHome}>
           <button

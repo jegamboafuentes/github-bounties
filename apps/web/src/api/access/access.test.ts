@@ -65,6 +65,7 @@ function memory(options?: {
   env?: NodeJS.ProcessEnv;
   wallet?: boolean;
   github?: boolean;
+  huggingface?: { username: string; linkedAt: string } | null;
   face?: string;
   status?: string;
   poster?: string;
@@ -181,6 +182,7 @@ function memory(options?: {
         email: "ada@example.com",
         walletAddress: options?.wallet === false ? null : PAYER,
         githubLogin: options?.github === false ? null : "ada",
+        huggingface: options?.huggingface === undefined ? null : options.huggingface,
       };
     },
     async loadAccountProfile(userId) {
@@ -237,6 +239,7 @@ function memory(options?: {
           options?.github === false
             ? null
             : { login: "ada", id: "583231", linkedAt: "2026-09-01T00:00:00.000Z" },
+        huggingface: options?.huggingface === undefined ? null : options.huggingface,
         wallet: { address: options?.wallet === false ? null : PAYER },
       };
     },
@@ -1542,11 +1545,13 @@ describe("profile, notifications, and linked accounts", () => {
     const accounts = (await linked.json()) as {
       google: { email: string };
       github: { login: string; id: string } | null;
+      huggingface: { username: string; linkedAt: string } | null;
       wallet: { address: string | null };
     };
     assert.equal(accounts.google.email, "ada@example.com");
     assert.equal(accounts.github?.login, "ada");
     assert.equal(accounts.github?.id, "583231");
+    assert.equal(accounts.huggingface, null);
     assert.equal(accounts.wallet.address, PAYER);
 
     const unlinked = memory({ github: false, wallet: false });
@@ -1558,9 +1563,71 @@ describe("profile, notifications, and linked accounts", () => {
       { kind: "linked-accounts" },
       unlinked.deps,
     );
-    const bareBody = (await bareAccounts.json()) as { github: null; wallet: { address: string | null } };
+    const bareBody = (await bareAccounts.json()) as {
+      github: null;
+      huggingface: null;
+      wallet: { address: string | null };
+    };
     assert.equal(bareBody.github, null);
+    assert.equal(bareBody.huggingface, null);
     assert.equal(bareBody.wallet.address, null);
+  });
+
+  it("returns huggingface username and linkedAt on REST me and linked-accounts", async () => {
+    const linkedAt = "2026-10-02T15:04:05.000Z";
+    const bag = memory({ huggingface: { username: "lysandre", linkedAt } });
+    const { token } = await principal(bag.deps, ["read"]);
+    const me = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me", {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      { kind: "me" },
+      bag.deps,
+    );
+    assert.equal(me.status, 200);
+    const meBody = (await me.json()) as {
+      githubLogin: string | null;
+      huggingface: { username: string; linkedAt: string } | null;
+    };
+    assert.equal(meBody.githubLogin, "ada");
+    assert.deepEqual(meBody.huggingface, { username: "lysandre", linkedAt });
+
+    const denied = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/linked-accounts", {
+        headers: { authorization: `Bearer ${token.replace(/./g, "x")}` },
+      }),
+      { kind: "linked-accounts" },
+      bag.deps,
+    );
+    assert.equal(denied.status, 401);
+    assert.equal(((await denied.json()) as { error: { code: string } }).error.code, "unauthorized");
+
+    const { token: writer } = await principal(bag.deps, ["write"]);
+    const forbidden = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/linked-accounts", {
+        headers: { authorization: `Bearer ${writer}` },
+      }),
+      { kind: "linked-accounts" },
+      bag.deps,
+    );
+    assert.equal(forbidden.status, 403);
+    assert.equal(((await forbidden.json()) as { error: { code: string } }).error.code, "forbidden_scope");
+
+    const linked = await handleV1Action(
+      new Request("https://dev.githubbounties.xyz/api/v1/me/linked-accounts", {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      { kind: "linked-accounts" },
+      bag.deps,
+    );
+    assert.equal(linked.status, 200);
+    assert.equal(linked.headers.get("ratelimit-limit"), "120");
+    const accounts = (await linked.json()) as {
+      github: { login: string };
+      huggingface: { username: string; linkedAt: string } | null;
+    };
+    assert.equal(accounts.github.login, "ada");
+    assert.deepEqual(accounts.huggingface, { username: "lysandre", linkedAt });
   });
 
   it("updates the display name on the write limit and rejects wallet and unknown fields", async () => {

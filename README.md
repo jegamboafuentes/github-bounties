@@ -19,7 +19,7 @@ This is **not** Lightning Bounties, LB1, or “Lightning Bounties 2”. Older pr
 
 ## Status now
 
-As of **2026-10-03**. No invented ship dates. `/roadmap`, About, and [docs/roadmap.md](docs/roadmap.md) use this list. Chain differs by environment. PROD serves API 4.5.0. 4.6.0 is the DEV and main API version and adds the provider field. The homepage has no roadmap section.
+As of **2026-10-03**. No invented ship dates. `/roadmap`, About, and [docs/roadmap.md](docs/roadmap.md) use this list. Chain differs by environment. PROD serves API 4.5.0. 4.7.0 is the DEV and main API version and adds the provider field. The homepage has no roadmap section.
 
 | Environment | URL | Chain |
 | --- | --- | --- |
@@ -34,12 +34,12 @@ As of **2026-10-03**. No invented ship dates. `/roadmap`, About, and [docs/roadm
 - **FE epic** — LIVE on PROD 2026-09-20. Homepage stats, public roadmap, and vs-Lightning differentiators. Same aggregates as GET /api/stats. Bounty pages include the payout split charts.
 - **V3 wave** — LIVE on PROD 2026-09-21. Full GitHub issue + Gemini about/stack/complexity (AI estimates, cached). Related polish: board badges/filters, Settings/Post connected-only, homepage motion/roadmap refresh.
 - **Funding wave** — LIVE on PROD 2026-09-24. Crowdfunding (#61): USDC top-ups on already-funded bounties. Fund any public issue (#64) without installing the GitHub App, with Claim running through the public merge poller. Funder avatars (#65 to #67) on the board cards and on the bounty page Funders list.
-- **V4 — API + MCP.** LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp (#76 #79 #80 #81 #78). API money is OFF on PROD. PROD serves 4.5.0. 4.6.0 is the DEV and main API version (24 operations, 25 tools) and adds the provider field. [MCP](https://githubbounties.xyz/mcp).
+- **V4 — API + MCP.** LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp (#76 #79 #80 #81 #78). API money is OFF on PROD. PROD serves 4.5.0. 4.7.0 is the DEV and main API version (24 operations, 25 tools) and adds the provider field. [MCP](https://githubbounties.xyz/mcp).
 - **V5 — MCP page, unfunded edits, admin.** DONE. `/mcp` is the MCP server endpoint and its docs page. Posters edit an unfunded bounty amount on the web, REST, and MCP (`update_bounty_amount`). The admin dashboard on admin hosts sets fee and pool, lists bounties with trash and refund, gates refunds on `ADMIN_REFUND_ENABLED`, and gates fee-wallet withdraws on `ADMIN_WITHDRAW_ENABLED` with a single-use confirm token and a duplicate guard. Admin actions write an admin audit log. No recorded PROD date.
 
 ### In progress
 
-- **V6 — Hugging Face.** Bounties on Hugging Face discussions and PRs. In progress. No ship date. Every bounty has `provider`: `github` or `huggingface` (existing rows stay `github`). REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. No env change. GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
+- **V6 — Hugging Face.** Bounties on Hugging Face discussions and PRs. In progress. No ship date. Every bounty has `provider`: `github` or `huggingface` (existing rows stay `github`). REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. A signed-in Google user can connect a Hugging Face account when `HF_OAUTH_CLIENT_ID` and `HF_OAUTH_CLIENT_SECRET` are set. Those secrets are optional. GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
 
 ### Next
 
@@ -100,7 +100,7 @@ Admin actions (settings, delete, refund, withdraw) write `admin_audit_log` (acto
 | `0013_bounty_amount_changes` | `bounty_amount_changes` (`web`, `rest`, `mcp`) |
 | `0014_admin_settings_delete_audit` | `platform_settings`, bounty `fee_bps` / `deleted_at` / `deleted_by`, `admin_audit_log`, `admin` API-key scope |
 | `0015_fee_withdraw_guards` | `withdraw_confirm_tokens`, `fee_withdrawals` (one row per token; one `pending` or `unknown` row per fee wallet) |
-| `0016_hf_provider` | `provider` on bounties, repos, and webhook deliveries (`github` or `huggingface`, default `github`); unused `hf_links` and `bounty_submissions`. Apply on DEV before remount. No env change. |
+| `0016_hf_provider` | `provider` on bounties, repos, and webhook deliveries (`github` or `huggingface`, default `github`); `hf_links` (Connect Hugging Face) and `bounty_submissions` (unused until submit). Apply on DEV before remount. No new migration for connect. |
 
 ### Environment
 
@@ -163,6 +163,28 @@ Every bounty has `provider`: `github` or `huggingface`. Existing rows stay `gith
 ## RepoProvider
 
 GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
+
+## Hugging Face
+
+Product login stays **Google**. Hugging Face is a second linked account, the same idea as Connect GitHub. It is off until both OAuth secrets are set. Settings hides **Connect Hugging Face** in that case, and `GET`/`POST /api/huggingface/connect`, `GET /huggingface/callback`, and `POST /api/huggingface/disconnect` return **503** `hf_not_configured`. GitHub connect is unchanged.
+
+A signed-in user opens **Settings → Connect Hugging Face**. The app starts an OAuth authorization-code flow with PKCE (`S256`) and scope `openid profile` only. The callback writes one `hf_links` row: Hugging Face user id (`sub`), username (`preferred_username`), https avatar, and `linked_at`. One Hugging Face account per user and one user per Hugging Face account. A second user who tries to link an account that is already linked is refused. **Disconnect** deletes that user's `hf_links` row and does not sign out of Google. Access tokens are not stored.
+
+`GET /api/v1/me/linked-accounts` and MCP `list_linked_accounts` (read scope) include `huggingface: { username, linkedAt } | null` next to the existing GitHub object. MCP `get_me` and `GET /api/v1/me` include the same `huggingface` field. Linking and unlinking stay on Settings. They are not API or MCP tools.
+
+| Variable | Where |
+| --- | --- |
+| `HF_OAUTH_CLIENT_ID` | Optional Secret Manager secret. `WEB_OPTIONAL_SECRETS`. Attach when an enabled version exists. Skip when it does not, so Cloud Build does not require it. |
+| `HF_OAUTH_CLIENT_SECRET` | Same. Not stored in git. |
+| `PUBLIC_BASE_URL`, then `AUTH_URL` | Origin of the redirect URI. Local fallback is `http://localhost:3000`. |
+
+Register these redirect URIs on the Hugging Face OAuth app. The path is fixed.
+
+| Environment | Redirect URI |
+| --- | --- |
+| DEV | `https://dev.githubbounties.xyz/huggingface/callback` |
+| PROD | `https://githubbounties.xyz/huggingface/callback` |
+| Local | `http://localhost:3000/huggingface/callback` |
 
 ## Local development
 
