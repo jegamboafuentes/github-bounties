@@ -95,6 +95,10 @@ Product app: [`apps/web`](apps/web) (Next.js App Router, Drizzle, Cloud Run `sta
 
 Every bounty has `provider`: `github` or `huggingface`. Existing rows stay `github`. REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. No env change.
 
+## RepoProvider
+
+GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
+
 ## Local development
 
 ```bash
