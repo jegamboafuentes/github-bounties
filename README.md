@@ -91,6 +91,10 @@ Decisions, sequences, and failure modes:
 
 Product app: [`apps/web`](apps/web) (Next.js App Router, Drizzle, Cloud Run `standalone`).
 
+## Provider field
+
+Every bounty has `provider`: `github` or `huggingface`. Existing rows stay `github`. REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. No env change.
+
 ## Local development
 
 ```bash
