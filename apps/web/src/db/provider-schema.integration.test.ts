@@ -299,7 +299,7 @@ describe("0016_hf_provider on a seeded database", () => {
           order by created_at desc
           limit 1
         `;
-        assert.equal(applied[0]?.created_at, "1791100000000");
+        assert.equal(applied[0]?.created_at, "1791200000000");
         const columns = await empty.sql<{ column_name: string; column_default: string | null }[]>`
           select column_name, column_default
           from information_schema.columns
@@ -328,6 +328,12 @@ describe("0016_hf_provider on a seeded database", () => {
             and column_name = 'hf_author'
         `;
         assert.equal(authorColumn[0]?.column_name, "hf_author");
+        const contacts = await empty.sql<{ table_name: string }[]>`
+          select table_name
+          from information_schema.tables
+          where table_schema = 'public' and table_name = 'marketing_contacts'
+        `;
+        assert.equal(contacts[0]?.table_name, "marketing_contacts");
 
         const suffix = randomUUID().slice(0, 8);
         const userId = randomUUID();

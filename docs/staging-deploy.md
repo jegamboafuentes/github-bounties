@@ -250,6 +250,8 @@ Cloud Run `--set-secrets=ENV=NAME:latest`. Names only.
 | `API_KEY_HMAC_SECRET` | `API_KEY_HMAC_SECRET` | **optional** | V4-2 API key HMAC-SHA256. **DEV:** create a Secret Manager version (16+ characters) and remount so `API_KEY_HMAC_SECRET=API_KEY_HMAC_SECRET:latest` attaches. Skip cleanly when absent (keys then fail closed). Same `WEB_OPTIONAL_SECRETS` rule as `GEMINI_API_KEY`. Not required on PROD until keys are enabled there. |
 | `HF_OAUTH_CLIENT_ID` | `HF_OAUTH_CLIENT_ID` | **optional** | Hugging Face connect. Not product login. `WEB_OPTIONAL_SECRETS`: attach when an enabled version exists, skip when absent. Connect stays off until this and the secret are both set. |
 | `HF_OAUTH_CLIENT_SECRET` | `HF_OAUTH_CLIENT_SECRET` | **optional** | Pair of `HF_OAUTH_CLIENT_ID`. Same skip-if-absent rule. Not required for Cloud Build. |
+| `RESEND_AUDIENCE_ID` | `RESEND_AUDIENCE_ID` | **optional** | Campaign list audience. Same skip-if-absent rule. Unset means contact sync is a no-op. |
+| `RESEND_WEBHOOK_SECRET` | `RESEND_WEBHOOK_SECRET` | **optional** | Svix signing secret for `POST /api/webhooks/resend`. Same skip-if-absent rule. Unset rejects the webhook. |
 
 Plain env (not Secret Manager):
 
@@ -271,7 +273,7 @@ Plain env (not Secret Manager):
 
 `--set-secrets` fails if the named secret has **no enabled version**.
 
-`GEMINI_API_KEY`, `RESEND_API_KEY`, `API_KEY_HMAC_SECRET`, `HF_OAUTH_CLIENT_ID`, and `HF_OAUTH_CLIENT_SECRET` are `WEB_OPTIONAL_SECRETS` in [`infra/gcloud/config.sh`](../infra/gcloud/config.sh). `deploy-web.sh` (static and discover) attaches each when Secret Manager has an enabled version so a full DEV remount with `--set-secrets` does not drop an existing mount. If a secret is missing, the deploy skips it: the bounty page degrades the intelligence card, welcome mail stays pending, and Hugging Face connect stays off. **PROD is not wired** for the Gemini, Resend, or API-key secrets until those features are turned on there. The Hugging Face secrets follow the same skip-if-absent rule on DEV and PROD.
+`GEMINI_API_KEY`, `RESEND_API_KEY`, `API_KEY_HMAC_SECRET`, `HF_OAUTH_CLIENT_ID`, `HF_OAUTH_CLIENT_SECRET`, `RESEND_AUDIENCE_ID`, and `RESEND_WEBHOOK_SECRET` are `WEB_OPTIONAL_SECRETS` in [`infra/gcloud/config.sh`](../infra/gcloud/config.sh). `deploy-web.sh` (static and discover) attaches each when Secret Manager has an enabled version so a full DEV remount with `--set-secrets` does not drop an existing mount. If a secret is missing, the deploy skips it: the bounty page degrades the intelligence card, welcome mail stays pending, Hugging Face connect stays off, and campaign contact sync stays a no-op. **PROD is not wired** for the Gemini, Resend, or API-key secrets until those features are turned on there. The Hugging Face and campaign-list secrets follow the same skip-if-absent rule on DEV and PROD.
 
 Rotate: add a new SM version, then deploy a no-op revision (or re-submit this
 build) so instances restart. See [gcp-bootstrap.md](gcp-bootstrap.md#rotate-secrets).

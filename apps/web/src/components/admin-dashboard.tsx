@@ -216,7 +216,10 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
         <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Admin</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">GitHub Bounties</h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          {data.actorEmail} · {data.network}. Escrow is view only.
+          {data.actorEmail} · {data.network}. Escrow is view only.{" "}
+          <a className="underline" href="/admin/contacts">
+            Contacts
+          </a>
         </p>
       </header>
 

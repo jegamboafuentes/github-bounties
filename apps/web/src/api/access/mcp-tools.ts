@@ -35,6 +35,7 @@ import { PublicApiError } from "../public/errors";
 import { logMcpToolCall, mcpOutcomeCode, mcpOutcomeFromBody } from "../public/mcp-log";
 import { apiMoneyEnabled, assertNoAddress, assertNoUserOverride } from "./policy";
 import { apiKeyRequiredMessage, moneyScopeRequirement } from "./money-wording";
+import { handleCountContacts, handleListContactsArgs } from "../../contacts/http";
 import {
   bountyClaimsToolSchema,
   cancelToolSchema,
@@ -556,6 +557,45 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
       guarded(access, "write", `tool:withdraw_submission ${args.id}`, args.id, () => {
         rejectUnknownToolArgs(args, ["id"]);
         return handleWithdrawSubmission(requirePrincipal(access?.principal), args.id, access!.deps);
+      }),
+  );
+
+  server.registerTool(
+    "list_contacts",
+    {
+      title: "List marketing contacts",
+      description:
+        "Requires API key (admin scope). Search campaign contacts by email, name, or GitHub username. Filter by source (ghb, lb1, both), subscribed, and utm_campaign. Paginated. Each contact includes utmCampaign. A key without the admin scope is forbidden_scope.",
+      inputSchema: z.object({
+        search: z.string().optional(),
+        source: z.enum(["ghb", "lb1", "both"]).optional(),
+        subscribed: z.boolean().optional(),
+        utm_campaign: z.string().optional(),
+        limit: z.number().int().optional(),
+        offset: z.number().int().optional(),
+      }),
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) =>
+      guarded(access, "read", "tool:list_contacts", null, () => {
+        rejectUnknownToolArgs(args, ["search", "source", "subscribed", "utm_campaign", "limit", "offset"]);
+        return handleListContactsArgs(requirePrincipal(access?.principal), args, access!.deps);
+      }),
+  );
+
+  server.registerTool(
+    "count_contacts",
+    {
+      title: "Count marketing contacts",
+      description:
+        "Requires API key (admin scope). Totals for the campaign list: total, subscribed, unsubscribed, counts by source, and counts by utm_campaign and utm_content. A key without the admin scope is forbidden_scope.",
+      inputSchema: emptyToolSchema,
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+    },
+    async (args) =>
+      guarded(access, "read", "tool:count_contacts", null, () => {
+        rejectUnknownToolArgs(args, []);
+        return handleCountContacts(requirePrincipal(access?.principal), access!.deps);
       }),
   );
 }

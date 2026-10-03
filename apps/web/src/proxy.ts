@@ -10,6 +10,7 @@ import { authConfig } from "@/auth/config";
 import { hasSessionSecret } from "@/auth/env";
 import { isProtectedApiPath, isProtectedPagePath } from "@/auth/paths";
 import { providerSignInLocation } from "@/auth/provider-signin-get";
+import { planUtmCookie, UTM_COOKIE_NAME } from "@/contacts/utm";
 import { mappedHostHeader } from "@/lib/site-env";
 
 const { auth } = NextAuth(authConfig);
@@ -90,6 +91,22 @@ export function malformedSignInPostStatus(req: {
   return 400;
 }
 
+type UtmRequest = {
+  cookies: { get(name: string): { value: string } | undefined };
+  nextUrl: { pathname: string; searchParams: URLSearchParams };
+};
+
+/** Stamp `gb_utm` on the response when this request is the first touch. */
+function stampUtm(response: NextResponse, req: UtmRequest): NextResponse {
+  const planned = planUtmCookie({
+    existing: req.cookies.get(UTM_COOKIE_NAME)?.value,
+    searchParams: req.nextUrl.searchParams,
+    pathname: req.nextUrl.pathname,
+  });
+  if (planned) response.cookies.set(planned.name, planned.value, planned.options);
+  return response;
+}
+
 function withRobots(response: NextResponse, robots: boolean): NextResponse {
   if (robots) response.headers.set("x-robots-tag", ADMIN_ROBOTS_HEADER);
   return response;
@@ -115,19 +132,25 @@ const sessionProxy = auth((req) => {
   const decision = classifyHostRequest(host, pathname);
   const signedIn = hasSessionSecret() && Boolean(req.auth);
 
-  if (decision.action === "not_found") return notFound(decision.robots);
+  if (decision.action === "not_found") return stampUtm(notFound(decision.robots), req);
   if (decision.action === "robots") {
-    return withRobots(
-      new NextResponse(ADMIN_ROBOTS_TXT, { headers: { "content-type": "text/plain; charset=utf-8" } }),
-      true,
+    return stampUtm(
+      withRobots(
+        new NextResponse(ADMIN_ROBOTS_TXT, { headers: { "content-type": "text/plain; charset=utf-8" } }),
+        true,
+      ),
+      req,
     );
   }
 
   const effective = decision.action === "rewrite" ? decision.pathname : pathname;
   if (isProtectedApiPath(effective) && !signedIn) {
-    return withRobots(
-      NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 }),
-      decision.robots,
+    return stampUtm(
+      withRobots(
+        NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 }),
+        decision.robots,
+      ),
+      req,
     );
   }
 
@@ -137,16 +160,16 @@ const sessionProxy = auth((req) => {
     // and not from a Host header that failed the allowlist.
     const location = providerSignInLocation(process.env, effective, host);
     const signin = location.startsWith("/") ? new URL(location, req.nextUrl.origin) : new URL(location);
-    return withRobots(NextResponse.redirect(signin), decision.robots);
+    return stampUtm(withRobots(NextResponse.redirect(signin), decision.robots), req);
   }
 
   if (decision.action === "rewrite") {
     const url = req.nextUrl.clone();
     url.pathname = decision.pathname;
-    return withRobots(NextResponse.rewrite(url), true);
+    return stampUtm(withRobots(NextResponse.rewrite(url), true), req);
   }
 
-  return withRobots(NextResponse.next(), decision.robots);
+  return stampUtm(withRobots(NextResponse.next(), decision.robots), req);
 });
 
 /**
@@ -181,15 +204,18 @@ export default function proxy(
   const host = requestHost(req);
   const decision = classifyHostRequest(host, pathname);
 
-  if (decision.action === "not_found") return notFound(decision.robots);
+  if (decision.action === "not_found") return stampUtm(notFound(decision.robots), req);
   if (decision.action === "robots") {
-    return withRobots(
-      new NextResponse(ADMIN_ROBOTS_TXT, { headers: { "content-type": "text/plain; charset=utf-8" } }),
-      true,
+    return stampUtm(
+      withRobots(
+        new NextResponse(ADMIN_ROBOTS_TXT, { headers: { "content-type": "text/plain; charset=utf-8" } }),
+        true,
+      ),
+      req,
     );
   }
   if (!needsSession(pathname, host)) {
-    return withRobots(NextResponse.next(), decision.robots);
+    return stampUtm(withRobots(NextResponse.next(), decision.robots), req);
   }
   return sessionProxy(req, event);
 }

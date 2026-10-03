@@ -12,6 +12,7 @@ import { backfillUnlinkedPoolParticipants } from "../webhooks/pool";
 import { upsertGithubLink, upsertInstallationRepos } from "./persist";
 import { githubAppOAuthUrl, githubCallbackUrl, publicAppOrigin } from "./urls";
 import { signGitHubConnectState, verifyGitHubConnectState } from "./state";
+import { recordGithubUsernameSafe } from "../contacts/persist";
 
 export type GitHubCompleteInput = {
   userId: string;
@@ -100,6 +101,10 @@ export async function completeGitHubAppReturn(
           err,
         );
       }
+      await recordGithubUsernameSafe(db, {
+        userId: input.userId,
+        githubUsername: row.githubLogin,
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "GitHub user OAuth failed";
       return { ok: false, error: "oauth_failed", message };

@@ -153,6 +153,14 @@ export const users = pgTable(
      * Google sign-in keeps refreshing display_name only while this is false.
      */
     displayNameCustom: boolean("display_name_custom").notNull().default(false),
+    /** First-touch campaign params copied from the `gb_utm` cookie at sign-up. */
+    utmSource: text("utm_source"),
+    utmMedium: text("utm_medium"),
+    utmCampaign: text("utm_campaign"),
+    utmContent: text("utm_content"),
+    utmTerm: text("utm_term"),
+    signupLandingPath: text("signup_landing_path"),
+    attributedAt: timestamp("attributed_at", { withTimezone: true, mode: "date" }),
     ...timestamps,
   },
   (table) => [
@@ -1100,6 +1108,50 @@ export const bountySubmissions = pgTable(
     check("bounty_submissions_pr_positive", sql`${table.prNumber} > 0`),
     check("bounty_submissions_pr_url_present", sql`length(trim(${table.prUrl})) > 0`),
     check("bounty_submissions_status_present", sql`length(trim(${table.status})) > 0`),
+  ],
+);
+
+/** Campaign list. `ghb` is a GitHub Bounties sign-up, `lb1` is the imported list, `both` is a person in both. */
+export const marketingContactSourceEnum = pgEnum("marketing_contact_source", ["ghb", "lb1", "both"]);
+
+export const MARKETING_CONTACT_SOURCES = ["ghb", "lb1", "both"] as const;
+
+export type MarketingContactSource = (typeof MARKETING_CONTACT_SOURCES)[number];
+
+/**
+ * One row per mailbox. `email` is stored lowercase and trimmed.
+ * `subscribed` starts true. Nothing in this app sets it back to true after it is false.
+ */
+export const marketingContacts = pgTable(
+  "marketing_contacts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    email: text("email").notNull(),
+    firstName: text("first_name"),
+    lastName: text("last_name"),
+    githubUsername: text("github_username"),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    source: marketingContactSourceEnum("source").notNull(),
+    lb1Status: text("lb1_status"),
+    contactType: text("contact_type"),
+    subscribed: boolean("subscribed").notNull().default(true),
+    unsubscribedAt: timestamp("unsubscribed_at", { withTimezone: true, mode: "date" }),
+    resendContactId: text("resend_contact_id"),
+    resendSyncedAt: timestamp("resend_synced_at", { withTimezone: true, mode: "date" }),
+    utmSource: text("utm_source"),
+    utmMedium: text("utm_medium"),
+    utmCampaign: text("utm_campaign"),
+    utmContent: text("utm_content"),
+    utmTerm: text("utm_term"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("marketing_contacts_email_uidx").on(table.email),
+    index("marketing_contacts_user_id_idx").on(table.userId),
+    index("marketing_contacts_source_idx").on(table.source),
+    index("marketing_contacts_utm_campaign_idx").on(table.utmCampaign),
+    check("marketing_contacts_email_present", sql`length(btrim(${table.email})) > 0`),
+    check("marketing_contacts_email_normalized", sql`${table.email} = lower(btrim(${table.email}))`),
   ],
 );
 

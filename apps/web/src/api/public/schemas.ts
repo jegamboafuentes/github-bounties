@@ -481,6 +481,7 @@ export const PUBLIC_API_DESCRIPTION = [
   "Funder avatars and the funders route are newest contribution first, matching the board avatar stack. Avatars are distinct funders, capped at five. The funders route is one row per contribution.",
   "Rate limit: about 60 requests per minute per client IP, counted in memory on each Cloud Run instance. It is not a global limit across instances. The client IP is the last address in X-Forwarded-For (the hop Cloud Run appends). A limited response is HTTP 429 with error code rate_limited, Retry-After, and RateLimit-Limit, RateLimit-Remaining, and RateLimit-Reset headers.",
   "Authenticated calls use Authorization: Bearer and no cookies. Per key, reads are 120/minute, writes are 20/minute, and money calls are 10/hour. Those counters are rows in api_request_log so they hold across Cloud Run instances. Money endpoints stay off when CDP_NETWORK=base unless API_MONEY_ENABLED is explicitly on.",
+  "GET /api/v1/admin/contacts and GET /api/v1/admin/contacts/count require an API key with the admin scope. A key without it receives 403 forbidden_scope. The Contacts page on the admin host uses an admin session and is not this API.",
 ].join("\n\n");
 
 registerAccessOpenApi(publicApiRegistry);

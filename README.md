@@ -34,7 +34,7 @@ As of **2026-10-03**. No invented ship dates. `/roadmap`, About, and [docs/roadm
 - **FE epic** — LIVE on PROD 2026-09-20. Homepage stats, public roadmap, and vs-Lightning differentiators. Same aggregates as GET /api/stats. Bounty pages include the payout split charts.
 - **V3 wave** — LIVE on PROD 2026-09-21. Full GitHub issue + Gemini about/stack/complexity (AI estimates, cached). Related polish: board badges/filters, Settings/Post connected-only, homepage motion/roadmap refresh.
 - **Funding wave** — LIVE on PROD 2026-09-24. Crowdfunding (#61): USDC top-ups on already-funded bounties. Fund any public issue (#64) without installing the GitHub App, with Claim running through the public merge poller. Funder avatars (#65 to #67) on the board cards and on the bounty page Funders list.
-- **V4 — API + MCP.** LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp (#76 #79 #80 #81 #78). API money is OFF on PROD. PROD serves 4.5.0. 4.10.0 is the DEV and main API version (27 operations, 28 tools) and adds the provider field. [MCP](https://githubbounties.xyz/mcp).
+- **V4 — API + MCP.** LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp (#76 #79 #80 #81 #78). API money is OFF on PROD. PROD serves 4.5.0. 4.10.0 is the DEV and main API version (29 operations, 30 tools) and adds the provider field. [MCP](https://githubbounties.xyz/mcp).
 - **V5 — MCP page, unfunded edits, admin.** DONE. `/mcp` is the MCP server endpoint and its docs page. Posters edit an unfunded bounty amount on the web, REST, and MCP (`update_bounty_amount`). The admin dashboard on admin hosts sets fee and pool, lists bounties with trash and refund, gates refunds on `ADMIN_REFUND_ENABLED`, and gates fee-wallet withdraws on `ADMIN_WITHDRAW_ENABLED` with a single-use confirm token and a duplicate guard. Admin actions write an admin audit log. No recorded PROD date.
 
 ### In progress
@@ -76,7 +76,42 @@ Fee and pool are `platform_settings` (fee 0.00%–10.00%, pool 10.00%–20.00%; 
 
 Refunds stay off unless `ADMIN_REFUND_ENABLED` is exactly `1`. The dashboard disables Refund otherwise, and the server writes a refused audit row and returns `admin_refund_disabled`. Fee-wallet withdraws stay off unless `ADMIN_WITHDRAW_ENABLED` is exactly `1`. A preview writes an admin audit row and mints a single-use confirm token (5 minutes, stored as a hash). The token is consumed before the send and is not reused when the send fails. The duplicate guard refuses the same amount, destination, and network on that fee wallet within 10 minutes unless the admin confirms send-again (`withdraw_duplicate_recent`). A `pending` or `unknown` withdrawal for that fee wallet also blocks another send. `FEE_WALLET_ADDRESS` must match `getAccount({ name: "gb-fee" })` or the withdraw aborts. Neither admin flag turns public fund, cancel, or refund on.
 
-Admin actions (settings, delete, refund, withdraw) write `admin_audit_log` (actor, action, target, before, after, result).
+Admin actions (settings, delete, refund, withdraw, contacts CSV export) write `admin_audit_log` (actor, action, target, before, after, result).
+
+### Marketing contacts
+
+`marketing_contacts` is the campaign list (migration `0017_marketing_contacts`). One row per email, stored lowercase and trimmed. `source` is `ghb` (a GitHub Bounties sign-up), `lb1` (the imported list), or `both`. `subscribed` starts true. Nothing in this app sets it back to true after it is false.
+
+A new Google sign-up upserts a contact (`source` `ghb`, or `both` when the mailbox was already `lb1`) and links `user_id`. Linking GitHub fills `github_username` and does not change attribution. A failure there is logged and does not fail sign-in.
+
+The first request that carries any `utm_*` param sets a first-party cookie `gb_utm` (JSON: source, medium, campaign, content, term, landing path, and time). It lasts 30 days, is httpOnly, SameSite=Lax, and Secure in production. A later visit does not overwrite it. Values are capped at 100 characters and limited to `[A-Za-z0-9_.-]` (the landing path may also contain `/`). There is no third-party analytics. On first sign-up the cookie is copied onto `users` (`utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`, `signup_landing_path`, `attributed_at`) and onto the contact's `utm_*` columns when those are still empty.
+
+Resend audience **LB + GHB Community** (`bae17e81-f141-4204-b096-e6e9eee9c490`) is `RESEND_AUDIENCE_ID`. It reuses `RESEND_API_KEY`. New and changed rows are pushed best-effort (email, first name, last name, and `unsubscribed` only when the row is unsubscribed). `GET` or `POST /api/jobs/sync-contacts` retries rows whose `resend_synced_at` is null or older than `updated_at`, and pulls audience contacts that are unsubscribed. The route uses the same optional `CRON_SECRET` bearer as the other jobs. This repo does not create the schedule.
+
+`POST /api/webhooks/resend` verifies the Svix signature (`svix-id`, `svix-timestamp`, `svix-signature`) with `RESEND_WEBHOOK_SECRET`. `contact.updated` with `unsubscribed: true`, and unsubscribe events, set `subscribed=false` and `unsubscribed_at`. A still-subscribed update does not re-subscribe anyone. If `RESEND_AUDIENCE_ID` is unset, sync is a no-op.
+
+Register the webhook in Resend:
+
+- DEV: `https://dev.githubbounties.xyz/api/webhooks/resend`
+- PROD: `https://githubbounties.xyz/api/webhooks/resend`
+
+The admin host Contacts page (`/admin/contacts`) shows total, subscribed, unsubscribed, counts by source, and counts by `utm_campaign` and `utm_content`, with search, a campaign filter, and pagination. CSV export is admin-session only and writes `contacts_export` to `admin_audit_log`. `GET /api/v1/admin/contacts` and `GET /api/v1/admin/contacts/count` need an API key with the `admin` scope. The list accepts `utm_campaign` and each contact includes `utmCampaign`. MCP tools are `list_contacts` (filter `utm_campaign`) and `count_contacts`. A key without that scope gets 403 `forbidden_scope`.
+
+The seed CSVs stay out of git. Ops runs the import against a database. On a fresh database the expected result is 98 rows and 1 unsubscribed (`inserted=98 updated=0 unsubscribed=1`).
+
+DEV first, then PROD:
+
+1. Apply migration `0017_marketing_contacts`. Cloud Run job `github-bounties-migrate`, or locally `cd apps/web && npm run db:migrate` with `DATABASE_URL` pointed at that database (Cloud SQL Auth Proxy for a laptop).
+2. Import, from a machine that has the CSVs and `DATABASE_URL`. Do not commit the files. A one-off Cloud Run job can run the same command if the CSVs are mounted there; they are not in the image.
+
+```bash
+cd apps/web
+npm run contacts:import -- --master /secure/master_list.csv --suppressed /secure/suppressed.csv
+```
+
+3. Create Secret Manager versions for `RESEND_AUDIENCE_ID` (`bae17e81-f141-4204-b096-e6e9eee9c490`) and `RESEND_WEBHOOK_SECRET` (the Svix signing secret from Resend). Both are `WEB_OPTIONAL_SECRETS`: a remount attaches them when an enabled version exists and skips them when it does not. `RESEND_API_KEY` is already that shape. Leave them unset and sync stays a no-op.
+4. Register the webhook URL above in Resend for contact updated and unsubscribe events.
+5. Point Cloud Scheduler at `GET https://dev.githubbounties.xyz/api/jobs/sync-contacts` (PROD: `https://githubbounties.xyz/api/jobs/sync-contacts`) with `Authorization: Bearer <CRON_SECRET>` when that secret is set.
 
 ### Migrations
 
@@ -101,7 +136,8 @@ Admin actions (settings, delete, refund, withdraw) write `admin_audit_log` (acto
 | `0014_admin_settings_delete_audit` | `platform_settings`, bounty `fee_bps` / `deleted_at` / `deleted_by`, `admin_audit_log`, `admin` API-key scope |
 | `0015_fee_withdraw_guards` | `withdraw_confirm_tokens`, `fee_withdrawals` (one row per token; one `pending` or `unknown` row per fee wallet) |
 | `0016_hf_provider` | `provider` on bounties, repos, and webhook deliveries (`github` or `huggingface`, default `github`); `hf_links` (Connect Hugging Face) and `bounty_submissions`. Apply on DEV before remount. No new migration for connect. |
-| `0018_hf_submission_author` | `bounty_submissions.hf_author` and one active submission per user per bounty. `0017` is used by another change. Apply on DEV before remount. |
+| `0017_marketing_contacts` | `marketing_contacts` (`ghb`, `lb1`, `both`) plus nullable `utm_*` on contacts and `utm_*`, `signup_landing_path`, `attributed_at` on `users`. Apply on DEV before the import. No required env. `RESEND_AUDIENCE_ID` and `RESEND_WEBHOOK_SECRET` are optional. |
+| `0018_hf_submission_author` | `bounty_submissions.hf_author` and one active submission per user per bounty. Apply on DEV before remount. |
 
 ### Environment
 
@@ -113,6 +149,8 @@ Plain env, not Secret Manager. Empty placeholders live in `apps/web/.env.example
 | `ADMIN_REFUND_ENABLED` | Exactly `1` enables admin refunds (dashboard, `/api/v1/admin/*`, admin MCP). Anything else keeps them off. Does not enable public fund, cancel, or refund. |
 | `ADMIN_WITHDRAW_ENABLED` | Exactly `1` enables fee-wallet withdraw. A preview writes an audit row and mints a 5-minute single-use confirm token. It does not send USDC, and it is not read-only. `API_MONEY_ENABLED` does not enable it. |
 | `FEE_WALLET_ADDRESS` | Expected `gb-fee` address. Withdraw aborts when it is unset or when `getAccount({ name: "gb-fee" })` does not match it. |
+| `RESEND_AUDIENCE_ID` | Optional Secret Manager. Resend audience id for the campaign list. Unset means contact sync is a no-op. DEV/PROD value for LB + GHB Community: `bae17e81-f141-4204-b096-e6e9eee9c490`. |
+| `RESEND_WEBHOOK_SECRET` | Optional Secret Manager. Svix signing secret for `POST /api/webhooks/resend`. Unset rejects the webhook. |
 | `BASE_BUILDER_CODE` | Optional public [base.dev](https://www.base.dev/) builder code (`^[a-z0-9_]{1,32}$`). The registered code is `bc_u97ii222`. When set, server-sent USDC transfers append an ERC-8021 Schema 0 suffix, and x402 fund challenges declare the same code so the facilitator can settle Schema 2 `{ a, w }`. Unset is a no-op. Not a secret. Ops sets `BASE_BUILDER_CODE=bc_u97ii222` on DEV first, then on PROD on Enrique's GO. |
 
 ## Money path

@@ -14,6 +14,8 @@ import { users } from "../db/schema";
 import type { TransactionalEmailAdapter } from "./adapter";
 import { deliverOutbox, enqueueEmailForUser } from "./outbox";
 import { welcomeIdempotencyKey } from "./templates";
+import { recordSignupContactSafe } from "../contacts/persist";
+import { parseUtmCookie, UTM_COOKIE_NAME, type UtmTouch } from "../contacts/utm";
 
 function logEmailFailure(userId: string, error: string): void {
   console.error(
@@ -23,6 +25,16 @@ function logEmailFailure(userId: string, error: string): void {
       error: error.slice(0, 300),
     }),
   );
+}
+
+async function readSignupAttribution(): Promise<UtmTouch | null> {
+  try {
+    const { cookies } = await import("next/headers");
+    const jar = await cookies();
+    return parseUtmCookie(jar.get(UTM_COOKIE_NAME)?.value);
+  } catch {
+    return null;
+  }
 }
 
 async function stampWelcomeEnqueued(userId: string, db: Database, now: Date): Promise<void> {
@@ -45,6 +57,8 @@ export async function persistGoogleSignIn(
     env?: EnvMap;
     adapter?: TransactionalEmailAdapter;
     now?: Date;
+    /** Pass null to skip the cookie. Omit to read `gb_utm` from the request. */
+    attribution?: UtmTouch | null;
   } = {},
 ): Promise<UserRow> {
   const db = deps.db ?? getRuntimeDb();
@@ -78,6 +92,20 @@ export async function persistGoogleSignIn(
     });
   } catch (err) {
     logEmailFailure(user.id, err instanceof Error ? err.message : "email_failed");
+  }
+
+  if (created) {
+    const attribution = deps.attribution !== undefined ? deps.attribution : await readSignupAttribution();
+    await recordSignupContactSafe(
+      db,
+      {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+      },
+      now,
+      attribution,
+    );
   }
 
   return user;

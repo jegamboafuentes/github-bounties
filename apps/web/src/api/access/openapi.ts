@@ -935,4 +935,99 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       429: { description: "Per-key read limit (120/min).", ...errorContent },
     },
   });
+
+  const contactSchema = z
+    .object({
+      id: z.string().uuid(),
+      email: z.string(),
+      firstName: z.string().nullable(),
+      lastName: z.string().nullable(),
+      githubUsername: z.string().nullable(),
+      userId: z.string().uuid().nullable(),
+      source: z.enum(["ghb", "lb1", "both"]),
+      lb1Status: z.string().nullable(),
+      contactType: z.string().nullable(),
+      subscribed: z.boolean(),
+      unsubscribedAt: z.string().datetime().nullable(),
+      resendContactId: z.string().nullable(),
+      resendSyncedAt: z.string().datetime().nullable(),
+      utmSource: z.string().nullable(),
+      utmMedium: z.string().nullable(),
+      utmCampaign: z.string().nullable().describe("First-touch utm_campaign copied at sign-up."),
+      utmContent: z.string().nullable(),
+      utmTerm: z.string().nullable(),
+      createdAt: z.string().datetime(),
+      updatedAt: z.string().datetime(),
+    })
+    .openapi("MarketingContact");
+
+  const contactListSchema = z
+    .object({
+      contacts: z.array(contactSchema),
+      total: z.number().int(),
+      limit: z.number().int(),
+      offset: z.number().int(),
+    })
+    .openapi("MarketingContactList");
+
+  const contactCountSchema = z
+    .object({
+      total: z.number().int(),
+      subscribed: z.number().int(),
+      unsubscribed: z.number().int(),
+      bySource: z.object({
+        ghb: z.number().int(),
+        lb1: z.number().int(),
+        both: z.number().int(),
+      }),
+      byCampaign: z.array(z.object({ value: z.string(), total: z.number().int() })),
+      byContent: z.array(z.object({ value: z.string(), total: z.number().int() })),
+    })
+    .openapi("MarketingContactCounts");
+
+  const contactListQuery = z.object({
+    search: z.string().optional().describe("Case-insensitive match on email, name, or GitHub username."),
+    q: z.string().optional().describe("Alias of search."),
+    source: z.enum(["ghb", "lb1", "both"]).optional(),
+    subscribed: z.enum(["true", "false"]).optional(),
+    utm_campaign: z.string().optional().describe("Exact first-touch utm_campaign. 1–100 characters from [A-Za-z0-9_.-]."),
+    limit: z.coerce.number().int().optional().describe("Page size. Default 50. Maximum 100."),
+    offset: z.coerce.number().int().optional().describe("Rows to skip. Default 0."),
+  });
+
+  const adminErrors = {
+    401: { description: "Missing, invalid, or revoked key.", ...errorContent },
+    403: { description: "Missing admin scope. error.code is forbidden_scope.", ...errorContent },
+    429: { description: "Per-key read limit (120/min).", ...errorContent },
+  };
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/admin/contacts",
+    operationId: "listContacts",
+    summary: "List campaign contacts",
+    description:
+      "Admin scope. Search, source, subscribed, and utm_campaign filters with limit and offset. A key without the admin scope receives 403 forbidden_scope. Session cookies are not accepted.",
+    security: bearer,
+    request: { query: contactListQuery },
+    responses: {
+      200: { description: "One page of contacts.", content: json(contactListSchema) },
+      400: { description: "validation_failed.", ...errorContent },
+      ...adminErrors,
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/admin/contacts/count",
+    operationId: "countContacts",
+    summary: "Count campaign contacts",
+    description:
+      "Admin scope. Total, subscribed, unsubscribed, counts by source (ghb, lb1, both), and counts by utm_campaign and utm_content. A key without the admin scope receives 403 forbidden_scope.",
+    security: bearer,
+    responses: {
+      200: { description: "Contact totals.", content: json(contactCountSchema) },
+      ...adminErrors,
+    },
+  });
 }

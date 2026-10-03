@@ -29,6 +29,8 @@ const WRITE = [
   "/api/v1/me/profile",
   "/api/v1/me/notification-preferences",
   "/api/v1/me/linked-accounts",
+  "/api/v1/admin/contacts",
+  "/api/v1/admin/contacts/count",
 ];
 
 describe("OpenAPI document", () => {
@@ -104,13 +106,14 @@ describe("OpenAPI document", () => {
         operationIds.add(operation.operationId ?? "");
       }
     }
-    assert.equal(operationIds.size, 27);
+    assert.equal(operationIds.size, 29);
     assert.deepEqual(
       [...operationIds].sort(),
       [
         "cancelBounty",
         "claimBounty",
         "clearWorkSignal",
+        "countContacts",
         "createBounty",
         "fundBounty",
         "getBounty",
@@ -123,6 +126,7 @@ describe("OpenAPI document", () => {
         "listBounties",
         "listBountyClaims",
         "listBountyFunders",
+        "listContacts",
         "listLinkedAccounts",
         "listMyBounties",
         "listMyClaims",
