@@ -197,11 +197,20 @@ describe("fetch Hugging Face discussions", () => {
     );
   });
 
-  it("still refuses merge, pull URL, and closing-pull reads", () => {
-    assert.throws(
-      () => huggingfaceProvider.parsePrUrl("https://huggingface.co/org/model/discussions/1"),
-      (err: unknown) => err instanceof ProviderNotSupportedError && err.code === "provider_not_supported",
+  it("parses a pull request URL and still refuses merge and closing-pull reads", () => {
+    assert.deepEqual(
+      huggingfaceProvider.parsePrUrl("https://huggingface.co/datasets/stanfordnlp/imdb/discussions/8"),
+      {
+        provider: "huggingface",
+        owner: "stanfordnlp",
+        repo: "imdb",
+        fullName: "stanfordnlp/imdb",
+        prNumber: 8,
+        hfRepoType: "dataset",
+        url: "https://huggingface.co/datasets/stanfordnlp/imdb/discussions/8",
+      },
     );
+    assert.equal(huggingfaceProvider.parsePrUrl("https://github.com/octo/hello/pull/8"), null);
     assert.throws(
       () =>
         huggingfaceProvider.verifyMerge({

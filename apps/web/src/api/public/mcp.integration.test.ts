@@ -125,7 +125,7 @@ describe("MCP read tools", () => {
     const listed = await client.listTools();
     const toolNames = listed.tools.map((tool) => tool.name);
     assert.equal(new Set(toolNames).size, toolNames.length);
-    assert.equal(toolNames.length, 25);
+    assert.equal(toolNames.length, 28);
     assert.deepEqual(
       [...toolNames].sort(),
       [
@@ -148,12 +148,15 @@ describe("MCP read tools", () => {
         "list_linked_accounts",
         "list_my_bounties",
         "list_my_claims",
+        "list_submissions",
         "refund_bounty",
         "signal_working",
+        "submit_pr",
         "top_up_bounty",
         "update_bounty_amount",
         "update_notification_preferences",
         "update_profile",
+        "withdraw_submission",
       ],
     );
     const moneyLead = new RegExp(`^${moneyScopeRequirement(apiMoneyEnabled()).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`);
@@ -184,6 +187,7 @@ describe("MCP read tools", () => {
       list_my_bounties: /^Requires API key \(read scope\)/,
       get_bounty_claims: /^Requires API key \(read scope\)/,
       list_my_claims: /^Requires API key \(read scope\)/,
+      list_submissions: /^Requires API key \(read scope\)/,
       get_profile: /^Requires API key \(read scope\)/,
       get_notification_preferences: /^Requires API key \(read scope\)/,
       list_linked_accounts: /^Requires API key \(read scope\)/,
@@ -194,6 +198,8 @@ describe("MCP read tools", () => {
       clear_work_signal: /^Requires API key \(write scope\)/,
       cancel_bounty: /^Requires API key \(write scope\)/,
       update_bounty_amount: /^Requires API key \(write scope\)/,
+      submit_pr: /^Requires API key \(write scope\)/,
+      withdraw_submission: /^Requires API key \(write scope\)/,
       fund_bounty: moneyLead,
       top_up_bounty: moneyLead,
       claim_winner: moneyLead,

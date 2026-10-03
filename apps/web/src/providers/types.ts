@@ -31,6 +31,8 @@ export type PrRef = {
   fullName: string;
   prNumber: number;
   url: string;
+  /** Set for Hugging Face pull-request discussion URLs. Absent on GitHub pulls. */
+  hfRepoType?: HfRepoType;
 };
 
 export type ProviderAuthor = {

@@ -20,6 +20,7 @@ const WRITE = [
   "/api/v1/bounties/{id}/top-up",
   "/api/v1/bounties/{id}/claim",
   "/api/v1/bounties/{id}/claims",
+  "/api/v1/bounties/{id}/submissions",
   "/api/v1/bounties/{id}/refund",
   "/api/v1/me",
   "/api/v1/me/bounties",
@@ -36,7 +37,7 @@ describe("OpenAPI document", () => {
     await SwaggerParser.validate(document);
     assert.equal(document.openapi, "3.1.0");
     assert.equal(document.info.title, "GitHub Bounties API");
-    assert.equal(document.info.version, "4.8.0");
+    assert.equal(document.info.version, "4.10.0");
     assert.equal(document.info.version, PUBLIC_API_VERSION);
     assert.match(document.info.description ?? "", /60 requests per minute/);
     assert.match(PUBLIC_API_DESCRIPTION, /Cloud Run instance/);
@@ -103,7 +104,7 @@ describe("OpenAPI document", () => {
         operationIds.add(operation.operationId ?? "");
       }
     }
-    assert.equal(operationIds.size, 24);
+    assert.equal(operationIds.size, 27);
     assert.deepEqual(
       [...operationIds].sort(),
       [
@@ -125,12 +126,15 @@ describe("OpenAPI document", () => {
         "listLinkedAccounts",
         "listMyBounties",
         "listMyClaims",
+        "listSubmissions",
         "refundBounty",
         "signalWorking",
+        "submitPr",
         "topUpBounty",
         "updateBountyAmount",
         "updateNotificationPreferences",
         "updateProfile",
+        "withdrawSubmission",
       ],
     );
     const profile = document.paths?.["/api/v1/me/profile"];

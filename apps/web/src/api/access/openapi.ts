@@ -141,6 +141,59 @@ export const workSignalToolSchema = z.object({
   id: idSchema.describe("Bounty id."),
 });
 
+export const submitPrBodySchema = z
+  .object({
+    prUrl: z
+      .string()
+      .trim()
+      .min(1)
+      .max(500)
+      .describe(
+        "Hugging Face pull request URL: https://huggingface.co/{owner}/{repo}/discussions/{n}, or the same path under datasets/ or spaces/. The discussion must have isPullRequest true. Requires HF_BOUNTIES_ENABLED=1.",
+      ),
+  })
+  .strict()
+  .openapi("SubmitPrBody");
+
+export const submitPrToolSchema = z.object({
+  id: idSchema.describe("Bounty id."),
+  prUrl: z
+    .string()
+    .trim()
+    .min(1)
+    .max(500)
+    .describe("Hugging Face pull request discussion URL in the same repo as the bounty."),
+});
+
+export const submissionSchema = z
+  .object({
+    id: z.string().uuid(),
+    bountyId: z.string().uuid(),
+    userId: z.string().uuid(),
+    provider: z.literal("huggingface"),
+    prUrl: z.string(),
+    prNum: z.number().int().positive(),
+    hfAuthor: z.string().describe("Hugging Face username of the pull request author at submit time."),
+    status: z.literal("submitted").describe("Submissions stay submitted until a later merge check."),
+    createdAt: z.string(),
+  })
+  .openapi("BountySubmission");
+
+export const submissionListSchema = z
+  .object({
+    bountyId: z.string().uuid(),
+    submissions: z.array(submissionSchema),
+  })
+  .openapi("BountySubmissionList");
+
+export const withdrawnSubmissionSchema = z
+  .object({
+    bountyId: z.string().uuid(),
+    id: z.string().uuid(),
+    withdrawn: z.literal(true),
+  })
+  .openapi("WithdrawnSubmission");
+
 export const claimToolSchema = z
   .object({
     id: idSchema.describe("Bounty id."),
@@ -623,6 +676,69 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       403: { description: "Money disabled, missing scope, GitHub login mismatch, or not the winner or pool member.", ...errorContent },
       409: { description: "Idempotency conflict, or the pool is not ready.", ...errorContent },
       429: { description: "Per-key money limit (10/hour).", ...errorContent },
+    },
+  });
+
+  registry.registerPath({
+    method: "get",
+    path: "/api/v1/bounties/{id}/submissions",
+    operationId: "listSubmissions",
+    summary: "List Hugging Face pull requests submitted to a bounty",
+    description:
+      "Scope read. Hugging Face bounties only. Returns rows with status submitted. GitHub bounties return provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns 403 hf_disabled when that flag is off.",
+    security: bearer,
+    request: { params: z.object({ id: idSchema }) },
+    responses: {
+      200: { description: "Submitted pull requests, oldest first.", content: json(submissionListSchema) },
+      401: { description: "Missing, invalid, or revoked key.", ...errorContent },
+      403: { description: "Missing read scope, or Hugging Face bounties disabled (hf_disabled).", ...errorContent },
+      404: { description: "Bounty not found.", ...errorContent },
+      429: { description: "Per-key read limit (120/min).", ...errorContent },
+    },
+  });
+
+  registry.registerPath({
+    method: "post",
+    path: "/api/v1/bounties/{id}/submissions",
+    operationId: "submitPr",
+    summary: "Submit a Hugging Face pull request to a funded bounty",
+    description:
+      "Scope write. Same checks as the bounty page. The caller needs a linked Hugging Face account. The pull request must be in the bounty repo, open or merged, and authored by that username. One active submission per user. GitHub bounties return provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns 403 hf_disabled when that flag is off. Idempotency-Key is not required.",
+    security: bearer,
+    request: {
+      params: z.object({ id: idSchema }),
+      body: { content: json(submitPrBodySchema) },
+    },
+    responses: {
+      201: { description: "Submission stored with status submitted.", content: json(submissionSchema) },
+      400: { description: "prUrl missing, not a pull request, or the pull request is closed.", ...errorContent },
+      401: { description: "Missing, invalid, or revoked key.", ...errorContent },
+      403: {
+        description: "Missing write scope, Hugging Face not linked, author mismatch, or hf_disabled.",
+        ...errorContent,
+      },
+      404: { description: "Bounty or pull request not found.", ...errorContent },
+      409: { description: "Bounty is not funded, the repo does not match, or a submission already exists.", ...errorContent },
+      429: { description: "Per-key write limit (20/min).", ...errorContent },
+    },
+  });
+
+  registry.registerPath({
+    method: "delete",
+    path: "/api/v1/bounties/{id}/submissions",
+    operationId: "withdrawSubmission",
+    summary: "Withdraw the caller's Hugging Face submission",
+    description:
+      "Scope write. Deletes the caller's active submission while the bounty is unpaid. GitHub bounties return provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns 403 hf_disabled when that flag is off.",
+    security: bearer,
+    request: { params: z.object({ id: idSchema }) },
+    responses: {
+      200: { description: "Submission withdrawn.", content: json(withdrawnSubmissionSchema) },
+      401: { description: "Missing, invalid, or revoked key.", ...errorContent },
+      403: { description: "Missing write scope, or Hugging Face bounties disabled (hf_disabled).", ...errorContent },
+      404: { description: "Bounty not found, or this user has no submission.", ...errorContent },
+      409: { description: "The bounty has been paid.", ...errorContent },
+      429: { description: "Per-key write limit (20/min).", ...errorContent },
     },
   });
 

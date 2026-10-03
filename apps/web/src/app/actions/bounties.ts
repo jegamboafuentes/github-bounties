@@ -11,8 +11,10 @@ import {
   releaseClaimLock,
   fundBounty,
   signalWorkingOnThis,
+  submitHuggingFacePr,
   topUpBounty,
   updateBountyAmount,
+  withdrawBountySubmission,
 } from "@/bounties";
 import { claimPoolPayout, claimPayout, isClaimError } from "@/claims";
 import { getRuntimeDb } from "@/db/runtime";
@@ -82,6 +84,53 @@ export async function createBountyAction(
     );
     revalidatePath("/board");
     redirect(`/bounties/${created.id}`);
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
+    return fail(err);
+  }
+}
+
+export async function submitHuggingFacePrAction(
+  _prev: BountyActionState | undefined,
+  formData: FormData,
+): Promise<BountyActionState> {
+  const bountyId = String(formData.get("bountyId") ?? "");
+  rejectMalformedBountyId(bountyId);
+  const user = await getCurrentPublicUser();
+  if (!user) {
+    redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
+  }
+  try {
+    await submitHuggingFacePr(
+      {
+        bountyId,
+        userId: user.id,
+        prUrl: String(formData.get("prUrl") ?? ""),
+      },
+      { db: getRuntimeDb() },
+    );
+    refreshBounty(bountyId);
+    return { ok: true, message: "Pull request submitted." };
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
+    return fail(err);
+  }
+}
+
+export async function withdrawSubmissionAction(
+  _prev: BountyActionState | undefined,
+  formData: FormData,
+): Promise<BountyActionState> {
+  const bountyId = String(formData.get("bountyId") ?? "");
+  rejectMalformedBountyId(bountyId);
+  const user = await getCurrentPublicUser();
+  if (!user) {
+    redirect(`/signin?callbackUrl=${encodeURIComponent(`/bounties/${bountyId}`)}`);
+  }
+  try {
+    await withdrawBountySubmission({ bountyId, userId: user.id }, { db: getRuntimeDb() });
+    refreshBounty(bountyId);
+    return { ok: true, message: "Submission withdrawn." };
   } catch (err) {
     if (isRedirectError(err)) throw err;
     return fail(err);

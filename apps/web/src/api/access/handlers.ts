@@ -2,6 +2,11 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { isAdminIdentity } from "../../admin/identity";
 import { isBountyError } from "../../bounties/errors";
+import {
+  listBountySubmissions,
+  submitHuggingFacePr,
+  withdrawBountySubmission,
+} from "../../bounties/submissions";
 import { ProviderNotSupportedError } from "../../providers/types";
 import { isClaimError } from "../../claims";
 import type { ApiKeyScope } from "../../db/schema";
@@ -30,6 +35,7 @@ import { authorizeClaimCaller } from "./claim-auth";
 import {
   claimBodySchema,
   createBountyBodySchema,
+  submitPrBodySchema,
   fundBodySchema,
   notificationPatchSchema,
   profilePatchSchema,
@@ -1212,6 +1218,62 @@ export async function handleRefund(
       }
     },
   );
+}
+
+function submissionDb(deps: AccessDeps) {
+  if (!deps.db) {
+    throw new PublicApiError("internal", "Submissions are not available.", null, 500);
+  }
+  return deps.db;
+}
+
+export async function handleListSubmissions(
+  principal: ApiPrincipal,
+  bountyId: string,
+  deps: AccessDeps,
+): Promise<ApiResult> {
+  requireScope(principal.scopes, "read");
+  const id = acceptBountyId(bountyId);
+  const submissions = await listBountySubmissions(id, {
+    db: submissionDb(deps),
+    env: deps.env,
+    http: deps.hfHttp,
+  });
+  return { status: 200, body: { bountyId: id, submissions } };
+}
+
+export async function handleSubmitPr(
+  principal: ApiPrincipal,
+  bountyId: string,
+  body: unknown,
+  deps: AccessDeps,
+): Promise<ApiResult> {
+  requireScope(principal.scopes, "write");
+  assertNoAddress(body);
+  const parsed = submitPrBodySchema.safeParse(body);
+  if (!parsed.success) {
+    throw new PublicApiError("validation_failed", "prUrl is required.", zodErrorDetails(parsed.error));
+  }
+  const id = acceptBountyId(bountyId);
+  const submission = await submitHuggingFacePr(
+    { bountyId: id, userId: principal.userId, prUrl: parsed.data.prUrl },
+    { db: submissionDb(deps), env: deps.env, http: deps.hfHttp },
+  );
+  return { status: 201, body: submission };
+}
+
+export async function handleWithdrawSubmission(
+  principal: ApiPrincipal,
+  bountyId: string,
+  deps: AccessDeps,
+): Promise<ApiResult> {
+  requireScope(principal.scopes, "write");
+  const id = acceptBountyId(bountyId);
+  const withdrawn = await withdrawBountySubmission(
+    { bountyId: id, userId: principal.userId },
+    { db: submissionDb(deps), env: deps.env },
+  );
+  return { status: 200, body: withdrawn };
 }
 
 export async function handleBountyClaims(

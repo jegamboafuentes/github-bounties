@@ -22,11 +22,14 @@ import {
   handleMyClaims,
   handleMyBounties,
   handleRefund,
+  handleListSubmissions,
+  handleSubmitPr,
   handleUpdateBountyAmount,
   handleUpdateNotificationPreferences,
   handleUpdateProfile,
   handleUsage,
   handleTopUp,
+  handleWithdrawSubmission,
   handleWorkSignal,
   readIdempotencyKey,
   requirePrincipal,
@@ -55,6 +58,9 @@ export type V1Action =
   | { kind: "claim"; bountyId: string }
   | { kind: "refund"; bountyId: string }
   | { kind: "bounty-claims"; bountyId: string }
+  | { kind: "submissions"; bountyId: string }
+  | { kind: "submit-pr"; bountyId: string }
+  | { kind: "withdraw-submission"; bountyId: string }
   | { kind: "my-claims" }
   | { kind: "profile" }
   | { kind: "profile-patch" }
@@ -72,6 +78,7 @@ function actionClass(action: V1Action): ApiClass {
     action.kind === "my-bounties" ||
     action.kind === "my-claims" ||
     action.kind === "bounty-claims" ||
+    action.kind === "submissions" ||
     action.kind === "profile" ||
     action.kind === "notification-preferences" ||
     action.kind === "linked-accounts"
@@ -109,6 +116,12 @@ function actionRoute(action: V1Action): string {
       return `POST /api/v1/bounties/${action.bountyId}/refund`;
     case "bounty-claims":
       return `GET /api/v1/bounties/${action.bountyId}/claims`;
+    case "submissions":
+      return `GET /api/v1/bounties/${action.bountyId}/submissions`;
+    case "submit-pr":
+      return `POST /api/v1/bounties/${action.bountyId}/submissions`;
+    case "withdraw-submission":
+      return `DELETE /api/v1/bounties/${action.bountyId}/submissions`;
     case "my-claims":
       return "GET /api/v1/me/claims";
     case "profile":
@@ -133,7 +146,10 @@ function actionBountyId(action: V1Action): string | null {
     action.kind === "top-up" ||
     action.kind === "claim" ||
     action.kind === "refund" ||
-    action.kind === "bounty-claims"
+    action.kind === "bounty-claims" ||
+    action.kind === "submissions" ||
+    action.kind === "submit-pr" ||
+    action.kind === "withdraw-submission"
   ) {
     return action.bountyId;
   }
@@ -264,6 +280,12 @@ async function perform(
       );
     case "bounty-claims":
       return handleBountyClaims(principal, action.bountyId, deps);
+    case "submissions":
+      return handleListSubmissions(principal, action.bountyId, deps);
+    case "submit-pr":
+      return handleSubmitPr(principal, action.bountyId, await readJsonBody(request), deps);
+    case "withdraw-submission":
+      return handleWithdrawSubmission(principal, action.bountyId, deps);
     case "my-claims":
       return handleMyClaims(principal, deps);
     case "profile":
