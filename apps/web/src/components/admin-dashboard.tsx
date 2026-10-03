@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   deleteBountyAction,
-  executeWithdrawAction,
   previewWithdrawAction,
+  refreshAdminAction,
   refundBountyAction,
   setFeeBpsAction,
   setPoolBpsAction,
@@ -42,6 +42,8 @@ export type AdminDashboardData = {
     destination?: string;
     amountUsdc?: string;
     deleteError?: string;
+    /** Test hook: destination already typed, so confirm can be submitted. */
+    confirmed?: boolean;
   };
 };
 
@@ -132,8 +134,79 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
         }
       : null,
   );
-  const [typed, setTyped] = useState("");
+  const [typed, setTyped] = useState(
+    data.fixture?.confirmed ? (data.fixture.destination ?? "") : "",
+  );
   const [withdrawMessage, setWithdrawMessage] = useState<string | null>(null);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [withdrawStatus, setWithdrawStatus] = useState<number | null>(null);
+  const [duplicateRecent, setDuplicateRecent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+
+  async function submitWithdraw(sendAgain: boolean) {
+    if (!preview || sendingRef.current) return;
+    if (typed !== preview.destination) return;
+    sendingRef.current = true;
+    setSending(true);
+    setWithdrawError(null);
+    setWithdrawMessage(null);
+    setWithdrawStatus(null);
+    try {
+      const response = await fetch("/api/v1/admin/fees/withdraw", {
+        method: "POST",
+        headers: { accept: "application/json", "content-type": "application/json" },
+        body: JSON.stringify({
+          confirmToken: preview.confirmToken,
+          confirmation: typed,
+          sendAgain,
+        }),
+      });
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+        message?: string;
+        txHash?: string;
+      } | null;
+      if (!response.ok) {
+        const code = typeof body?.error === "string" ? body.error : "";
+        const message =
+          typeof body?.message === "string" && body.message.trim()
+            ? body.message
+            : `Fee withdrawal failed (${response.status}).`;
+        setWithdrawStatus(response.status);
+        setWithdrawError(message);
+        setDuplicateRecent(code === "withdraw_duplicate_recent");
+        if (
+          code === "fee_transfer_failed" ||
+          code === "withdraw_outcome_unknown" ||
+          code === "withdraw_token_used"
+        ) {
+          setPreview(null);
+          setTyped("");
+        }
+        return;
+      }
+      const txHash = typeof body?.txHash === "string" ? body.txHash : "";
+      setPreview(null);
+      setTyped("");
+      setDuplicateRecent(false);
+      setWithdrawError(null);
+      setWithdrawStatus(null);
+      setWithdrawMessage(txHash ? `Sent ${txHash}` : "Sent");
+      try {
+        await refreshAdminAction();
+      } catch {
+        // The transfer already succeeded. A stale balance tile is not a failed send.
+      }
+    } catch {
+      setWithdrawStatus(0);
+      setWithdrawError("Fee withdrawal failed.");
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  }
+
   const rows = data.bounties.rows.filter((row) => !hidden.has(row.id));
   const confirmBounty = confirm && rows.some((row) => row.id === confirm.bounty.id) ? confirm : confirm;
 
@@ -252,6 +325,9 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
               setPreview(result.preview);
               setTyped("");
               setWithdrawMessage(null);
+              setWithdrawError(null);
+              setWithdrawStatus(null);
+              setDuplicateRecent(false);
             });
           }}
         >
@@ -281,7 +357,7 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
             <button
               className="rounded-lg bg-zinc-900 px-3 py-2 text-sm text-white disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
               type="submit"
-              disabled={!data.withdrawEnabled && !data.fixture}
+              disabled={sending || (!data.withdrawEnabled && !data.fixture)}
               title={data.withdrawEnabled ? undefined : "Withdrawals disabled on this deployment"}
             >
               Preview
@@ -293,10 +369,7 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
             className="mt-4 flex flex-col gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900 dark:bg-amber-950/40"
             onSubmit={(event) => {
               event.preventDefault();
-              if (data.fixture) return;
-              void executeWithdrawAction(new FormData(event.currentTarget)).then((result) => {
-                setWithdrawMessage(result.ok ? `Sent ${result.sent.txHash}` : result.message);
-              });
+              void submitWithdraw(false);
             }}
           >
             <p>
@@ -318,12 +391,30 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
             </label>
             <button
               type="submit"
-              disabled={typed !== preview.destination}
+              disabled={sending || typed !== preview.destination}
+              aria-busy={sending}
               className="w-fit rounded-lg bg-amber-700 px-3 py-2 text-white disabled:opacity-40"
             >
-              Withdraw fees
+              {sending ? "Sending…" : "Withdraw fees"}
             </button>
+            {duplicateRecent ? (
+              <button
+                type="button"
+                disabled={sending}
+                onClick={() => {
+                  void submitWithdraw(true);
+                }}
+                className="w-fit rounded-lg border border-amber-700 px-3 py-2 text-amber-900 disabled:opacity-40 dark:text-amber-100"
+              >
+                Yes, send again
+              </button>
+            ) : null}
           </form>
+        ) : null}
+        {withdrawError ? (
+          <p role="alert" data-status={withdrawStatus ?? ""} className="mt-2 text-sm font-medium text-red-700 dark:text-red-300">
+            {withdrawError}
+          </p>
         ) : null}
         {withdrawMessage ? <p className="mt-2 text-sm">{withdrawMessage}</p> : null}
       </Card>

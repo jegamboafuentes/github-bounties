@@ -11,8 +11,8 @@ import { bpsToPercent, setPlatformFee, setPlatformPool } from "@/admin/settings"
 import { executeFeeWithdraw, previewFeeWithdraw } from "@/admin/withdraw";
 import { getRuntimeDb } from "@/db/runtime";
 
-function fail(err: unknown): { ok: false; error: string; message: string } {
-  if (isAdminError(err)) return { ok: false, error: err.code, message: err.message };
+function fail(err: unknown): { ok: false; error: string; message: string; status: number } {
+  if (isAdminError(err)) return { ok: false, error: err.code, message: err.message, status: err.status };
   console.error(
     JSON.stringify({
       severity: "ERROR",
@@ -20,7 +20,7 @@ function fail(err: unknown): { ok: false; error: string; message: string } {
       reason: err instanceof Error ? err.message : "Failed.",
     }),
   );
-  return { ok: false, error: "admin_failed", message: "Admin request failed." };
+  return { ok: false, error: "admin_failed", message: "Admin request failed.", status: 500 };
 }
 
 export async function setFeeBpsAction(formData: FormData) {
@@ -108,6 +108,11 @@ export async function previewWithdrawAction(formData: FormData) {
   }
 }
 
+export async function refreshAdminAction() {
+  await requireAdminPageUser();
+  revalidatePath("/admin");
+}
+
 export async function executeWithdrawAction(formData: FormData) {
   const admin = await requireAdminPageUser();
   try {
@@ -117,12 +122,20 @@ export async function executeWithdrawAction(formData: FormData) {
       actorEmail: admin.email,
       confirmToken: String(formData.get("confirmToken") ?? ""),
       confirmation: String(formData.get("confirmation") ?? ""),
+      sendAgain: String(formData.get("sendAgain") ?? "") === "yes",
       client: await cdpNamedAccountClient(),
       readBalance: (address) => readOnChainUsdcBalance(address),
     });
     revalidatePath("/admin");
     return { ok: true as const, sent };
   } catch (err) {
-    return fail(err);
+    const failed = fail(err);
+    // A returned `{ ok: false }` is still HTTP 200 from a server action, which
+    // hid the gas failure. Throw so this action does not report success.
+    // The console POSTs to /api/v1/admin/fees/withdraw and uses that status.
+    const error = new Error(failed.message) as Error & { status?: number; code?: string };
+    error.status = failed.status;
+    error.code = failed.error;
+    throw error;
   }
 }

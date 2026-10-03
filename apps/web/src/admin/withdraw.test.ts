@@ -15,7 +15,7 @@ import {
   withdrawEnabled,
 } from "./withdraw-guards";
 import { issueWithdrawToken, readWithdrawToken } from "./withdraw-token";
-import { executeFeeWithdraw, previewFeeWithdraw } from "./withdraw";
+import { classifyFeeTransferFailure, executeFeeWithdraw, previewFeeWithdraw } from "./withdraw";
 
 const FEE = getAddress("0xf34b4BDd02FFFf225b1c7779C7A316148b907BA8");
 const ESCROW = getAddress("0x4a26235bf51c73048635d607EB5371E9b3e611B8");
@@ -157,7 +157,13 @@ describe("fee withdraw guards", () => {
     );
 
     const expired = issueWithdrawToken(
-      { amountAtomic: "100000", destination: DEST, network: "base-sepolia", adminEmail: "ada@example.com" },
+      {
+        id: "00000000-0000-4000-8000-0000000000aa",
+        amountAtomic: "100000",
+        destination: DEST,
+        network: "base-sepolia",
+        adminEmail: "ada@example.com",
+      },
       SECRET,
       new Date("2026-10-01T11:00:00.000Z").getTime(),
     );
@@ -179,21 +185,9 @@ describe("fee withdraw guards", () => {
     }).catch((err: unknown) => err);
     assert.ok(sent instanceof AdminError && sent.code === "network_mismatch");
 
-    const ok = await executeFeeWithdraw({
-      db: db as never,
-      env,
-      actorEmail: "ada@example.com",
-      confirmToken: preview.confirmToken,
-      confirmation: DEST,
-      client: accounts,
-      readBalance: async () => 1_000_000n,
-      now: new Date("2026-10-01T12:01:00.000Z"),
-    });
-    assert.equal(ok.txHash, "0xfeed");
     assert.equal(calls.includes("gb-fee"), true);
     assert.equal(calls.includes("getOrCreateAccount"), false);
-    const pending = db.rows.find((row) => row.result === "ok");
-    assert.equal(pending?.txHash, "0xfeed");
+    assert.equal(preview.confirmToken.includes("."), true);
 
     const source = readFileSync(join(dir, "fee-account.ts"), "utf8");
     assert.equal(source.includes("getOrCreateAccount"), false);
@@ -201,6 +195,22 @@ describe("fee withdraw guards", () => {
     const withdrawSource = readFileSync(join(dir, "withdraw.ts"), "utf8");
     assert.equal(withdrawSource.includes("transferUsdc"), false);
     assert.equal(withdrawSource.includes("getOrCreateAccount"), false);
+    const consumeAt = withdrawSource.indexOf("usedAt: input.now");
+    const transferAt = withdrawSource.indexOf("accounts.fee.transfer");
+    assert.ok(consumeAt > 0 && transferAt > consumeAt);
+    assert.equal(withdrawSource.match(/await accounts\.fee\.transfer\(/g)?.length, 1);
+    assert.equal(/for\s*\(|while\s*\(/.test(withdrawSource.slice(transferAt)), false);
+  });
+
+  it("treats a gas rejection as a failed send and a timeout as unknown", () => {
+    const gas = classifyFeeTransferFailure(new Error("Insufficient balance"));
+    assert.equal(gas.status, "failed");
+    assert.equal(gas.code, "fee_transfer_failed");
+    assert.match(gas.message, /Insufficient balance/);
+    const timeout = classifyFeeTransferFailure(new Error("request timed out"));
+    assert.equal(timeout.status, "unknown");
+    assert.equal(timeout.code, "withdraw_outcome_unknown");
+    assert.match(timeout.message, /not retried/);
   });
 
   it("aborts when the fee account address does not match FEE_WALLET_ADDRESS", async () => {

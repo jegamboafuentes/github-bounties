@@ -176,6 +176,7 @@ export async function handleAdminWithdraw(request: Request): Promise<Response> {
     confirmToken?: string;
     confirmation?: string;
     network?: string;
+    sendAgain?: unknown;
   } | null;
   try {
     const sent = await executeFeeWithdraw({
@@ -185,6 +186,7 @@ export async function handleAdminWithdraw(request: Request): Promise<Response> {
       confirmToken: body?.confirmToken ?? "",
       confirmation: body?.confirmation ?? "",
       callerNetwork: body?.network,
+      sendAgain: body?.sendAgain === true,
       client: await cdpNamedAccountClient(),
       readBalance: async (address) => {
         const { readOnChainUsdcBalance } = await import("./balances");

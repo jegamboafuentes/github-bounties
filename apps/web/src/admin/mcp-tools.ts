@@ -230,7 +230,7 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
     "admin_withdraw_fees_preview",
     {
       title: "Admin: preview a fee withdrawal",
-      description: `${adminLead} Preview a fee-wallet withdrawal. Writes an audit row and mints a 5-minute confirm token. Does not send USDC. Not read-only. Requires ADMIN_WITHDRAW_ENABLED=1.`,
+      description: `${adminLead} Preview a fee-wallet withdrawal. Writes an audit row and mints a single-use 5-minute confirm token. Does not send USDC. Not read-only. Requires ADMIN_WITHDRAW_ENABLED=1.`,
       inputSchema: {
         amountUsdc: z.string(),
         destination: z.string(),
@@ -261,10 +261,11 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
     "admin_withdraw_fees",
     {
       title: "Admin: withdraw fees",
-      description: `${adminLead} Send USDC from the fee wallet. Requires the preview confirm token and the destination typed back as confirmation.`,
+      description: `${adminLead} Send USDC from the fee wallet. The preview token is single-use and is consumed before the send, including when the send fails. Requires the destination typed back as confirmation. sendAgain must be true to repeat the same amount and destination within 10 minutes.`,
       inputSchema: {
         confirmToken: z.string(),
         confirmation: z.string(),
+        sendAgain: z.boolean().optional(),
       },
       annotations: { destructiveHint: true },
     },
@@ -278,6 +279,7 @@ export function registerAdminMcpTools(server: McpServer, access: McpAccess | nul
           actorEmail: email,
           confirmToken: args.confirmToken,
           confirmation: args.confirmation,
+          sendAgain: args.sendAgain === true,
           client: await cdpNamedAccountClient(),
           readBalance: (address) => readOnChainUsdcBalance(address, env),
         });

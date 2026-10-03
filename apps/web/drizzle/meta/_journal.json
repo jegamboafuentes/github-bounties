@@ -106,6 +106,13 @@
       "when": 1790800000000,
       "tag": "0014_admin_settings_delete_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1790900000000,
+      "tag": "0015_fee_withdraw_guards",
+      "breakpoints": true
     }
   ]
 }
