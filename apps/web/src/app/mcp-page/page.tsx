@@ -46,6 +46,7 @@ const SCOPE_LABEL = {
   read: "read",
   write: "write",
   money: "money",
+  admin: "admin",
 } as const;
 
 export default async function McpPage() {

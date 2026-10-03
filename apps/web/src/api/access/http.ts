@@ -37,6 +37,7 @@ import {
   type ApiResult,
 } from "./handlers";
 import { keyedRateLimitHeaders, type ApiClass } from "./policy";
+import { handleCountContacts, handleListContacts } from "../../contacts/http";
 
 export function runtimeAccessDeps(): AccessDeps {
   return createAccessDeps(getRuntimeDb());
@@ -60,7 +61,9 @@ export type V1Action =
   | { kind: "profile-patch" }
   | { kind: "notification-preferences" }
   | { kind: "notification-preferences-patch" }
-  | { kind: "linked-accounts" };
+  | { kind: "linked-accounts" }
+  | { kind: "admin-contacts" }
+  | { kind: "admin-contacts-count" };
 
 function actionClass(action: V1Action): ApiClass {
   if (action.kind === "fund" || action.kind === "top-up" || action.kind === "claim" || action.kind === "refund") {
@@ -74,7 +77,9 @@ function actionClass(action: V1Action): ApiClass {
     action.kind === "bounty-claims" ||
     action.kind === "profile" ||
     action.kind === "notification-preferences" ||
-    action.kind === "linked-accounts"
+    action.kind === "linked-accounts" ||
+    action.kind === "admin-contacts" ||
+    action.kind === "admin-contacts-count"
   ) {
     return "read";
   }
@@ -121,6 +126,10 @@ function actionRoute(action: V1Action): string {
       return "PATCH /api/v1/me/notification-preferences";
     case "linked-accounts":
       return "GET /api/v1/me/linked-accounts";
+    case "admin-contacts":
+      return "GET /api/v1/admin/contacts";
+    case "admin-contacts-count":
+      return "GET /api/v1/admin/contacts/count";
   }
 }
 
@@ -276,6 +285,10 @@ async function perform(
       return handleUpdateNotificationPreferences(principal, await readJsonBody(request), deps);
     case "linked-accounts":
       return handleLinkedAccounts(principal, deps);
+    case "admin-contacts":
+      return handleListContacts(principal, new URL(request.url), deps);
+    case "admin-contacts-count":
+      return handleCountContacts(principal, deps);
   }
 }
 

@@ -177,6 +177,9 @@ Hugging Face connect is optional and is not product login. Set `HF_OAUTH_CLIENT_
 | `/bounties/[id]` | escrow lock (poster: WalletConnect / Pay face / Advanced paste-hash), Working on this, pool roster, payout breakdown, winner payout claim, cancel/refund |
 | `GET\|POST /api/jobs/expire-claim-locks` | optional `CRON_SECRET` bearer; drains residual exclusive locks; `expires_at` refunds unchanged |
 | `GET\|POST /api/jobs/poll-public-merges` | optional `CRON_SECRET` bearer; Claim on public repos with no App install. Ops Cloud Scheduler on PROD every 10 minutes; this repo does not create the job |
+| `GET\|POST /api/jobs/sync-contacts` | optional `CRON_SECRET` bearer; push stale `marketing_contacts` and pull Resend unsubscribes. No-op when `RESEND_AUDIENCE_ID` is unset. This repo does not create the schedule |
+| `POST /api/webhooks/resend` | Svix signature (`RESEND_WEBHOOK_SECRET`). Unsubscribes are one-way |
+| `/admin/contacts` | admin host + admin session. Counts (including utm_campaign and utm_content), search, campaign filter, pagination, CSV export (audit `contacts_export`) |
 
 Exclusive 72h claim-lock is **retired**. Optional Working on this is not exclusive and **does not move money.** Merge is still truth (V1-3 eligible Claim). See [docs/bounties.md](../../docs/bounties.md).
 

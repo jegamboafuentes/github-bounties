@@ -9,7 +9,9 @@
 # GEMINI_API_KEY is a WEB_OPTIONAL_SECRET: deploy-web.sh attaches it when an
 # enabled SM version exists (DEV) and skips when absent. Not wired on PROD.
 # API_KEY_HMAC_SECRET is the same shape (V4-2 API key HMAC). Create the secret
-# on DEV and remount so keys work. API_MONEY_ENABLED, API_PER_TX_CAP_USDC, and
+# on DEV and remount so keys work. RESEND_AUDIENCE_ID and RESEND_WEBHOOK_SECRET
+# are the same optional shape for campaign contact sync. Absent versions are
+# skipped and sync stays a no-op. API_MONEY_ENABLED, API_PER_TX_CAP_USDC, and
 # API_DAILY_CAP_USDC are plain env, not secrets. Money defaults off when
 # CDP_NETWORK=base.
 # HF_OAUTH_CLIENT_ID and HF_OAUTH_CLIENT_SECRET are WEB_OPTIONAL_SECRETS.

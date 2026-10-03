@@ -4,7 +4,7 @@ import { MONEY_ACTIONS_DISABLED } from "../access/money-wording";
 import { createBountiesMcpServer } from "./mcp";
 import type { PublicReadApi } from "./service";
 
-export type McpToolScope = "public" | "read" | "write" | "money";
+export type McpToolScope = "public" | "read" | "write" | "money" | "admin";
 
 export type McpToolSummary = {
   name: string;
@@ -15,6 +15,7 @@ export type McpToolSummary = {
 };
 
 export function mcpToolScope(description: string): McpToolScope {
+  if (description.startsWith("Requires API key (admin scope).")) return "admin";
   if (description.startsWith("Requires API key (read scope).")) return "read";
   if (description.startsWith("Requires API key (write scope).")) return "write";
   if (description.startsWith("Requires API key with money scope.")) return "money";
@@ -23,7 +24,7 @@ export function mcpToolScope(description: string): McpToolScope {
 
 /** One sentence from the registry text. The required-scope lead is not repeated. */
 export function mcpToolOneLiner(description: string): string {
-  let rest = description.replace(/^Requires API key \((?:read|write) scope\)\.\s*/, "");
+  let rest = description.replace(/^Requires API key \((?:read|write|admin) scope\)\.\s*/, "");
   rest = rest.replace(/^Requires API key with money scope\.\s*/, "");
   if (rest.startsWith(MONEY_ACTIONS_DISABLED)) {
     rest = rest.slice(MONEY_ACTIONS_DISABLED.length).replace(/^\s*/, "");
