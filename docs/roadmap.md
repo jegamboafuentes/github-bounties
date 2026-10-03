@@ -59,7 +59,7 @@ Related polish on PROD: board complexity/language badges + filters, Settings/Pos
 
 ### V6 — Hugging Face
 
-Bounties on Hugging Face discussions and PRs. In progress. No ship date. Every bounty has `provider`: `github` or `huggingface` (existing rows stay `github`). REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. A signed-in Google user can connect Hugging Face when `HF_OAUTH_CLIENT_ID` and `HF_OAUTH_CLIENT_SECRET` are set. Those secrets are optional. GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
+Bounties on Hugging Face discussions and PRs. In progress. No ship date. Every bounty has `provider`: `github` or `huggingface` (existing rows stay `github`). REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. A signed-in Google user can connect Hugging Face when `HF_OAUTH_CLIENT_ID` and `HF_OAUTH_CLIENT_SECRET` are set. Those secrets are optional. Connect, callback, and disconnect return **401** without a session and **404** `hf_not_configured` (no secret names in the body) when the secrets are missing. Creating a bounty from a public discussion requires `HF_BOUNTIES_ENABLED=1`. Claim, merge detection, and payouts are not in this release. GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
 
 ## Next
 

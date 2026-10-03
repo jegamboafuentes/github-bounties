@@ -212,7 +212,40 @@ describe("link and unlink Hugging Face", () => {
 });
 
 describe("Hugging Face OAuth connect", () => {
-  it("returns 503 hf_not_configured when either secret is missing and does not link", async () => {
+  it("returns 401 before hf_not_configured when the session is missing", async () => {
+    for (const env of [{}, ENV]) {
+      const start = startHuggingFaceConnect({ userId: null, env });
+      assert.equal(start.status, 401);
+      assert.equal(((await start.json()) as { error: string }).error, "unauthorized");
+      assert.equal(start.headers.get("location"), null);
+
+      const callback = await finishHuggingFaceConnect({
+        userId: null,
+        code: "code",
+        state: "state",
+        env,
+      });
+      assert.equal(callback.status, 401);
+      assert.equal(((await callback.json()) as { error: string }).error, "unauthorized");
+
+      let deleted = false;
+      const disconnect = await disconnectHuggingFace({
+        userId: null,
+        env,
+        db: {
+          delete() {
+            deleted = true;
+            return { where: () => ({ returning: async () => [] }) };
+          },
+        } as never,
+      });
+      assert.equal(disconnect.status, 401);
+      assert.equal(((await disconnect.json()) as { error: string }).error, "unauthorized");
+      assert.equal(deleted, false);
+    }
+  });
+
+  it("returns 404 hf_not_configured when either secret is missing and does not link", async () => {
     for (const env of [
       {},
       { HF_OAUTH_CLIENT_ID: "id-only" },
@@ -220,12 +253,12 @@ describe("Hugging Face OAuth connect", () => {
       { HF_OAUTH_CLIENT_ID: "  ", HF_OAUTH_CLIENT_SECRET: "secret" },
     ]) {
       const start = startHuggingFaceConnect({ userId: "user-1", env });
-      assert.equal(start.status, 503);
+      assert.equal(start.status, 404);
       const body = (await start.json()) as ReturnType<typeof hfNotConfiguredBody>;
       assert.equal(body.ok, false);
       assert.equal(body.error, "hf_not_configured");
-      assert.ok(body.missing.length > 0);
-      assert.match(body.message, /HF_OAUTH_CLIENT_ID and HF_OAUTH_CLIENT_SECRET/);
+      assert.equal("missing" in body, false);
+      assert.doesNotMatch(JSON.stringify(body), /HF_OAUTH_/);
 
       const callback = await finishHuggingFaceConnect({
         userId: "user-1",
@@ -233,8 +266,10 @@ describe("Hugging Face OAuth connect", () => {
         state: "state",
         env,
       });
-      assert.equal(callback.status, 503);
-      assert.equal(((await callback.json()) as { error: string }).error, "hf_not_configured");
+      assert.equal(callback.status, 404);
+      const callbackBody = (await callback.json()) as { error: string };
+      assert.equal(callbackBody.error, "hf_not_configured");
+      assert.doesNotMatch(JSON.stringify(callbackBody), /HF_OAUTH_/);
 
       let deleted = false;
       const disconnect = await disconnectHuggingFace({
@@ -247,8 +282,10 @@ describe("Hugging Face OAuth connect", () => {
           },
         } as never,
       });
-      assert.equal(disconnect.status, 503);
-      assert.equal(((await disconnect.json()) as { error: string }).error, "hf_not_configured");
+      assert.equal(disconnect.status, 404);
+      const disconnectBody = (await disconnect.json()) as { error: string };
+      assert.equal(disconnectBody.error, "hf_not_configured");
+      assert.doesNotMatch(JSON.stringify(disconnectBody), /HF_OAUTH_/);
       assert.equal(deleted, false);
     }
   });

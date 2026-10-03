@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   ISSUE_BODY_TTL_MS,
+  refreshesIssueBodyFromProvider,
   shouldRefreshIssueBody,
   splitFullName,
 } from "./issue-body";
@@ -39,6 +40,11 @@ describe("issue body refresh", () => {
       }),
       false,
     );
+  });
+
+  it("refreshes GitHub issue bodies and keeps the Hugging Face snapshot", () => {
+    assert.equal(refreshesIssueBodyFromProvider("github"), true);
+    assert.equal(refreshesIssueBodyFromProvider("huggingface"), false);
   });
 
   it("splits owner/repo and rejects extra path segments", () => {

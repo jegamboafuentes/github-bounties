@@ -24,6 +24,7 @@ import { EditAmountForm } from "@/components/edit-amount-form";
 import { FundLockPanel } from "@/components/fund-lock-panel";
 import { FunderContributionList } from "@/components/funder-contributions";
 import { GitHubAvatar } from "@/components/github-avatar";
+import { ProviderBadge } from "@/components/provider-badge";
 import { AppHeader } from "@/components/header";
 import { IssueBodyCard } from "@/components/issue-body";
 import { PayoutBreakdown } from "@/components/payout-breakdown";
@@ -148,8 +149,11 @@ export default async function BountyDetailPage({
       <AppHeader />
       <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-6 py-14">
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
-            {bounty.repoFullName} · #{bounty.githubIssueNumber}
+          <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-emerald-700 dark:text-emerald-400">
+            <span>
+              {bounty.repoFullName} · #{bounty.githubIssueNumber}
+            </span>
+            <ProviderBadge provider={bounty.provider} />
           </p>
           <h1 className="text-3xl font-semibold tracking-tight">{bounty.title}</h1>
           <p className="text-lg font-medium" data-bounty-amount>
@@ -160,7 +164,7 @@ export default async function BountyDetailPage({
           ) : null}
         </div>
 
-        <IssueBodyCard markdown={issue?.markdown ?? null} />
+        <IssueBodyCard markdown={issue?.markdown ?? null} provider={bounty.provider} />
         <BountyIntelligenceCard intelligence={intelligence} />
 
         <p className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
@@ -332,7 +336,9 @@ export default async function BountyDetailPage({
             </dd>
           </div>
           <div className="grid gap-1 px-4 py-3 sm:grid-cols-3">
-            <dt className="text-xs uppercase tracking-wide text-zinc-500">Issue</dt>
+            <dt className="text-xs uppercase tracking-wide text-zinc-500">
+              {bounty.provider === "huggingface" ? "Discussion" : "Issue"}
+            </dt>
             <dd className="sm:col-span-2">
               <a href={bounty.url} className="underline underline-offset-4" target="_blank" rel="noreferrer">
                 {bounty.url}

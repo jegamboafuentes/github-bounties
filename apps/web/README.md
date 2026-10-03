@@ -162,7 +162,7 @@ See [docs/github-app.md](../../docs/github-app.md) and [docs/webhooks.md](../../
 
 If Google env is missing, `/signin` lists the unset variable names. Home and `/api/health` still work. If GitHub App env is missing, Settings shows the documented blocker; webhooks return 503.
 
-Hugging Face connect is optional and is not product login. Set `HF_OAUTH_CLIENT_ID` and `HF_OAUTH_CLIENT_SECRET` to show **Connect Hugging Face** on Settings. The redirect URI is `{PUBLIC_BASE_URL or AUTH_URL}/huggingface/callback` (`https://dev.githubbounties.xyz/huggingface/callback` on DEV, `https://githubbounties.xyz/huggingface/callback` on PROD, `http://localhost:3000/huggingface/callback` locally). If either secret is missing, the button stays hidden and the connect routes return 503 `hf_not_configured`.
+Hugging Face connect is optional and is not product login. Set `HF_OAUTH_CLIENT_ID` and `HF_OAUTH_CLIENT_SECRET` to show **Connect Hugging Face** on Settings. The redirect URI is `{PUBLIC_BASE_URL or AUTH_URL}/huggingface/callback` (`https://dev.githubbounties.xyz/huggingface/callback` on DEV, `https://githubbounties.xyz/huggingface/callback` on PROD, `http://localhost:3000/huggingface/callback` locally). Connect, callback, and disconnect return 401 when no one is signed in, then 404 `hf_not_configured` (no secret names in the body) when either secret is missing. The button stays hidden in that case. Discussion bounties are a separate switch: `HF_BOUNTIES_ENABLED=1`.
 
 ## Bounty board + parallel hunt (V1-4 / V2-4)
 

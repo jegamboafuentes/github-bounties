@@ -25,7 +25,7 @@ export async function completeHuggingFaceConnect(
 ): Promise<HfCompleteResult> {
   const missing = missingHfOAuthEnv(opts.env);
   if (missing.length > 0) {
-    const body = hfNotConfiguredBody(missing);
+    const body = hfNotConfiguredBody();
     return { ok: false, error: body.error, message: body.message };
   }
   if (input.oauthError) {

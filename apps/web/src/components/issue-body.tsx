@@ -1,6 +1,13 @@
 import { renderSafeIssueHtml } from "@/bounties/markdown";
 
-export function IssueBodyCard({ markdown }: { markdown: string | null }) {
+export function IssueBodyCard({
+  markdown,
+  provider = "github",
+}: {
+  markdown: string | null;
+  provider?: "github" | "huggingface";
+}) {
+  const huggingFace = provider === "huggingface";
   const html = markdown?.trim() ? renderSafeIssueHtml(markdown) : "";
 
   return (
@@ -12,14 +19,20 @@ export function IssueBodyCard({ markdown }: { markdown: string | null }) {
       <div className="relative flex flex-col gap-3 p-4">
         <div>
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-            GitHub issue
+            {huggingFace ? "Discussion" : "GitHub issue"}
           </h2>
-          <p className="mt-1 text-xs text-zinc-500">Full description from the linked issue.</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            {huggingFace
+              ? "Full description from the linked discussion."
+              : "Full description from the linked issue."}
+          </p>
         </div>
         {html ? (
           <div className="issue-body text-sm leading-6 text-zinc-700 dark:text-zinc-300" dangerouslySetInnerHTML={{ __html: html }} />
         ) : (
-          <p className="text-sm text-zinc-500">No issue description on GitHub.</p>
+          <p className="text-sm text-zinc-500">
+            {huggingFace ? "No discussion description on Hugging Face." : "No issue description on GitHub."}
+          </p>
         )}
       </div>
     </section>

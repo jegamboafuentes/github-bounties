@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
 import { isAdminIdentity } from "../../admin/identity";
 import { isBountyError } from "../../bounties/errors";
+import { ProviderNotSupportedError } from "../../providers/types";
 import { isClaimError } from "../../claims";
 import type { ApiKeyScope } from "../../db/schema";
 import { logMoneyAction, moneyResultCode } from "../../escrow/actor-log";
@@ -284,6 +285,9 @@ export async function runAuthed(
 
 function asApiError(err: unknown): PublicApiError {
   if (err instanceof PublicApiError) return err;
+  if (err instanceof ProviderNotSupportedError) {
+    return new PublicApiError(err.code, err.message, null, statusForDomainCode(err.code));
+  }
   if (isClaimError(err)) {
     return new PublicApiError(err.code, err.message, null, statusForDomainCode(err.code));
   }

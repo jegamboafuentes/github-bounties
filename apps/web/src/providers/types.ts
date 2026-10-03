@@ -1,5 +1,5 @@
 import type { Database } from "../db/client";
-import type { BountyProvider } from "../db/schema";
+import type { BountyProvider, HfRepoType } from "../db/schema";
 import type { GitHubHttp } from "../github/api";
 import type { PublicClosingPull } from "../github/public-read";
 import type { GitHubWebhookPayload } from "../webhooks/types";
@@ -7,8 +7,8 @@ import type { GitHubWebhookPayload } from "../webhooks/types";
 export class ProviderNotSupportedError extends Error {
   readonly code = "provider_not_supported" as const;
 
-  constructor(provider: string) {
-    super(`Provider ${provider} is not supported.`);
+  constructor(provider: string, message?: string) {
+    super(message ?? `Provider ${provider} is not supported.`);
     this.name = "ProviderNotSupportedError";
   }
 }
@@ -20,6 +20,8 @@ export type IssueRef = {
   fullName: string;
   issueNumber: number;
   url: string;
+  /** Set for Hugging Face discussion URLs. Absent on GitHub issues. */
+  hfRepoType?: HfRepoType;
 };
 
 export type PrRef = {
@@ -50,6 +52,8 @@ export type RepoMeta = {
   ownerLogin: string | null;
   githubRepoId: bigint | null;
   defaultBranch: string | null;
+  /** Set when the read came from a Hugging Face repo payload. */
+  hfRepoType?: HfRepoType;
 };
 
 export type FetchedIssue = {

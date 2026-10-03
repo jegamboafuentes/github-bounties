@@ -2,11 +2,7 @@ import type { Database } from "../db/client";
 import { getRuntimeDb } from "../db/runtime";
 import { clearHfConnectCookieHeader, hfConnectCookieHeader } from "./cookie";
 import { completeHuggingFaceConnect } from "./complete";
-import {
-  hfNotConfiguredResponse,
-  hfOAuthConfigured,
-  missingHfOAuthEnv,
-} from "./env";
+import { hfNotConfiguredResponse, hfOAuthConfigured } from "./env";
 import type { HfHttp } from "./oauth";
 import { huggingfaceAuthorizeUrl } from "./oauth";
 import { createPkcePair, pkceHash, signHfConnectState } from "./state";
@@ -17,27 +13,28 @@ function settingsNotice(message: string): string {
   return `/settings?notice=${encodeURIComponent(message)}`;
 }
 
+function unauthorized(): Response {
+  return Response.json(
+    { ok: false, error: "unauthorized" },
+    { status: 401, headers: { "cache-control": "no-store" } },
+  );
+}
+
 function redirect(location: string, cookies: string[] = []): Response {
   const headers = new Headers({ location, "cache-control": "no-store" });
   for (const cookie of cookies) headers.append("set-cookie", cookie);
   return new Response(null, { status: 302, headers });
 }
 
-/** Start connect. 503 when OAuth env is missing. 401 without a session. */
+/** Start connect. 401 without a session, then 404 when OAuth env is missing. */
 export function startHuggingFaceConnect(input: {
   userId: string | null;
   env?: NodeJS.ProcessEnv;
   now?: number;
 }): Response {
+  if (!input.userId) return unauthorized();
   const env = input.env ?? process.env;
-  const missing = missingHfOAuthEnv(env);
-  if (missing.length > 0) return hfNotConfiguredResponse(missing);
-  if (!input.userId) {
-    return Response.json(
-      { ok: false, error: "unauthorized" },
-      { status: 401, headers: { "cache-control": "no-store" } },
-    );
-  }
+  if (!hfOAuthConfigured(env)) return hfNotConfiguredResponse();
   const { verifier, challenge } = createPkcePair();
   const state = signHfConnectState(
     { userId: input.userId, pkceHash: pkceHash(verifier), now: input.now },
@@ -52,7 +49,7 @@ export function startHuggingFaceConnect(input: {
   return redirect(location, [hfConnectCookieHeader(verifier, env.NODE_ENV)]);
 }
 
-/** Browser return from Hugging Face. 503 when OAuth env is missing. */
+/** Browser return from Hugging Face. 401 without a session, then 404 when OAuth env is missing. */
 export async function finishHuggingFaceConnect(input: {
   userId: string | null;
   code?: string | null;
@@ -64,14 +61,10 @@ export async function finishHuggingFaceConnect(input: {
   db?: Database;
   now?: number;
 }): Promise<Response> {
+  if (!input.userId) return unauthorized();
   const env = input.env ?? process.env;
-  const missing = missingHfOAuthEnv(env);
-  if (missing.length > 0) return hfNotConfiguredResponse(missing);
+  if (!hfOAuthConfigured(env)) return hfNotConfiguredResponse();
   const clear = clearHfConnectCookieHeader(env.NODE_ENV);
-  if (!input.userId) {
-    const back = `/huggingface/callback`;
-    return redirect(`/signin?callbackUrl=${encodeURIComponent(back)}`, [clear]);
-  }
   const result = await completeHuggingFaceConnect(
     {
       userId: input.userId,
@@ -90,20 +83,15 @@ export async function finishHuggingFaceConnect(input: {
   return redirect(settingsNotice(result.message), [clear]);
 }
 
-/** Disconnect. 503 when OAuth env is missing. Does not unlink in that case. */
+/** Disconnect. 401 without a session, then 404 when OAuth env is missing. Does not unlink in that case. */
 export async function disconnectHuggingFace(input: {
   userId: string | null;
   env?: NodeJS.ProcessEnv;
   db?: Database;
 }): Promise<Response> {
+  if (!input.userId) return unauthorized();
   const env = input.env ?? process.env;
-  if (!hfOAuthConfigured(env)) return hfNotConfiguredResponse(missingHfOAuthEnv(env));
-  if (!input.userId) {
-    return Response.json(
-      { ok: false, error: "unauthorized" },
-      { status: 401, headers: { "cache-control": "no-store" } },
-    );
-  }
+  if (!hfOAuthConfigured(env)) return hfNotConfiguredResponse();
   const db = input.db ?? getRuntimeDb();
   await unlinkHuggingFaceForUser(input.userId, db);
   return redirect(settingsNotice(DISCONNECT_HF_NOTICE));

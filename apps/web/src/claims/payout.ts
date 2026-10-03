@@ -15,6 +15,7 @@ import {
   POOL_NOT_READY_MESSAGE,
   POOL_ROSTER_NOT_FROZEN_MESSAGE,
 } from "./errors";
+import { ProviderNotSupportedError } from "../providers/types";
 import { getPendingHunterLinkForBounty, pendingHunterLinkGuidance } from "./pending-link";
 
 export type ClaimPayoutInput = {
@@ -75,6 +76,12 @@ export async function claimPayout(
     .limit(1);
   if (!bounty || bounty.deletedAt) {
     throw new ClaimError("bounty_not_found", "Bounty not found.");
+  }
+  if (bounty.provider === "huggingface") {
+    throw new ProviderNotSupportedError(
+      "huggingface",
+      "Claiming a Hugging Face bounty is not supported yet.",
+    );
   }
 
   const claim = await loadClaimForPayout(opts.db, bountyId, input.claimId, bounty);
@@ -156,6 +163,12 @@ export async function claimPoolPayout(
     .limit(1);
   if (!bounty || bounty.deletedAt) {
     throw new ClaimError("bounty_not_found", "Bounty not found.");
+  }
+  if (bounty.provider === "huggingface") {
+    throw new ProviderNotSupportedError(
+      "huggingface",
+      "Claiming a Hugging Face bounty is not supported yet.",
+    );
   }
 
   const freeze = await loadFrozenSettleSet(opts.db, bountyId);

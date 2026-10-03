@@ -69,6 +69,8 @@ export async function pollPublicMerges(
     .where(
       and(
         eq(repos.connectionKind, "public_reference"),
+        eq(repos.provider, "github"),
+        eq(bounties.provider, "github"),
         inArray(bounties.status, [...FUNDED_BOUNTY_STATUSES]),
         isNull(bounties.deletedAt),
       ),
@@ -121,6 +123,7 @@ export async function pollPublicMerges(
     const pulls = new Map<number, PublicClosingPull>();
     const issueNumbers = new Set<number>();
     for (const target of targets) {
+      if (target.provider !== "github") continue;
       issueNumbers.add(target.issueNumber);
       try {
         const provider = getProvider(target.provider);

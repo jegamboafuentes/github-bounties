@@ -7,7 +7,14 @@ extendZodWithOpenApi(z);
 
 export const createBountyBodySchema = z
   .object({
-    issueUrl: z.string().trim().min(1).max(500).describe("Public GitHub issue URL."),
+    issueUrl: z
+      .string()
+      .trim()
+      .min(1)
+      .max(500)
+      .describe(
+        "Public GitHub issue URL, or a public Hugging Face discussion URL (model, datasets/, or spaces/). Hugging Face create requires HF_BOUNTIES_ENABLED=1 and returns 403 hf_disabled when that flag is off.",
+      ),
     amountUsdc: z
       .string()
       .trim()
@@ -426,7 +433,10 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       201: { description: "Pending fund bounty.", content: json(createdBountySchema) },
       400: { description: "Validation failed.", ...errorContent },
       401: { description: "Unauthorized or revoked.", ...errorContent },
-      403: { description: "Missing write scope.", ...errorContent },
+      403: {
+        description: "Missing write scope, or Hugging Face bounties disabled (hf_disabled).",
+        ...errorContent,
+      },
       409: { description: "An active bounty already exists for this issue.", ...errorContent },
       429: { description: "Per-key write limit (20/min).", ...errorContent },
     },
