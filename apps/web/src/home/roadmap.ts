@@ -6,7 +6,7 @@ import { PUBLIC_API_VERSION } from "../api/public/version";
 export const ROADMAP_INTRO =
   "Shipped versions and what is next. No invented ship dates.";
 
-export const ROADMAP_STATUSES = ["shipped", "next", "then", "later", "parked"] as const;
+export const ROADMAP_STATUSES = ["shipped", "in_progress", "next", "then", "later", "parked"] as const;
 
 export type RoadmapStatus = (typeof ROADMAP_STATUSES)[number];
 
@@ -79,14 +79,29 @@ export const PUBLIC_ROADMAP = [
   {
     id: "v5",
     version: "V5",
-    title: "GitHub-native /bounty",
+    title: "MCP page, unfunded edits, admin",
     summary:
-      "GitHub-native bounty creation via a `/bounty` comment on a GitHub issue. Roadmap only. Nothing is built.",
-    status: "next",
+      "DONE. /mcp is the MCP server endpoint and its docs page. Posters edit an unfunded bounty amount on the web, REST, and MCP (update_bounty_amount). The admin dashboard on admin hosts sets fee and pool, lists bounties with trash and refund, gates refunds on ADMIN_REFUND_ENABLED, and gates fee-wallet withdraws on ADMIN_WITHDRAW_ENABLED with a single-use confirm token and a duplicate guard. Admin actions write an admin audit log. No recorded PROD date.",
+    status: "shipped",
   },
   {
     id: "v6",
-    version: "V6+",
+    version: "V6",
+    title: "Hugging Face",
+    summary: "Bounties on Hugging Face discussions and PRs. In progress. No ship date.",
+    status: "in_progress",
+  },
+  {
+    id: "v7",
+    version: "V7",
+    title: "/bounty command",
+    summary:
+      "A `/bounty` command on GitHub and Hugging Face. Roadmap only. Nothing is built. No ship date.",
+    status: "next",
+  },
+  {
+    id: "v8",
+    version: "V8",
     title: "Agent economy",
     summary: "The agent economy on x402. No ship date.",
     status: "then",
@@ -123,6 +138,7 @@ export function roadmapWithSurface(counts: PublicSurfaceCounts): RoadmapItem[] {
 
 export const ROADMAP_STATUS_LABEL: Record<RoadmapStatus, string> = {
   shipped: "Shipped",
+  in_progress: "In progress",
   next: "Next",
   then: "Then",
   later: "Later",
