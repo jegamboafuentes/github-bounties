@@ -13,16 +13,18 @@ const readme = readFileSync(join(repoRoot, "README.md"), "utf8");
 
 const STATUS_RANK: Record<(typeof ROADMAP_STATUSES)[number], number> = {
   shipped: 0,
-  next: 1,
-  then: 2,
-  later: 3,
-  parked: 4,
+  in_progress: 1,
+  next: 2,
+  then: 3,
+  later: 4,
+  parked: 5,
 };
 
 describe("public roadmap", () => {
   it("uses honest statuses and never invents a ship date field", () => {
-    assert.deepEqual([...ROADMAP_STATUSES], ["shipped", "next", "then", "later", "parked"]);
+    assert.deepEqual([...ROADMAP_STATUSES], ["shipped", "in_progress", "next", "then", "later", "parked"]);
     assert.equal(ROADMAP_STATUS_LABEL.shipped, "Shipped");
+    assert.equal(ROADMAP_STATUS_LABEL.in_progress, "In progress");
     assert.equal(ROADMAP_STATUS_LABEL.next, "Next");
     assert.equal(ROADMAP_STATUS_LABEL.then, "Then");
     assert.equal(ROADMAP_STATUS_LABEL.later, "Later");
@@ -85,13 +87,40 @@ describe("public roadmap", () => {
     assert.doesNotMatch(byId.v4?.summary ?? "", /23 operations, 24 tools/);
     assert.match(byId.v4?.summary ?? "", /API money is OFF on PROD/);
     assert.doesNotMatch(byId.v4?.summary ?? "", /In planning/);
-    assert.equal(byId.v5?.status, "next");
-    assert.equal(byId.v5?.title, "GitHub-native /bounty");
-    assert.match(byId.v5?.summary ?? "", /\/bounty/);
-    assert.match(byId.v5?.summary ?? "", /Nothing is built/);
-    assert.equal(byId.v6?.status, "then");
-    assert.match(byId.v6?.summary ?? "", /agent economy on x402/i);
+    assert.equal(byId.v5?.status, "shipped");
+    assert.equal(byId.v5?.version, "V5");
+    assert.equal(byId.v5?.title, "MCP page, unfunded edits, admin");
+    assert.match(byId.v5?.summary ?? "", /DONE/);
+    assert.match(byId.v5?.summary ?? "", /\/mcp is the MCP server endpoint and its docs page/);
+    assert.match(byId.v5?.summary ?? "", /update_bounty_amount/);
+    assert.match(byId.v5?.summary ?? "", /ADMIN_REFUND_ENABLED/);
+    assert.match(byId.v5?.summary ?? "", /ADMIN_WITHDRAW_ENABLED/);
+    assert.match(byId.v5?.summary ?? "", /single-use confirm token and a duplicate guard/);
+    assert.match(byId.v5?.summary ?? "", /admin audit log/);
+    assert.match(byId.v5?.summary ?? "", /No recorded PROD date/);
+    assert.doesNotMatch(byId.v5?.summary ?? "", /Nothing is built/);
+    assert.doesNotMatch(byId.v5?.summary ?? "", /LIVE on PROD/);
+    assert.equal(byId.v6?.status, "in_progress");
+    assert.equal(byId.v6?.version, "V6");
+    assert.equal(byId.v6?.title, "Hugging Face");
+    assert.match(byId.v6?.summary ?? "", /Bounties on Hugging Face discussions and PRs/);
+    assert.match(byId.v6?.summary ?? "", /In progress/);
     assert.match(byId.v6?.summary ?? "", /No ship date/);
+    assert.equal(byId.v7?.status, "next");
+    assert.equal(byId.v7?.version, "V7");
+    assert.equal(byId.v7?.title, "/bounty command");
+    assert.match(byId.v7?.summary ?? "", /\/bounty/);
+    assert.match(byId.v7?.summary ?? "", /GitHub and Hugging Face/);
+    assert.match(byId.v7?.summary ?? "", /Nothing is built/);
+    assert.equal(byId.v8?.status, "then");
+    assert.equal(byId.v8?.version, "V8");
+    assert.equal(byId.v8?.title, "Agent economy");
+    assert.match(byId.v8?.summary ?? "", /agent economy on x402/i);
+    assert.match(byId.v8?.summary ?? "", /No ship date/);
+    assert.deepEqual(
+      PUBLIC_ROADMAP.map((item) => item.version),
+      ["V1", "V2", "Pool Claim", "FE", "V3", "Funding", "V4", "V5", "V6", "V7", "V8", "BTC", "Checkout"],
+    );
     assert.equal(byId["btc-payouts"]?.status, "parked");
     assert.match(byId["btc-payouts"]?.summary ?? "", /Parked/);
     assert.equal(byId["hosted-checkout"]?.status, "parked");
@@ -108,12 +137,12 @@ describe("public roadmap", () => {
     assert.doesNotMatch(ROADMAP_INTRO, /\bQ[1-4]\b|\b20\d{2}-\d{2}-\d{2}\b/);
     assert.match(docsRoadmap, /Do not invent ship dates/i);
     assert.match(docsRoadmap, /public `\/roadmap` page/);
-    assert.match(docsRoadmap, /as of 2026-09-25/i);
+    assert.match(docsRoadmap, /as of 2026-10-03/i);
     assert.doesNotMatch(docsRoadmap, /pending Enrique/i);
     assert.match(docsRoadmap, /LIVE on PROD 2026-09-25/);
     assert.match(docsRoadmap, /LIVE on PROD 2026-09-24/);
     assert.doesNotMatch(docsRoadmap, /Live on DEV, not PROD/i);
-    assert.doesNotMatch(docsRoadmap, /## In progress/i);
+    assert.match(docsRoadmap, /## In progress/);
     assert.doesNotMatch(docsRoadmap, /## Planned/i);
     assert.doesNotMatch(docsRoadmap, /In planning/);
     assert.match(docsRoadmap, /## Shipped/);
@@ -122,14 +151,33 @@ describe("public roadmap", () => {
     assert.match(docsRoadmap, /## Parked/);
     assert.match(docsRoadmap, /githubbounties\.xyz\/mcp/);
     assert.doesNotMatch(docsRoadmap, /\/developers/);
-    assert.match(readme, /As of \*\*2026-09-25\*\*/);
+    assert.match(readme, /As of \*\*2026-10-03\*\*/);
     assert.match(readme, /LIVE on PROD 2026-09-25/);
     assert.match(readme, /LIVE on PROD 2026-09-24/);
     assert.match(readme, /githubbounties\.xyz\/mcp/);
+    assert.match(readme, /0015_fee_withdraw_guards/);
+    assert.match(readme, /ADMIN_EMAILS/);
+    assert.match(readme, /ADMIN_REFUND_ENABLED/);
+    assert.match(readme, /ADMIN_WITHDRAW_ENABLED/);
+    assert.match(readme, /FEE_WALLET_ADDRESS/);
     assert.doesNotMatch(readme, /\/developers/);
     assert.doesNotMatch(readme, /V3-0 is \*\*DEV only\*\*/);
     assert.doesNotMatch(readme, /V3 is not on PROD/);
     assert.doesNotMatch(readme, /V5 agent economy/);
+    const docsOrder = ["### V5 —", "## In progress", "### V6 —", "### V7 —", "### V8 —", "## Parked", "### BTC payouts", "### Hosted Coinbase checkout"];
+    const readmeOrder = ["**V5 —", "### In progress", "**V6 —", "**V7 —", "**V8 —", "### Parked", "**BTC payouts.**", "**Hosted Coinbase checkout.**"];
+    let docsAt = -1;
+    for (const marker of docsOrder) {
+      const at = docsRoadmap.indexOf(marker);
+      assert.ok(at > docsAt, marker);
+      docsAt = at;
+    }
+    let readmeAt = -1;
+    for (const marker of readmeOrder) {
+      const at = readme.indexOf(marker);
+      assert.ok(at > readmeAt, marker);
+      readmeAt = at;
+    }
     for (const item of PUBLIC_ROADMAP) {
       const title = new RegExp(item.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
       assert.match(docsRoadmap, title);
