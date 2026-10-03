@@ -195,8 +195,8 @@ describe("public roadmap", () => {
     assert.match(surfaced?.summary ?? "", new RegExp(PUBLIC_API_VERSION.replace(/\./g, "\\.")));
     assert.match(docsRoadmap, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.match(readme, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-    assert.match(docsRoadmap, /version 4\.6\.0/);
-    assert.match(readme, /version 4\.6\.0/);
+    assert.match(docsRoadmap, /version 4\.7\.0/);
+    assert.match(readme, /version 4\.7\.0/);
     assert.doesNotMatch(docsRoadmap, /23 operations, 24 tools/);
     assert.doesNotMatch(readme, /23 operations, 24 tools/);
   });

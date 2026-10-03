@@ -14,6 +14,7 @@ import {
   claims,
   escrows,
   githubLinks,
+  hfLinks,
   poolParticipants,
   users,
   type ApiKeyEnv,
@@ -26,6 +27,7 @@ import { assertFundedTopUpOpen, topUpFundedBounty } from "../../escrow/top-up";
 import { processLiveX402Exact } from "../../escrow/x402-seller";
 import { atomicToUsdc, usdcToAtomic } from "../../lib/money";
 import {
+  huggingfaceAccountView,
   loadAccountProfile,
   loadEmailNotificationPreferences,
   loadLinkedAccounts,
@@ -283,9 +285,12 @@ export function createAccessDeps(
           email: users.email,
           walletAddress: users.walletAddress,
           githubLogin: githubLinks.githubLogin,
+          hfUsername: hfLinks.hfUsername,
+          hfLinkedAt: hfLinks.linkedAt,
         })
         .from(users)
         .leftJoin(githubLinks, eq(githubLinks.userId, users.id))
+        .leftJoin(hfLinks, eq(hfLinks.userId, users.id))
         .where(eq(users.id, userId))
         .limit(1);
       if (!row) return null;
@@ -295,6 +300,7 @@ export function createAccessDeps(
         email: row.email,
         walletAddress: row.walletAddress,
         githubLogin: row.githubLogin,
+        huggingface: huggingfaceAccountView(row.hfUsername, row.hfLinkedAt),
       };
     },
     async loadAccountProfile(userId) {
