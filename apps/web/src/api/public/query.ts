@@ -65,6 +65,7 @@ export function coerceListSearchParams(params: URLSearchParams): Record<string, 
   };
   take("repo");
   take("status");
+  take("provider");
   take("complexity");
   take("language");
   take("sort");

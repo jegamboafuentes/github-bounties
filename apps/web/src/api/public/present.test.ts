@@ -28,6 +28,7 @@ function board(partial: Partial<BoardBounty> & Pick<BoardBounty, "status" | "amo
     title: "Issue",
     url: "https://github.com/android/architecture-samples/issues/1080",
     currency: "USDC",
+    provider: "github",
     githubIssueNumber: 1080,
     repoFullName: "android/architecture-samples",
     posterDisplayName: "Enrique Gamboa",
@@ -136,6 +137,7 @@ describe("confirmed funded total", () => {
     assert.equal(presented.totalFundedUsdc, "10.000000");
     assert.equal(presented.amountUsdc, "10.000000");
     assert.equal(presented.payout.faceUsdc, "10.000000");
+    assert.equal(presented.provider, "github");
   });
 
   it("counts an original lock and a top-up once when the escrow hash is the lock", () => {

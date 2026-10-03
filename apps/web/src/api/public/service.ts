@@ -40,6 +40,7 @@ export function createPublicReadApi(db?: Database) {
           status: input.status,
           complexity: input.complexity,
           language: input.language,
+          provider: input.provider,
         },
         {
           limit: input.limit,

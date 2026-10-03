@@ -1,23 +1,16 @@
 import type { Database } from "../db/client";
-import { bounties, escrows, type repos } from "../db/schema";
+import { bounties, escrows, type BountyProvider, type repos } from "../db/schema";
 import { isUniqueViolation } from "../db/errors";
-import {
-  fetchIssue,
-  type GitHubHttp,
-  type GitHubIssueSnapshot,
-} from "../github/api";
+import { type GitHubHttp, type GitHubIssueSnapshot } from "../github/api";
 import { findActiveRepoByFullName, upsertPublicReferenceRepo } from "../github/persist";
-import {
-  isPublicGitHubError,
-  PublicGitHubError,
-  resolvePublicIssue,
-} from "../github/public-read";
+import { isPublicGitHubError, PublicGitHubError } from "../github/public-read";
+import { getProvider } from "../providers/registry";
+import { toGitHubIssueSnapshot } from "../providers/github";
 import { readPlatformSettings } from "../admin/settings";
 import { DEFAULT_CHAIN, DEFAULT_CURRENCY } from "../lib/constants";
 import { normalizeBountyAmountUsdc } from "./amount";
 import { BountyError } from "./errors";
 import { clipIssueBody } from "./markdown";
-import { parseGitHubIssueUrl } from "./parse-issue-url";
 
 export type CreateBountyInput = {
   posterUserId: string;
@@ -35,6 +28,7 @@ export type CreatedBounty = {
   status: "pending_fund";
   title: string;
   amountUsdc: string;
+  provider: BountyProvider;
 };
 
 type RepoRow = typeof repos.$inferSelect;
@@ -65,7 +59,7 @@ export async function createBountyFromIssueUrl(
     throw new BountyError("unauthorized", "Sign in with Google to post a bounty.");
   }
 
-  const parsed = parseGitHubIssueUrl(input.issueUrl);
+  const parsed = getProvider("github").parseIssueUrl(input.issueUrl);
   if (!parsed) {
     throw new BountyError(
       "invalid_issue_url",
@@ -119,6 +113,7 @@ export async function createBountyFromIssueUrl(
           status: bounties.status,
           title: bounties.title,
           amountUsdc: bounties.amountUsdc,
+          provider: bounties.provider,
         });
 
       if (!row) throw new Error("insert bounty returned no row");
@@ -140,6 +135,7 @@ export async function createBountyFromIssueUrl(
       status: "pending_fund",
       title: created.title,
       amountUsdc: created.amountUsdc,
+      provider: created.provider === "huggingface" ? "huggingface" : "github",
     };
   } catch (err) {
     if (isUniqueViolation(err)) {
@@ -240,34 +236,47 @@ async function resolveRepoAndIssue(
     return { repo: existing, snapshot };
   }
 
+  const provider = getProvider("github");
+  const ref = {
+    provider: "github" as const,
+    owner: parsed.owner,
+    repo: parsed.repo,
+    fullName: parsed.fullName,
+    issueNumber: parsed.issueNumber,
+    url: `https://github.com/${parsed.fullName}/issues/${parsed.issueNumber}`,
+  };
   const useInstall =
     existing?.connectionKind === "app_install" && existing.installationId != null;
   if (useInstall && existing) {
     try {
-      const snapshot = await fetchIssue(parsed.owner, parsed.repo, parsed.issueNumber, {
+      const fetched = await provider.fetchIssue(ref, {
         installationId: existing.installationId as bigint,
         http: opts.http,
         jwt: opts.jwt,
       });
-      return { repo: existing, snapshot };
+      return { repo: existing, snapshot: toGitHubIssueSnapshot(fetched) };
     } catch (err) {
       throw bountyErrorForInstalledFetch(err, parsed.fullName, parsed.issueNumber);
     }
   }
 
   try {
-    const resolved = await resolvePublicIssue(parsed.owner, parsed.repo, parsed.issueNumber, {
+    const fetched = await provider.fetchIssue(ref, {
       http: opts.http,
       env: opts.env,
     });
-    assertPostableIssue(parsed.fullName, parsed.issueNumber, resolved.issue);
+    const snapshot = toGitHubIssueSnapshot(fetched);
+    assertPostableIssue(parsed.fullName, parsed.issueNumber, snapshot);
+    if (fetched.repo.githubRepoId == null) {
+      throw new PublicGitHubError("unavailable", 200, "GitHub repo payload missing id");
+    }
     const repo = await upsertPublicReferenceRepo({
       userId: posterUserId,
-      githubRepoId: resolved.githubRepoId,
-      fullName: resolved.fullName,
+      githubRepoId: fetched.repo.githubRepoId,
+      fullName: fetched.repo.fullName,
       db: opts.db,
     });
-    return { repo, snapshot: resolved.issue };
+    return { repo, snapshot };
   } catch (err) {
     if (err instanceof BountyError) throw err;
     if (isPublicGitHubError(err)) {

@@ -51,11 +51,12 @@ Read-only `/api/v1` routes answer `POST`, `PUT`, `PATCH`, and `DELETE` with **40
 | `complexity` | `S`, `M`, or `L` from the cached badge. Rows without a badge drop out |
 | `language` | Substring of the cached language stack |
 | `has_intel` | `true` or `false`. Ready cached badge only, or the rows without one |
+| `provider` | `github` or `huggingface`. Omit to list every provider. Any other value is `validation_failed` |
 | `sort` | `newest` (default) or `amount` (face USDC, descending) |
 | `limit` | Default 20, maximum 100 |
 | `cursor` | Opaque `nextCursor` from the previous page. Must use the same `sort` |
 
-List rows include the issue, status, the face, the confirmed funded sum, the roster fee/pool schedule, cached badges, and the board funder stack (distinct count and up to five avatar URLs, newest contribution first). The list and the detail use one roster function. A funded bounty with no pool members has `payout.schedule` `roster`, `emptyPool` true, and the winner receives 100% of post-fee on both routes.
+List rows include `provider` (`github` or `huggingface`), the issue, status, the face, the confirmed funded sum, the roster fee/pool schedule, cached badges, and the board funder stack (distinct count and up to five avatar URLs, newest contribution first). Detail, create, and my-bounties rows include `provider` too. Existing rows are `github`. The list and the detail use one roster function. A funded bounty with no pool members has `payout.schedule` `roster`, `emptyPool` true, and the winner receives 100% of post-fee on both routes.
 
 `amountUsdc` and `payout.faceUsdc` are the **face**: the posted amount, including top-ups after lock. The fee schedule uses the face. A bounty has a face as soon as it is created, before anyone sends USDC.
 
@@ -243,7 +244,7 @@ claude mcp add --transport http github-bounties-dev https://dev.githubbounties.x
   --header "Authorization: Bearer ${GB_API_KEY}"
 ```
 
-Keyed MCP tools start with the scope they require. Money tools start with `Requires API key with money scope`. A browser request for `/mcp` (`Accept: text/html`) shows the setup page. MCP clients use the same path as streamable HTTP. Claim and refund tools are `claim_winner`, `claim_pool`, and `refund_bounty`. Their results include the same `legs` array as the REST 200 body. `refund_bounty` on a bounty already in `refunding` resumes the unpaid legs. An unknown tool argument is `validation_failed` on that tool's rate class (read 120/minute, write 20/minute, money 10/hour), not a generic JSON-RPC invalid-params error. Status tools are `get_bounty_claims` and `list_my_claims`. OpenAPI `info.version` and the MCP server version are both `4.5.0`.
+Keyed MCP tools start with the scope they require. Money tools start with `Requires API key with money scope`. A browser request for `/mcp` (`Accept: text/html`) shows the setup page. MCP clients use the same path as streamable HTTP. Claim and refund tools are `claim_winner`, `claim_pool`, and `refund_bounty`. Their results include the same `legs` array as the REST 200 body. `refund_bounty` on a bounty already in `refunding` resumes the unpaid legs. An unknown tool argument is `validation_failed` on that tool's rate class (read 120/minute, write 20/minute, money 10/hour), not a generic JSON-RPC invalid-params error. Status tools are `get_bounty_claims` and `list_my_claims`. OpenAPI `info.version` and the MCP server version are both `4.6.0`.
 
 An agent with a Base Sepolia CDP server wallet can post and fund a DEV bounty end to end with `apps/web/scripts/dev-agent-fund.ts` (not run in CI). After a winning merge, `apps/web/scripts/dev-agent-claim.ts` claims to the saved wallet or refunds a funded bounty to the recorded payer:
 

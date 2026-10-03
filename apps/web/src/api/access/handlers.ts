@@ -512,6 +512,7 @@ export async function handleMyBounties(principal: ApiPrincipal, deps: AccessDeps
         id: row.id,
         title: row.title,
         status: row.status,
+        provider: row.provider,
         amountUsdc: row.amountUsdc,
         issueUrl: row.issueUrl,
         createdAt: row.createdAt.toISOString(),
@@ -521,6 +522,7 @@ export async function handleMyBounties(principal: ApiPrincipal, deps: AccessDeps
         bountyId: row.bountyId,
         title: row.title,
         status: row.status,
+        provider: row.provider,
         amountUsdc: row.amountUsdc,
         contributionUsdc: row.contributionUsdc,
         txHash: row.txHash,
@@ -554,6 +556,7 @@ export async function handleCreateBounty(
       title: created.title,
       amountUsdc: created.amountUsdc,
       issueUrl: created.url,
+      provider: created.provider,
     },
   };
 }

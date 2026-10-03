@@ -306,6 +306,7 @@ function memory(options?: {
         title: "Issue",
         amountUsdc: input.amountUsdc,
         url: input.issueUrl,
+        provider: "github" as const,
       };
     },
     async signalWorking() {

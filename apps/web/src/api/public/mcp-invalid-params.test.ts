@@ -81,6 +81,27 @@ describe("MCP invalid params", () => {
     assert.equal(rewritten.result?.isError, true);
     const body = JSON.parse(rewritten.result?.content?.[0]?.text ?? "{}") as { error: { code: string } };
     assert.equal(body.error.code, "validation_failed");
+
+    const embedded = rewriteInvalidParamsBody({
+      jsonrpc: "2.0",
+      id: 7,
+      result: {
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: "MCP error -32602: Input validation error: Invalid enum value. Expected 'github' | 'huggingface', received 'gitlab' at provider",
+          },
+        ],
+      },
+    }) as { result?: { isError?: boolean; content?: { text?: string }[] } };
+    const embeddedBody = JSON.parse(embedded.result?.content?.[0]?.text ?? "{}") as {
+      error: { code: string; message: string; details: null };
+    };
+    assert.equal(embedded.result?.isError, true);
+    assert.equal(embeddedBody.error.code, "validation_failed");
+    assert.match(embeddedBody.error.message, /provider/);
+    assert.equal(embeddedBody.error.details, null);
   });
 
   it("returns validation_failed inside the money rate class for an unknown refund argument", async () => {

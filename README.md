@@ -34,12 +34,12 @@ As of **2026-10-03**. No invented ship dates. `/roadmap`, About, and [docs/roadm
 - **FE epic** — LIVE on PROD 2026-09-20. Homepage stats, public roadmap, and vs-Lightning differentiators. Same aggregates as GET /api/stats. Bounty pages include the payout split charts.
 - **V3 wave** — LIVE on PROD 2026-09-21. Full GitHub issue + Gemini about/stack/complexity (AI estimates, cached). Related polish: board badges/filters, Settings/Post connected-only, homepage motion/roadmap refresh.
 - **Funding wave** — LIVE on PROD 2026-09-24. Crowdfunding (#61): USDC top-ups on already-funded bounties. Fund any public issue (#64) without installing the GitHub App, with Claim running through the public merge poller. Funder avatars (#65 to #67) on the board cards and on the bounty page Funders list.
-- **V4 — API + MCP.** DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version 4.5.0, 24 operations, 25 tools (#76 #79 #80 #81 #78). API money is OFF on PROD. [MCP](https://githubbounties.xyz/mcp).
+- **V4 — API + MCP.** DONE, LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp, version 4.6.0, 24 operations, 25 tools (#76 #79 #80 #81 #78). API money is OFF on PROD. [MCP](https://githubbounties.xyz/mcp).
 - **V5 — MCP page, unfunded edits, admin.** DONE. `/mcp` is the MCP server endpoint and its docs page. Posters edit an unfunded bounty amount on the web, REST, and MCP (`update_bounty_amount`). The admin dashboard on admin hosts sets fee and pool, lists bounties with trash and refund, gates refunds on `ADMIN_REFUND_ENABLED`, and gates fee-wallet withdraws on `ADMIN_WITHDRAW_ENABLED` with a single-use confirm token and a duplicate guard. Admin actions write an admin audit log. No recorded PROD date.
 
 ### In progress
 
-- **V6 — Hugging Face.** Bounties on Hugging Face discussions and PRs. In progress. No ship date.
+- **V6 — Hugging Face.** Bounties on Hugging Face discussions and PRs. In progress. No ship date. Every bounty has `provider`: `github` or `huggingface` (existing rows stay `github`). REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. No env change. GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
 
 ### Next
 
@@ -80,7 +80,7 @@ Admin actions (settings, delete, refund, withdraw) write `admin_audit_log` (acto
 
 ### Migrations
 
-`npm run db:migrate` in `apps/web` applies `apps/web/drizzle/` in journal order through `0015_fee_withdraw_guards`.
+`npm run db:migrate` in `apps/web` applies `apps/web/drizzle/` in journal order through `0016_hf_provider`.
 
 | Migration | What it adds |
 | --- | --- |
@@ -100,6 +100,7 @@ Admin actions (settings, delete, refund, withdraw) write `admin_audit_log` (acto
 | `0013_bounty_amount_changes` | `bounty_amount_changes` (`web`, `rest`, `mcp`) |
 | `0014_admin_settings_delete_audit` | `platform_settings`, bounty `fee_bps` / `deleted_at` / `deleted_by`, `admin_audit_log`, `admin` API-key scope |
 | `0015_fee_withdraw_guards` | `withdraw_confirm_tokens`, `fee_withdrawals` (one row per token; one `pending` or `unknown` row per fee wallet) |
+| `0016_hf_provider` | `provider` on bounties, repos, and webhook deliveries (`github` or `huggingface`, default `github`); unused `hf_links` and `bounty_submissions`. Apply on DEV before remount. No env change. |
 
 ### Environment
 
@@ -151,6 +152,14 @@ Decisions, sequences, and failure modes:
 | PROD cutover (apex, mainnet, separate stack) | [docs/prod-cutover.md](docs/prod-cutover.md) |
 
 Product app: [`apps/web`](apps/web) (Next.js App Router, Drizzle, Cloud Run `standalone`).
+
+## Provider field
+
+Every bounty has `provider`: `github` or `huggingface`. Existing rows stay `github`. REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. No env change.
+
+## RepoProvider
+
+GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`.
 
 ## Local development
 

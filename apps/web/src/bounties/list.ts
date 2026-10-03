@@ -4,6 +4,7 @@ import {
   bounties,
   bountyIntelligence,
   bountyStatusValues,
+  type BountyProvider,
   escrows,
   githubLinks,
   repos,
@@ -38,6 +39,7 @@ export type BoardFilters = {
   status?: (typeof bountyStatusValues)[number] | string;
   complexity?: string;
   language?: string;
+  provider?: BountyProvider;
 };
 
 export type BoardListSort = "newest" | "amount";
@@ -63,6 +65,7 @@ export type BoardBounty = {
   amountUsdc: string;
   currency: string;
   status: string;
+  provider: BountyProvider;
   githubIssueNumber: number;
   repoFullName: string;
   posterDisplayName: string;
@@ -97,6 +100,7 @@ const BOARD_COLUMNS = {
   amountUsdc: bounties.amountUsdc,
   currency: bounties.currency,
   status: bounties.status,
+  provider: bounties.provider,
   githubIssueNumber: bounties.githubIssueNumber,
   repoFullName: repos.fullName,
   posterDisplayName: users.displayName,
@@ -131,6 +135,7 @@ export async function listBoardBounties(
   const rows = await queryBoardRows(db, {
     repoFilter,
     status,
+    provider: filters.provider,
   });
 
   return (await hydrateBoardRows(db, rows)).filter((bounty) =>
@@ -166,6 +171,7 @@ export async function listBoardBountiesPage(
   const rows = await queryBoardRows(db, {
     repoFilter,
     status,
+    provider: filters.provider,
     page: {
       sort,
       limit: page.limit + 1,
@@ -257,6 +263,7 @@ type ListRow = {
   amountUsdc: string;
   currency: string;
   status: string;
+  provider: string;
   githubIssueNumber: number;
   repoFullName: string;
   posterDisplayName: string;
@@ -288,6 +295,7 @@ async function queryBoardRows(
     bountyId?: string;
     repoFilter?: string;
     status?: (typeof bountyStatusValues)[number];
+    provider?: BountyProvider;
     page?: PageQuery;
   },
 ): Promise<ListRow[]> {
@@ -397,6 +405,7 @@ function boardWhere(opts: {
   bountyId?: string;
   repoFilter?: string;
   status?: (typeof bountyStatusValues)[number];
+  provider?: BountyProvider;
 }) {
   return and(
     opts.bountyId ? eq(bounties.id, opts.bountyId) : undefined,
@@ -404,6 +413,7 @@ function boardWhere(opts: {
       ? sql`${repos.fullName} ilike ${`%${escapeLike(opts.repoFilter)}%`}`
       : undefined,
     opts.status ? eq(bounties.status, opts.status) : undefined,
+    opts.provider ? eq(bounties.provider, opts.provider) : undefined,
     isNull(bounties.deletedAt),
   );
 }
@@ -422,6 +432,7 @@ function toBoardBounty(
     amountUsdc: row.amountUsdc,
     currency: row.currency,
     status: row.status,
+    provider: row.provider === "huggingface" ? "huggingface" : "github",
     githubIssueNumber: row.githubIssueNumber,
     repoFullName: row.repoFullName,
     posterDisplayName: row.posterDisplayName,

@@ -9,6 +9,7 @@ export type AdminBountyRow = {
   repoFullName: string;
   githubIssueNumber: number;
   status: string;
+  provider: "github" | "huggingface";
   amountUsdc: string;
   refundable: boolean;
   createdAt: string;
@@ -72,6 +73,7 @@ export async function listAdminBounties(
         status: bounties.status,
         amountUsdc: bounties.amountUsdc,
         githubIssueNumber: bounties.githubIssueNumber,
+        provider: bounties.provider,
         createdAt: bounties.createdAt,
         repoFullName: repos.fullName,
       })
@@ -94,6 +96,7 @@ export async function listAdminBounties(
       title: row.title,
       repoFullName: row.repoFullName,
       githubIssueNumber: row.githubIssueNumber,
+      provider: row.provider === "huggingface" ? "huggingface" : "github",
       status: row.status,
       amountUsdc: row.amountUsdc,
       refundable: adminBountyRefundable(row.status),

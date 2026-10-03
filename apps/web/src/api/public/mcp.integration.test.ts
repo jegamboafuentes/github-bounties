@@ -5,6 +5,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { apiMoneyEnabled } from "../access/policy";
 import { moneyScopeRequirement } from "../access/money-wording";
 import { createBountiesMcpServer } from "./mcp";
+import { handleMcpHttp } from "./mcp-http";
 import type { PublicReadApi } from "./service";
 
 const BOUNTY_ID = "00000000-0000-4000-8000-000000000022";
@@ -52,6 +53,7 @@ describe("MCP read tools", () => {
                 emptyPool: true,
                 schedule: "empty_pool",
               },
+              provider: "github",
               intelligence: null,
               funders: { count: 1, avatars: [{ displayName: "Ada", avatarUrl: null }] },
               poster: { displayName: "Ada Maintainer", githubLogin: "ada-maintainer" },
@@ -165,6 +167,7 @@ describe("MCP read tools", () => {
       assert.match(tool?.description ?? "", /^Requires API key \(read scope\)/);
     }
     const listTool = listed.tools.find((tool) => tool.name === "list_bounties");
+    assert.match(listTool?.description ?? "", /provider/);
     assert.match(listTool?.description ?? "", /has_intel/);
     assert.match(listTool?.description ?? "", /totalFundedUsdc/);
     assert.match(listTool?.description ?? "", /newest contribution first/);
@@ -230,12 +233,82 @@ describe("MCP read tools", () => {
     );
 
     const result = await client.callTool({ name: "list_bounties", arguments: { limit: 2 } });
-    const payload = JSON.parse(textOf(result)) as { data: { id: string; issue: { title: string } }[] };
+    const payload = JSON.parse(textOf(result)) as {
+      data: { id: string; provider: string; issue: { title: string } }[];
+    };
     assert.equal(payload.data.length, 1);
     assert.equal(payload.data[0]?.id, BOUNTY_ID);
+    assert.equal(payload.data[0]?.provider, "github");
     assert.equal(payload.data[0]?.issue.title, "Seed bounty");
 
     await client.close();
     await server.close();
+  });
+
+  it("passes provider to list_bounties and rejects an unknown provider", async () => {
+    let seen: string | undefined;
+    const api: PublicReadApi = {
+      async listBounties(input) {
+        seen = input.provider;
+        return { data: [], page: { limit: input.limit, sort: input.sort, nextCursor: null } };
+      },
+      async getBounty() {
+        throw new Error("not used");
+      },
+      async listFunders() {
+        throw new Error("not used");
+      },
+      async getIntelligence() {
+        throw new Error("not used");
+      },
+      async getStats() {
+        throw new Error("not used");
+      },
+    };
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const server = createBountiesMcpServer(api);
+    const client = new Client({ name: "provider-filter", version: "0.0.0" });
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    try {
+      const listed = await client.listTools();
+      const schema = listed.tools.find((tool) => tool.name === "list_bounties")?.inputSchema as {
+        properties?: { provider?: { enum?: string[] } };
+      };
+      assert.deepEqual(schema.properties?.provider?.enum, ["github", "huggingface"]);
+      const ok = await client.callTool({ name: "list_bounties", arguments: { provider: "huggingface" } });
+      assert.equal(ok.isError, false);
+      assert.equal(seen, "huggingface");
+    } finally {
+      await client.close();
+      await server.close();
+    }
+
+    const rejected = await handleMcpHttp(
+      new Request("https://dev.githubbounties.xyz/mcp", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          accept: "application/json, text/event-stream",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 7,
+          method: "tools/call",
+          params: { name: "list_bounties", arguments: { provider: "gitlab" } },
+        }),
+      }),
+    );
+    assert.equal(rejected.status, 200);
+    const body = (await rejected.json()) as {
+      result?: { isError?: boolean; content?: { text?: string }[] };
+    };
+    assert.equal(body.result?.isError, true);
+    const error = JSON.parse(body.result?.content?.[0]?.text ?? "{}") as {
+      error: { code: string; message: string; details: unknown };
+    };
+    assert.equal(error.error.code, "validation_failed");
+    assert.match(error.error.message, /provider/);
+    assert.equal("details" in error.error, true);
   });
 });

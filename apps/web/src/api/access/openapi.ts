@@ -263,6 +263,7 @@ const createdBountySchema = z
     title: z.string(),
     amountUsdc: z.string(),
     issueUrl: z.string().url(),
+    provider: z.enum(["github", "huggingface"]),
   })
   .openapi("CreatedBounty");
 
@@ -382,6 +383,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
               id: z.string().uuid(),
               title: z.string(),
               status: z.string(),
+              provider: z.enum(["github", "huggingface"]),
               amountUsdc: z.string(),
               issueUrl: z.string(),
               createdAt: z.string(),
@@ -391,6 +393,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
               bountyId: z.string().uuid(),
               title: z.string(),
               status: z.string(),
+              provider: z.enum(["github", "huggingface"]),
               amountUsdc: z.string(),
               contributionUsdc: z.string(),
               txHash: z.string(),

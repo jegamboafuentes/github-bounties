@@ -3,10 +3,8 @@ import type { Database } from "../db/client";
 import { bounties, repos } from "../db/schema";
 import type { GitHubHttp } from "../github/api";
 import { fetchPoolPullRequests } from "../github/pool-snapshot";
-import {
-  listPublicClosingPulls,
-  type PublicClosingPull,
-} from "../github/public-read";
+import { type PublicClosingPull } from "../github/public-read";
+import { getProvider } from "../providers/registry";
 import { splitFullName } from "./issue-body";
 import { FUNDED_BOUNTY_STATUSES, postgresClaimWriter } from "../webhooks/claims";
 import { postgresDeliveryRecorder } from "../webhooks/delivery-store";
@@ -14,10 +12,10 @@ import { evaluateEligibility } from "../webhooks/eligibility";
 import { toEligibilityInput } from "../webhooks/input";
 import { postgresPoolWriter, type PoolPullRequestFetcher } from "../webhooks/pool";
 import { processDelivery } from "../webhooks/process-delivery";
-import type { GitHubWebhookPayload } from "../webhooks/types";
 
 export type PublicMergePollTarget = {
   bountyId: string;
+  provider: string;
   owner: string;
   repo: string;
   fullName: string;
@@ -41,41 +39,7 @@ export function publicMergeDeliveryId(fullName: string, prNumber: number): strin
   return `public-merge:${fullName.toLowerCase()}#${prNumber}`;
 }
 
-export function closingPullToWebhookPayload(
-  fullName: string,
-  pull: PublicClosingPull,
-): GitHubWebhookPayload {
-  return {
-    action: "closed",
-    repository: {
-      full_name: fullName,
-      default_branch: pull.defaultBranch,
-    },
-    pull_request: {
-      number: pull.number,
-      title: pull.title,
-      body: pull.body,
-      merged: pull.merged,
-      merged_at: pull.mergedAt ?? null,
-      html_url: pull.htmlUrl ?? `https://github.com/${fullName}/pull/${pull.number}`,
-      user: {
-        login: pull.authorLogin,
-        id: pull.authorId ?? null,
-      },
-      base: {
-        ref: pull.baseRef,
-        repo: {
-          full_name: fullName,
-          default_branch: pull.defaultBranch,
-        },
-      },
-      merge_commit_sha: pull.mergeCommitSha ?? null,
-      merge_commit_message: pull.mergeCommitMessage ?? null,
-      commit_messages: pull.commitMessages ?? null,
-      closing_issue_numbers: pull.closingIssueNumbers ?? null,
-    },
-  };
-}
+export { closingPullToWebhookPayload } from "./merge-payload";
 
 /**
  * Find merged PRs that close funded issues on `public_reference` repos and
@@ -96,6 +60,7 @@ export async function pollPublicMerges(
   const rows = await db
     .select({
       bountyId: bounties.id,
+      provider: bounties.provider,
       issueNumber: bounties.githubIssueNumber,
       fullName: repos.fullName,
     })
@@ -129,6 +94,7 @@ export async function pollPublicMerges(
     }
     const target: PublicMergePollTarget = {
       bountyId: row.bountyId,
+      provider: row.provider,
       owner,
       repo,
       fullName: row.fullName,
@@ -157,9 +123,10 @@ export async function pollPublicMerges(
     for (const target of targets) {
       issueNumbers.add(target.issueNumber);
       try {
+        const provider = getProvider(target.provider);
         const found = opts.listClosingPulls
           ? await opts.listClosingPulls(target)
-          : await listPublicClosingPulls({
+          : await provider.listClosingPulls({
               owner: target.owner,
               repo: target.repo,
               issueNumber: target.issueNumber,
@@ -176,7 +143,10 @@ export async function pollPublicMerges(
     }
 
     for (const pull of pulls.values()) {
-      const payload = closingPullToWebhookPayload(fullName, pull);
+      const payload = getProvider(targets[0]?.provider ?? "github").mergeDeliveryPayload(
+        fullName,
+        pull,
+      );
       const decision = evaluateEligibility(toEligibilityInput("pull_request", payload));
       const closesWatched = decision.closedIssueNumbers.some((n) => issueNumbers.has(n));
       if (!decision.eligible || !closesWatched) {
