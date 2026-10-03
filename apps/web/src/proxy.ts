@@ -10,7 +10,8 @@ import { authConfig } from "@/auth/config";
 import { hasSessionSecret } from "@/auth/env";
 import { isProtectedApiPath, isProtectedPagePath } from "@/auth/paths";
 import { providerSignInLocation } from "@/auth/provider-signin-get";
-import { planUtmForNavigation, UTM_COOKIE_NAME } from "@/contacts/utm";
+import { publicBountyExists } from "@/contacts/bounty-exists";
+import { bountyDetailId, planUtmForNavigation, utmProxyStatus, UTM_COOKIE_NAME } from "@/contacts/utm";
 import { mappedHostHeader } from "@/lib/site-env";
 
 const { auth } = NextAuth(authConfig);
@@ -104,14 +105,37 @@ type UtmRequest = {
 /**
  * Stamp `gb_utm` only for a successful public HTML navigation.
  * API, static, robots, sitemap, admin routes, redirects, and 404s do not.
+ * A bounty detail URL is 200 from `next()` before the page calls notFound(),
+ * so the cookie waits until that bounty is known to exist.
  */
-function stampUtm(response: NextResponse, req: UtmRequest): NextResponse {
+async function stampUtm(response: NextResponse, req: UtmRequest): Promise<NextResponse> {
+  const rewritten = response.headers.has("x-middleware-rewrite");
+  let status = response.status;
+  const bountyId = bountyDetailId(req.nextUrl.pathname);
+  if (bountyId && status >= 200 && status < 300 && !rewritten) {
+    const candidate = planUtmForNavigation({
+      method: req.method,
+      pathname: req.nextUrl.pathname,
+      adminHost: isAdminConsoleHost(requestHost(req)),
+      status,
+      rewritten: false,
+      existing: req.cookies.get(UTM_COOKIE_NAME)?.value,
+      searchParams: req.nextUrl.searchParams,
+    });
+    if (candidate) {
+      status = utmProxyStatus({
+        pathname: req.nextUrl.pathname,
+        proxyStatus: status,
+        bountyExists: await publicBountyExists(bountyId),
+      });
+    }
+  }
   const planned = planUtmForNavigation({
     method: req.method,
     pathname: req.nextUrl.pathname,
     adminHost: isAdminConsoleHost(requestHost(req)),
-    status: response.status,
-    rewritten: response.headers.has("x-middleware-rewrite"),
+    status,
+    rewritten,
     existing: req.cookies.get(UTM_COOKIE_NAME)?.value,
     searchParams: req.nextUrl.searchParams,
   });
@@ -138,7 +162,7 @@ function notFound(robots: boolean): NextResponse {
  * session cookie is not decoded and responses do not set Auth.js cookies.
  * Admin hosts are the exception for page routes: `/` rewrites to `/admin`.
  */
-const sessionProxy = auth((req) => {
+const sessionProxy = auth(async (req) => {
   const pathname = req.nextUrl.pathname;
   const host = requestHost(req);
   const decision = classifyHostRequest(host, pathname);
@@ -196,7 +220,7 @@ export function needsSession(pathname: string, host: string): boolean {
   return pathname === "/" || pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
-export default function proxy(
+export default async function proxy(
   req: Parameters<typeof sessionProxy>[0],
   event: Parameters<typeof sessionProxy>[1],
 ) {

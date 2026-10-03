@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import type { AccessDeps } from "../api/access/deps";
@@ -11,17 +13,20 @@ import { resultFromError, type ApiPrincipal } from "../api/access/handlers";
 import { PublicApiError } from "../api/public/errors";
 import { createBountiesMcpServer } from "../api/public/mcp";
 import type { PublicReadApi } from "../api/public/service";
-import { handleCountContacts, handleListContacts } from "./http";
+import { SearchValidationNotice } from "../components/search-validation-notice";
+import { handleCountContacts, handleListContacts, handleListContactsArgs } from "./http";
 import { planContactImport } from "./import";
 import { normalizeContactEmail, normalizeImportedEmail, splitDisplayName } from "./normalize";
 import { recordSignupContactSafe } from "./persist";
-import { adminContactsOutOfRange } from "./query";
+import { adminContactsOutOfRange, parseContactListQuery } from "./query";
 import {
+  bountyDetailId,
   isUtmHtmlNavigation,
   planUtmCookie,
   planUtmForNavigation,
   sanitizeLandingPath,
   sanitizeUtmValue,
+  utmProxyStatus,
   UTM_MAX_AGE_SECONDS,
 } from "./utm";
 import {
@@ -222,11 +227,32 @@ describe("signup attribution cookie", () => {
     assert.equal(planned({ adminHost: true }), null);
     assert.equal(planned({ status: 404 }), null);
     assert.equal(planned({ status: 307 }), null);
+    assert.equal(bountyDetailId(`/bounties/${bountyId}`), bountyId);
+    assert.equal(bountyDetailId("/bounties/not-a-uuid"), null);
+    assert.equal(
+      utmProxyStatus({ pathname: `/bounties/${bountyId}`, proxyStatus: 200, bountyExists: false }),
+      404,
+    );
+    assert.equal(
+      utmProxyStatus({ pathname: `/bounties/${bountyId}`, proxyStatus: 200, bountyExists: true }),
+      200,
+    );
+    assert.equal(utmProxyStatus({ pathname: "/", proxyStatus: 200, bountyExists: false }), 200);
+    assert.equal(JSON.parse(planned({ pathname: `/bounties/${bountyId}` })?.value ?? "{}").source, "lb_email");
+    assert.equal(
+      planned({
+        pathname: `/bounties/${bountyId}`,
+        status: utmProxyStatus({ pathname: `/bounties/${bountyId}`, proxyStatus: 200, bountyExists: false }),
+      }),
+      null,
+    );
     assert.equal(planned({ rewritten: true }), null);
     assert.equal(planned({ method: "POST" }), null);
     assert.equal(planned({ existing: "%%%" })?.value.includes("lb_email"), true);
     const proxy = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../proxy.ts"), "utf8");
     assert.match(proxy, /planUtmForNavigation/);
+    assert.match(proxy, /publicBountyExists/);
+    assert.match(proxy, /utmProxyStatus/);
   });
 });
 
@@ -355,6 +381,109 @@ describe("Resend marketing sync", () => {
     });
     assert.deepEqual(synced, { configured: false, pushed: 0, pushFailed: 0, pullUnsubscribed: 0 });
     assert.equal(calls, 0);
+  });
+});
+
+describe("contact search control characters", () => {
+  function assertRejected(search: string) {
+    assert.throws(
+      () => parseContactListQuery({ search }),
+      (err: unknown) => {
+        assert.ok(err instanceof PublicApiError);
+        assert.equal(err.code, "validation_failed");
+        assert.equal(err.status, 400);
+        assert.equal(err.message, "Search cannot include control characters.");
+        assert.equal(err.details, null);
+        return true;
+      },
+    );
+  }
+
+  it("rejects NUL and the other C0 and DEL controls before a query", () => {
+    assertRejected("\u0000");
+    assertRejected("ab\u0000cd");
+    assertRejected("\u0001");
+    assertRejected("ada\u001F");
+    assertRejected("ada\u007F");
+    assertRejected("\ninside");
+    const parsed = parseContactListQuery({ search: "  ada@example.com  " });
+    assert.equal(parsed.search, "ada@example.com");
+  });
+
+  it("returns 400 validation_failed on REST for search and q", async () => {
+    for (const href of [
+      "https://admin.example/api/v1/admin/contacts?search=%00",
+      "https://admin.example/api/v1/admin/contacts?search=ab%00cd",
+      "https://admin.example/api/v1/admin/contacts?q=%00",
+      "https://admin.example/api/v1/admin/contacts?q=%7F",
+    ]) {
+      await assert.rejects(
+        () => handleListContacts(principal(["admin"]), new URL(href), deps()),
+        (err: unknown) => {
+          assert.ok(err instanceof PublicApiError);
+          const result = resultFromError(err);
+          assert.equal(result.status, 400);
+          const body = result.body as { error: { code: string; message: string; details: unknown } };
+          assert.equal(body.error.code, "validation_failed");
+          assert.equal(body.error.message, "Search cannot include control characters.");
+          assert.equal(body.error.details, null);
+          return true;
+        },
+      );
+    }
+    await assert.rejects(
+      () => handleListContactsArgs(principal(["admin"]), { search: "\u0000" }, deps()),
+      (err: unknown) => err instanceof PublicApiError && err.code === "validation_failed" && err.status === 400,
+    );
+  });
+
+  it("returns validation_failed from MCP list_contacts and does not query", async () => {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const server = createBountiesMcpServer(catalogApi, {
+      principal: principal(["admin"]),
+      deps: deps(),
+      ip: "127.0.0.1",
+      origin: "https://dev.githubbounties.xyz",
+    });
+    const client = new Client({ name: "contacts", version: "0.0.0" });
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    try {
+      for (const search of ["\u0000", "ab\u0000cd", "\u007F"]) {
+        const denied = await client.callTool({ name: "list_contacts", arguments: { search } });
+        assert.equal(denied.isError, true);
+        const content = denied.content as Array<{ text?: string }>;
+        const body = JSON.parse(content[0]?.text ?? "") as { error: { code: string; message: string } };
+        assert.equal(body.error.code, "validation_failed");
+        assert.equal(body.error.message, "Search cannot include control characters.");
+      }
+    } finally {
+      await client.close();
+      await server.close();
+    }
+  });
+
+  it("shows the validation message on the admin contacts page", () => {
+    let message: string | null = null;
+    try {
+      parseContactListQuery({ search: "\u0000" });
+    } catch (err) {
+      assert.ok(err instanceof PublicApiError);
+      message = err.message;
+    }
+    const html = renderToStaticMarkup(createElement(SearchValidationNotice, { message }));
+    assert.match(html, /role="alert"/);
+    assert.match(html, /Search cannot include control characters/);
+    assert.equal(renderToStaticMarkup(createElement(SearchValidationNotice, { message: null })), "");
+    const page = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../app/admin/contacts/page.tsx"), "utf8");
+    const board = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../app/board/page.tsx"), "utf8");
+    const admin = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../app/admin/page.tsx"), "utf8");
+    assert.match(page, /SearchValidationNotice/);
+    assert.match(page, /err instanceof PublicApiError/);
+    assert.match(page, /error = err\.message/);
+    assert.match(board, /SearchValidationNotice/);
+    assert.match(admin, /SearchValidationNotice/);
+    assert.match(admin, /containsControlChars/);
   });
 });
 

@@ -1,4 +1,5 @@
 import { requireAdminPageUser } from "@/admin/gate";
+import { SearchValidationNotice } from "@/components/search-validation-notice";
 import {
   adminContactsOutOfRange,
   CONTACT_LIST_MAX_OFFSET,
@@ -40,7 +41,8 @@ export default async function AdminContactsPage({
 }) {
   const admin = await requireAdminPageUser();
   const raw = await searchParams;
-  const search = raw.q?.trim() ?? "";
+  const rawSearch = raw.q ?? "";
+  const search = rawSearch.trim();
   const source = raw.source?.trim() ?? "";
   const subscribed = raw.subscribed?.trim() ?? "";
   const utmCampaign = raw.utm_campaign?.trim() ?? "";
@@ -54,7 +56,7 @@ export default async function AdminContactsPage({
   if (!outOfRange) {
     try {
       const query = parseContactListQuery({
-        search,
+        search: rawSearch,
         source,
         subscribed,
         utmCampaign,
@@ -193,7 +195,7 @@ export default async function AdminContactsPage({
         </button>
       </form>
 
-      {error && !outOfRange ? <p className="text-sm text-red-700 dark:text-red-300">{error}</p> : null}
+      {!outOfRange ? <SearchValidationNotice message={error} /> : null}
 
       <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <table className="min-w-full text-left text-sm">

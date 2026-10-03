@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AppHeader } from "@/components/header";
 import { BountyCard } from "@/components/bounty-card";
+import { SearchValidationNotice } from "@/components/search-validation-notice";
 import { listBoardBounties, LOCK_NOT_MONEY_COPY } from "@/bounties";
 import { bountyProviderValues, bountyStatusValues } from "@/db/schema";
 import { getRuntimeDb } from "@/db/runtime";
@@ -139,7 +140,7 @@ export default async function BoardPage({
         </p>
 
         {loadError ? (
-          <p className="text-sm text-red-600 dark:text-red-400">{loadError}</p>
+          <SearchValidationNotice message={loadError} />
         ) : bounties.length === 0 ? (
           <p className="text-sm text-zinc-500">No bounties match these filters.</p>
         ) : (
