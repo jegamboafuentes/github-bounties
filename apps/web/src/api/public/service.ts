@@ -1,5 +1,7 @@
+import { desc, eq } from "drizzle-orm";
 import { getBoardBounty, listBoardBountiesPage, readStoredIssueBody } from "../../bounties";
 import type { Database } from "../../db/client";
+import { claims } from "../../db/schema";
 import { getRuntimeDb } from "../../db/runtime";
 import { getEscrowSnapshot, listBountyContributions } from "../../escrow";
 import { isUndefinedTableError } from "../../intelligence/errors";
@@ -14,11 +16,45 @@ import {
   presentCachedIntelligence,
   presentFunderList,
   presentPublicBounty,
+  type PublicMergeIdentity,
+  type PublicMergeView,
 } from "./present";
 import { cursorFromPageItem, keysetFromCursor, type BoardCursor } from "./query";
 import type { ListBountiesInput } from "./schemas";
 
 export type ListBountiesQuery = ListBountiesInput & { cursorValue: BoardCursor | null };
+
+function mergeIdentity(login: string | null, providerUserId: string | null): PublicMergeIdentity | null {
+  if (!login && !providerUserId) return null;
+  return { login, providerUserId };
+}
+
+async function loadPublicMerge(db: Database, bountyId: string): Promise<PublicMergeView> {
+  const empty: PublicMergeView = { winner: null, mergedBy: null, mergeReview: null };
+  const rows = await db
+    .select({
+      status: claims.status,
+      rejectionReason: claims.rejectionReason,
+      prAuthorLogin: claims.prAuthorLogin,
+      prAuthorProviderId: claims.prAuthorProviderId,
+      mergedByLogin: claims.mergedByLogin,
+      mergedByProviderId: claims.mergedByProviderId,
+    })
+    .from(claims)
+    .where(eq(claims.bountyId, bountyId))
+    .orderBy(desc(claims.updatedAt));
+  const payable = rows.find((row) => row.status === "eligible") ?? rows.find((row) => row.status === "paid");
+  const review = rows.find(
+    (row) => row.status === "disputed" && row.rejectionReason === "merger_review_required",
+  );
+  const row = payable ?? review;
+  if (!row) return empty;
+  return {
+    winner: mergeIdentity(row.prAuthorLogin, row.prAuthorProviderId),
+    mergedBy: mergeIdentity(row.mergedByLogin, row.mergedByProviderId),
+    mergeReview: !payable && review ? "merger_review_required" : null,
+  };
+}
 
 async function requireBounty(id: string, db: Database) {
   const bounty = await getBoardBounty(id, db);
@@ -75,7 +111,7 @@ export function createPublicReadApi(db?: Database) {
     async getBounty(id: string) {
       const database = resolve();
       const bounty = await requireBounty(id, database);
-      const [escrow, roster, issue, totals, contributions] = await Promise.all([
+      const [escrow, roster, issue, totals, contributions, merge] = await Promise.all([
         getEscrowSnapshot(id, database),
         getPoolRoster(id, database),
         readStoredIssueBody(id, database),
@@ -84,6 +120,7 @@ export function createPublicReadApi(db?: Database) {
           if (!isUndefinedTableError(err)) throw err;
           return [];
         }),
+        loadPublicMerge(database, id),
       ]);
       if (!roster) {
         throw new PublicApiError("not_found", "Bounty not found.", null);
@@ -96,6 +133,7 @@ export function createPublicReadApi(db?: Database) {
         escrow,
         contributions,
         mainnet: isFundMainnetEnabled(),
+        merge,
       });
     },
 

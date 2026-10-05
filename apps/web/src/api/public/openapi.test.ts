@@ -39,7 +39,7 @@ describe("OpenAPI document", () => {
     await SwaggerParser.validate(document);
     assert.equal(document.openapi, "3.1.0");
     assert.equal(document.info.title, "GitHub Bounties API");
-    assert.equal(document.info.version, "4.10.1");
+    assert.equal(document.info.version, "4.11.0");
     assert.equal(document.info.version, PUBLIC_API_VERSION);
     assert.match(document.info.description ?? "", /60 requests per minute/);
     assert.match(PUBLIC_API_DESCRIPTION, /Cloud Run instance/);

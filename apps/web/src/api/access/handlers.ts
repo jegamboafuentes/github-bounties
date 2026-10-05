@@ -298,7 +298,12 @@ function asApiError(err: unknown): PublicApiError {
     return new PublicApiError(err.code, err.message, null, statusForDomainCode(err.code));
   }
   if (isBountyError(err)) {
-    return new PublicApiError(err.code, err.message, err.details, statusForDomainCode(err.code));
+    return new PublicApiError(
+      err.code,
+      err.message,
+      err.details,
+      err.httpStatus ?? statusForDomainCode(err.code),
+    );
   }
   if (isEscrowError(err)) {
     if (err.httpStatus === 410) {
@@ -1253,7 +1258,11 @@ export async function handleSubmitPr(
   assertNoAddress(body);
   const parsed = submitPrBodySchema.safeParse(body);
   if (!parsed.success) {
-    throw new PublicApiError("validation_failed", "prUrl is required.", zodErrorDetails(parsed.error));
+    throw new PublicApiError(
+      "validation_failed",
+      submitPrValidationMessage(parsed.error),
+      zodErrorDetails(parsed.error),
+    );
   }
   const id = acceptBountyId(bountyId);
   const submission = await submitHuggingFacePr(
@@ -1301,6 +1310,22 @@ function rejectWalletPatch(body: unknown): void {
   const fields = walletPatchFieldNames(body);
   if (fields.length === 0) return;
   throw new PublicApiError("wallet_change_human_only", WALLET_CHANGE_MESSAGE, { fields });
+}
+
+export function submitPrValidationMessage(error: ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) return "prUrl is required.";
+  if (issue.code === "unrecognized_keys") {
+    const keys = "keys" in issue && Array.isArray(issue.keys) ? issue.keys.join(", ") : "";
+    return keys ? `Unrecognized field: ${keys}.` : "Unrecognized field.";
+  }
+  if (issue.code === "invalid_type") {
+    const received = "received" in issue ? String(issue.received) : "unknown";
+    if (received === "undefined") return "prUrl is required.";
+    return `prUrl: Expected string, received ${received}`;
+  }
+  if (issue.code === "too_big") return `prUrl: ${issue.message}`;
+  return "prUrl is required.";
 }
 
 function validationFromZod(error: ZodError, fallback: string): PublicApiError {

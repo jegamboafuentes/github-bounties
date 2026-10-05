@@ -160,12 +160,11 @@ export function bountyErrorForHuggingFace(err: HuggingFaceReadError, ref: string
         `${ref} is private or inaccessible. Only public discussions can be posted.`,
       );
     case "hf_rate_limited": {
-      const retryAfter = err.retryAfter?.trim() || null;
-      const wait = retryAfter ? ` Retry after ${retryAfter}.` : "";
+      const retryAfter = err.retryAfter?.trim() || "60";
       return new BountyError(
         "hf_rate_limited",
-        `Hugging Face rate limit reached while reading this discussion.${wait}`,
-        retryAfter ? { retryAfter } : null,
+        `Hugging Face rate limit reached while reading this discussion. Retry after ${retryAfter}.`,
+        { retryAfter },
       );
     }
     case "hf_timeout":

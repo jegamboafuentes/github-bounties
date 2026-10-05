@@ -3,6 +3,7 @@ import { getRuntimeDb } from "../db/runtime";
 import { readCookie, HF_CONNECT_COOKIE } from "./cookie";
 import { hfNotConfiguredBody, missingHfOAuthEnv } from "./env";
 import { exchangeHfAuthorizationCode, type HfHttp } from "./oauth";
+import { backfillHuggingFaceClaimsForHunter } from "./apply-merge";
 import { HfAccountTakenError, linkHuggingFaceAccount } from "./persist";
 import { pkceHashesMatch, verifyHfConnectState } from "./state";
 import { hfCallbackUrl, hfPublicOrigin } from "./urls";
@@ -80,6 +81,18 @@ export async function completeHuggingFaceConnect(
     });
     const db = opts.db ?? getRuntimeDb();
     const row = await linkHuggingFaceAccount(input.userId, identity, db);
+    try {
+      await backfillHuggingFaceClaimsForHunter(
+        { userId: input.userId, hfUsername: row.hfUsername, hfSub: row.hfSub },
+        db,
+        { http: opts.http, env },
+      );
+    } catch (err) {
+      console.error(
+        `[eligibility] huggingface-link backfill failed user=${input.userId} login=${row.hfUsername}`,
+        err,
+      );
+    }
     return { ok: true, hfUsername: row.hfUsername };
   } catch (err) {
     if (err instanceof HfAccountTakenError) {

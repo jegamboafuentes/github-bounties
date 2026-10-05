@@ -250,6 +250,8 @@ Cloud Run `--set-secrets=ENV=NAME:latest`. Names only.
 | `API_KEY_HMAC_SECRET` | `API_KEY_HMAC_SECRET` | **optional** | V4-2 API key HMAC-SHA256. **DEV:** create a Secret Manager version (16+ characters) and remount so `API_KEY_HMAC_SECRET=API_KEY_HMAC_SECRET:latest` attaches. Skip cleanly when absent (keys then fail closed). Same `WEB_OPTIONAL_SECRETS` rule as `GEMINI_API_KEY`. Not required on PROD until keys are enabled there. |
 | `HF_OAUTH_CLIENT_ID` | `HF_OAUTH_CLIENT_ID` | **optional** | Hugging Face connect. Not product login. `WEB_OPTIONAL_SECRETS`: attach when an enabled version exists, skip when absent. Connect stays off until this and the secret are both set. |
 | `HF_OAUTH_CLIENT_SECRET` | `HF_OAUTH_CLIENT_SECRET` | **optional** | Pair of `HF_OAUTH_CLIENT_ID`. Same skip-if-absent rule. Not required for Cloud Build. |
+| `HF_BOT_TOKEN` | `HF_BOT_TOKEN` | **optional** | Bearer for Hub reads and for adding a funded repo to the bot webhook. Same skip-if-absent rule. Public reads work without it. |
+| `HF_WEBHOOK_SECRET` | `HF_WEBHOOK_SECRET` | **optional** | `X-Webhook-Secret` for `POST /webhooks/huggingface`. Same skip-if-absent rule. Unset returns 503. |
 | `RESEND_AUDIENCE_ID` | `RESEND_AUDIENCE_ID` | **optional** | Campaign list audience. Same skip-if-absent rule. Unset means contact sync is a no-op. |
 | `RESEND_WEBHOOK_SECRET` | `RESEND_WEBHOOK_SECRET` | **optional** | Svix signing secret for `POST /api/webhooks/resend`. Same skip-if-absent rule. Unset rejects the webhook. |
 
@@ -266,6 +268,7 @@ Plain env (not Secret Manager):
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | omit | Public Reown Cloud project id (not SM). Needed for WalletConnect QR on fund / Lock. Browser wallets work without it. Allow `https://dev.githubbounties.xyz` and `http://localhost:3000` in the Reown dashboard. |
 | `EMAIL_FROM` | omit | Optional plain env (not SM). Verified Resend sender. Unset uses `GitHub Bounties <noreply@githubbounties.xyz>`. DEV only. |
 | `API_MONEY_ENABLED` | omit | Optional plain env. Unset is **on** for `CDP_NETWORK=base-sepolia` and **off** for `base`. Set `0` to disable public fund/top-up/claim/refund. Leave unset or `0` on PROD. This does not enable admin refunds. |
+| `HF_BOUNTIES_ENABLED` | omit | Optional plain env. Exactly `1` enables Hugging Face create, submit, merge detection, and winner claim. Leave unset to make no Hub call. |
 | `ADMIN_REFUND_ENABLED` | omit | Optional plain env. Exactly `1` enables admin refunds (admin host, admin session, `/api/v1/admin/*`, admin MCP). Set `1` on PROD when an admin should refund. Leave unset to keep admin refunds off. |
 | `ADMIN_WITHDRAW_ENABLED` | omit | Optional plain env. Exactly `1` enables admin fee withdraw. A preview writes an audit row and mints a 5-minute confirm token, so it is not read-only. |
 | `API_PER_TX_CAP_USDC` | omit | Optional plain env. Admin per-transaction ceiling. DEV default `50`, PROD default `25`. Users can only lower a key. |
@@ -273,7 +276,7 @@ Plain env (not Secret Manager):
 
 `--set-secrets` fails if the named secret has **no enabled version**.
 
-`GEMINI_API_KEY`, `RESEND_API_KEY`, `API_KEY_HMAC_SECRET`, `HF_OAUTH_CLIENT_ID`, `HF_OAUTH_CLIENT_SECRET`, `RESEND_AUDIENCE_ID`, and `RESEND_WEBHOOK_SECRET` are `WEB_OPTIONAL_SECRETS` in [`infra/gcloud/config.sh`](../infra/gcloud/config.sh). `deploy-web.sh` (static and discover) attaches each when Secret Manager has an enabled version so a full DEV remount with `--set-secrets` does not drop an existing mount. If a secret is missing, the deploy skips it: the bounty page degrades the intelligence card, welcome mail stays pending, Hugging Face connect stays off, and campaign contact sync stays a no-op. **PROD is not wired** for the Gemini, Resend, or API-key secrets until those features are turned on there. The Hugging Face and campaign-list secrets follow the same skip-if-absent rule on DEV and PROD.
+`GEMINI_API_KEY`, `RESEND_API_KEY`, `API_KEY_HMAC_SECRET`, `HF_OAUTH_CLIENT_ID`, `HF_OAUTH_CLIENT_SECRET`, `HF_BOT_TOKEN`, `HF_WEBHOOK_SECRET`, `RESEND_AUDIENCE_ID`, and `RESEND_WEBHOOK_SECRET` are `WEB_OPTIONAL_SECRETS` in [`infra/gcloud/config.sh`](../infra/gcloud/config.sh). `deploy-web.sh` (static and discover) attaches each when Secret Manager has an enabled version so a full DEV remount with `--set-secrets` does not drop an existing mount. If a secret is missing, the deploy skips it: the bounty page degrades the intelligence card, welcome mail stays pending, Hugging Face connect stays off, and campaign contact sync stays a no-op. **PROD is not wired** for the Gemini, Resend, or API-key secrets until those features are turned on there. The Hugging Face and campaign-list secrets follow the same skip-if-absent rule on DEV and PROD.
 
 Rotate: add a new SM version, then deploy a no-op revision (or re-submit this
 build) so instances restart. See [gcp-bootstrap.md](gcp-bootstrap.md#rotate-secrets).

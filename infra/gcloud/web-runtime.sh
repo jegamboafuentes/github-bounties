@@ -147,6 +147,8 @@ web_print_secret_map() {
   echo "    API_MONEY_ENABLED  (optional plain env. Unset: on for base-sepolia,"
   echo "      off for CDP_NETWORK=base. Set 0 to disable public money on DEV."
   echo "      Leave unset or 0 on PROD. Does not enable admin refunds.)"
+  echo "    HF_BOUNTIES_ENABLED  (optional plain env. Exactly 1 enables Hugging Face"
+  echo "      create, submit, merge detection, and winner claim. Off makes no Hub call.)"
   echo "    ADMIN_REFUND_ENABLED  (optional plain env. Exactly 1 enables admin"
   echo "      refunds. Set 1 on PROD when an admin should refund.)"
   echo "    ADMIN_WITHDRAW_ENABLED  (optional plain env. Exactly 1 enables fee"

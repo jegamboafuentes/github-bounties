@@ -41,6 +41,38 @@ describe("Hugging Face claim auth", () => {
       },
     );
   });
+
+  it("accepts the linked Hugging Face username once a winner claim is eligible", () => {
+    authorizeClaimCaller("hunter", "winner", {
+      ...ctx(false, null),
+      githubLogin: null,
+      hfUsername: "Ada",
+      hfSub: "hf-ada",
+      bounty: { ...bounty, provider: "huggingface" },
+      winner: {
+        claimId: "claim",
+        hunterUserId: "hunter",
+        prAuthorLogin: "ada",
+        prAuthorProviderId: "hf-ada",
+        status: "eligible",
+        amountUsdc: null,
+        txHash: null,
+        paidAt: null,
+      },
+    });
+  });
+
+  it("keeps Hugging Face pool claims unsupported", () => {
+    assert.throws(
+      () =>
+        authorizeClaimCaller("hunter", "pool", {
+          ...ctx(true, null),
+          bounty: { ...bounty, provider: "huggingface" },
+          hfUsername: "ada",
+        }),
+      (err: unknown) => err instanceof PublicApiError && err.code === "provider_not_supported" && err.status === 501,
+    );
+  });
 });
 
 describe("pool claim auth order", () => {

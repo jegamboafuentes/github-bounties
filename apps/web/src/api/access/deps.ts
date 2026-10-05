@@ -103,6 +103,7 @@ export type WinnerLegAuth = {
   claimId: string;
   hunterUserId: string;
   prAuthorLogin: string | null;
+  prAuthorProviderId?: string | null;
   status: string;
   amountUsdc: string | null;
   txHash: string | null;
@@ -129,6 +130,8 @@ export type ClaimAuthContext = {
   } | null;
   walletAddress: string | null;
   githubLogin: string | null;
+  hfUsername?: string | null;
+  hfSub?: string | null;
   winner: WinnerLegAuth | null;
   pool: PoolLegAuth | null;
   /** True when at least one pool participant row is frozen. Pool claims check this before membership. */

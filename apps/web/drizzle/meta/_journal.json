@@ -134,6 +134,13 @@
       "when": 1791200000000,
       "tag": "0018_hf_submission_author",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791300000000,
+      "tag": "0019_hf_submission_withdrawn",
+      "breakpoints": true
     }
   ]
 }

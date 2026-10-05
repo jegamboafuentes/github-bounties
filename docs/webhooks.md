@@ -204,6 +204,10 @@ This webhook path writes `claims.status=eligible` on merge+close of a `funded` o
 
 Merge still pays the merged PR’s author even if the lock expired — product lock is coordination, not a second truth source.
 
+## Hugging Face
+
+`POST /webhooks/huggingface` is separate from the GitHub App webhook. Hub sends `X-Webhook-Secret` and `Webhook-Id`. The handler checks `HF_WEBHOOK_SECRET`, then re-reads the discussion API before it writes a winner claim. `GET /api/jobs/poll-hf-merges` is the safety net. Both stay idle unless `HF_BOUNTIES_ENABLED=1`. See the Hugging Face merge section in the root README.
+
 ## Out of scope
 
 - Changing Google Sign-In (V1-2)

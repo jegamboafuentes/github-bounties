@@ -62,7 +62,7 @@ export function createBountiesMcpServer(
     {
       title: "Get bounty",
       description:
-        "Read one public bounty by id. Includes provider, the stored issue body (no GitHub refetch), status, fee and pool payout breakdown, pool roster, escrow status, and the retired claim-lock state (always read-only). amountUsdc and payout.faceUsdc are the face. totalFundedUsdc is the verified escrow fund plus confirmed contributions, each fund hash once, or 0.000000 when there is no verified inflow. status cancelled, expired, refunding, or refunded means that amount is not still locked. funders.avatars are newest contribution first. Omits wallet addresses, emails, and Google ids.",
+        "Read one public bounty by id. Includes provider, the stored issue body (no GitHub refetch), status, fee and pool payout breakdown, pool roster, escrow status, winner, mergedBy, and mergeReview. winner and mergedBy are set when a claim exists, including a Hugging Face merge. mergeReview is merger_review_required when the merger was not an owner or org member; that claim is not auto-paid. The retired claim-lock state is always read-only. amountUsdc and payout.faceUsdc are the face. totalFundedUsdc is the verified escrow fund plus confirmed contributions, each fund hash once, or 0.000000 when there is no verified inflow. status cancelled, expired, refunding, or refunded means that amount is not still locked. funders.avatars are newest contribution first. Omits wallet addresses, emails, and Google ids.",
       inputSchema: bountyIdParamsSchema,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true },
     },

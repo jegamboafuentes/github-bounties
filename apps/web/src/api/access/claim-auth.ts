@@ -23,17 +23,69 @@ function identitiesMatch(ctx: ClaimAuthContext, otherLogin: string | null | unde
  * login to match the merged PR author and the claim row. Pool claims need
  * that login to match the caller's own frozen pool row.
  */
-export function authorizeClaimCaller(actorUserId: string, kind: ClaimKind, ctx: ClaimAuthContext): void {
-  if (!ctx.bounty) {
-    throw new PublicApiError("not_found", "Bounty not found.");
+function hfNamesMatch(left: string | null | undefined, right: string | null | undefined): boolean {
+  const a = left?.trim().toLowerCase() ?? "";
+  const b = right?.trim().toLowerCase() ?? "";
+  return a.length > 0 && a === b;
+}
+
+function authorizeHuggingFaceClaim(actorUserId: string, kind: ClaimKind, ctx: ClaimAuthContext): void {
+  if (kind === "pool") {
+    throw new PublicApiError(
+      "provider_not_supported",
+      "Claiming a Hugging Face pool share is not supported yet.",
+      null,
+      statusForDomainCode("provider_not_supported"),
+    );
   }
-  if (ctx.bounty.provider === "huggingface") {
+  const winner = ctx.winner;
+  const payable = Boolean(winner && (winner.status === "eligible" || winner.status === "paid"));
+  if (!payable || !winner) {
     throw new PublicApiError(
       "provider_not_supported",
       "Claiming a Hugging Face bounty is not supported yet.",
       null,
       statusForDomainCode("provider_not_supported"),
     );
+  }
+  if (!ctx.hfUsername?.trim()) {
+    throw new PublicApiError(
+      "hf_not_linked",
+      "Link Hugging Face before claiming with this key.",
+      null,
+      statusForDomainCode("hf_not_linked"),
+    );
+  }
+  if (!ctx.walletAddress?.trim()) {
+    throw new PublicApiError(
+      "wallet_not_set",
+      "Save a payout wallet before claiming with this key.",
+      null,
+      403,
+    );
+  }
+  const loginOk = hfNamesMatch(ctx.hfUsername, winner.prAuthorLogin);
+  const idOk = Boolean(
+    ctx.hfSub && winner.prAuthorProviderId && ctx.hfSub === winner.prAuthorProviderId,
+  );
+  const ownerOk = winner.hunterUserId === actorUserId;
+  if ((!loginOk && !idOk) || !ownerOk) {
+    throw new PublicApiError(
+      "not_winner",
+      "Only the winning Hugging Face account can claim the winner share. The linked username must match the merged pull request author.",
+      null,
+      403,
+    );
+  }
+}
+
+export function authorizeClaimCaller(actorUserId: string, kind: ClaimKind, ctx: ClaimAuthContext): void {
+  if (!ctx.bounty) {
+    throw new PublicApiError("not_found", "Bounty not found.");
+  }
+  if (ctx.bounty.provider === "huggingface") {
+    authorizeHuggingFaceClaim(actorUserId, kind, ctx);
+    return;
   }
   if (!ctx.githubLogin?.trim()) {
     throw new PublicApiError(

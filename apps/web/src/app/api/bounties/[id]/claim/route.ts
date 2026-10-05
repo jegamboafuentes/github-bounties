@@ -4,6 +4,7 @@ import { getRuntimeDb } from "@/db/runtime";
 import { escrowErrorJson, httpStatusForEscrowError, isEscrowError, jsonForUnknown } from "@/escrow";
 import { redactDatabaseText } from "@/http/redact-error";
 import { isUuid, platformNotFoundResponse } from "@/ids";
+import { ProviderNotSupportedError } from "@/providers/types";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,12 @@ export async function POST(
     }
     if (isEscrowError(err)) {
       return Response.json(escrowErrorJson(err), { status: httpStatusForEscrowError(err) });
+    }
+    if (err instanceof ProviderNotSupportedError) {
+      return Response.json(
+        { ok: false, error: err.code, message: redactDatabaseText(err.message) },
+        { status: 501 },
+      );
     }
     return Response.json(jsonForUnknown(err instanceof Error ? err.message : "claim failed"), {
       status: 500,

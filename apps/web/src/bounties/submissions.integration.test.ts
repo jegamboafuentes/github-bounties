@@ -346,6 +346,16 @@ describe("Hugging Face bounty submissions", () => {
       );
       assert.equal(withdrawn.withdrawn, true);
       assert.equal((await listBountySubmissions(fx.fundedId, { db: fx.db, env: ENABLED })).length, 0);
+      const [kept] = await fx.db
+        .select({ status: bountySubmissions.status })
+        .from(bountySubmissions)
+        .where(eq(bountySubmissions.id, withdrawn.id));
+      assert.equal(kept?.status, "withdrawn");
+      await assert.rejects(
+        () =>
+          withdrawBountySubmission({ bountyId: fx.fundedId, userId: fx.otherId }, { db: fx.db, env: ENABLED }),
+        expectCode("submission_not_found"),
+      );
 
       const again = await submitHuggingFacePr(
         { bountyId: fx.fundedId, userId: fx.hunterId, prUrl: fx.prUrl },

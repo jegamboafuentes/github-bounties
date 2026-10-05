@@ -480,6 +480,11 @@ export function createAccessDeps(
         .from(githubLinks)
         .where(eq(githubLinks.userId, userId))
         .limit(1);
+      const [hfLink] = await db
+        .select({ hfUsername: hfLinks.hfUsername, hfSub: hfLinks.hfSub })
+        .from(hfLinks)
+        .where(eq(hfLinks.userId, userId))
+        .limit(1);
       const winner = bounty && kind === "winner" ? await loadWinnerLeg(db, bountyId) : null;
       const pool =
         bounty && kind === "pool" ? await loadOwnPoolLeg(db, bountyId, userId, link?.githubId ?? null) : null;
@@ -497,6 +502,8 @@ export function createAccessDeps(
           : null,
         walletAddress: user?.walletAddress ?? null,
         githubLogin: link?.githubLogin ?? null,
+        hfUsername: hfLink?.hfUsername ?? null,
+        hfSub: hfLink?.hfSub ?? null,
         winner,
         pool,
         rosterFrozen,
@@ -702,6 +709,7 @@ async function loadWinnerLeg(db: Database, bountyId: string): Promise<WinnerLegA
     claimId: claim.id,
     hunterUserId: claim.hunterUserId,
     prAuthorLogin: claim.prAuthorLogin,
+    prAuthorProviderId: claim.prAuthorProviderId,
     status: claim.status,
     amountUsdc: claim.payoutUsdc,
     txHash: claim.payoutTxHash,

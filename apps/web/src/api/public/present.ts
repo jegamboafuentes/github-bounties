@@ -131,6 +131,19 @@ function presentMember(member: RosterMemberView) {
   };
 }
 
+export type PublicMergeIdentity = {
+  login: string | null;
+  providerUserId: string | null;
+};
+
+export type PublicMergeView = {
+  winner: PublicMergeIdentity | null;
+  mergedBy: PublicMergeIdentity | null;
+  mergeReview: "merger_review_required" | null;
+};
+
+const EMPTY_MERGE: PublicMergeView = { winner: null, mergedBy: null, mergeReview: null };
+
 export function presentBountyDetail(args: {
   bounty: BoardBounty;
   totalFundedUsdc: string;
@@ -139,6 +152,7 @@ export function presentBountyDetail(args: {
   escrow: EscrowSnapshot | null;
   contributions?: readonly FundingContributionInput[];
   mainnet?: boolean;
+  merge?: PublicMergeView | null;
 }) {
   const base = presentPublicBounty(args.bounty, args.totalFundedUsdc, args.roster);
   return {
@@ -184,6 +198,9 @@ export function presentBountyDetail(args: {
           prNumber: args.bounty.pendingHunterLink.prNumber,
         }
       : null,
+    winner: (args.merge ?? EMPTY_MERGE).winner,
+    mergedBy: (args.merge ?? EMPTY_MERGE).mergedBy,
+    mergeReview: (args.merge ?? EMPTY_MERGE).mergeReview,
     funding: presentFundingTransactions({
       contributions: args.contributions ?? [],
       escrowFundTxHash: args.escrow?.fundTxHash ?? null,

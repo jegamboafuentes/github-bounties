@@ -415,6 +415,7 @@ export function readIdempotencyKey(value: string | null | undefined, required: b
 const DOMAIN_STATUS: Record<string, number> = {
   unauthorized: 401,
   bounty_not_found: 404,
+  submission_not_found: 404,
   issue_not_found: 404,
   not_found: 404,
   not_poster: 403,

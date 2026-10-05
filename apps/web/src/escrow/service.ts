@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, lte } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { bounties, claimLocks, claims, escrows, feeLedger, githubLinks, users } from "../db/schema";
 import { bountyFeeBps, bountyPoolBps } from "../bounties/rates";
+import { watchFundedHuggingFaceBounty } from "../huggingface/watch";
 import { FEE_BPS } from "../lib/constants";
 import { splitFaceUsdc, splitPostFeePool, type PostFeePoolSplit } from "../lib/money";
 import { EscrowError } from "./errors";
@@ -359,6 +360,17 @@ export async function lockEscrowFunds(
   if (!escrow) throw new EscrowError("bounty_not_found", "Escrow row missing after lock.");
 
   await notifyBountyFunded(opts.db, bountyId, opts.email);
+  try {
+    await watchFundedHuggingFaceBounty(opts.db, bounty);
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        event: "hf_watch_sync",
+        bountyId,
+        message: err instanceof Error ? err.message : "watch failed",
+      }),
+    );
+  }
 
   logMoneyAction({
     action: "lock",

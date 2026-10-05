@@ -1,6 +1,6 @@
 import { and, asc, eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { isUniqueViolation } from "../db/errors";
+import { isUniqueViolation, uniqueViolationConstraint } from "../db/errors";
 import { bounties, bountySubmissions, claims, hfLinks, repos } from "../db/schema";
 import type { GitHubHttp } from "../github/api";
 import {
@@ -99,10 +99,22 @@ async function loadBounty(db: Database, bountyId: string): Promise<BountyRow> {
     .innerJoin(repos, eq(repos.id, bounties.repoId))
     .where(eq(bounties.id, bountyId))
     .limit(1);
-  if (!row || row.deletedAt) {
+  if (!row) {
     throw new BountyError("bounty_not_found", "Bounty not found.");
   }
+  if (row.deletedAt) {
+    throw new BountyError("bounty_not_found", "Bounty not found.", null, 410);
+  }
   return row;
+}
+
+/** Race on the active-user index is the caller's own submission, not a taken pull request. */
+export function submissionUniqueConflictMessage(err: unknown): string {
+  const constraint = uniqueViolationConstraint(err) ?? "";
+  if (constraint.includes("active_user")) {
+    return "You already submitted a pull request for this bounty. Withdraw it before submitting another.";
+  }
+  return "This pull request was already submitted for this bounty.";
 }
 
 function assertHuggingFaceSubmissions(bounty: BountyRow, env: NodeJS.ProcessEnv): void {
@@ -257,8 +269,11 @@ export async function submitHuggingFacePr(
         .from(bounties)
         .where(eq(bounties.id, bounty.id))
         .limit(1);
-      if (!fresh || fresh.deletedAt) {
+      if (!fresh) {
         throw new BountyError("bounty_not_found", "Bounty not found.");
+      }
+      if (fresh.deletedAt) {
+        throw new BountyError("bounty_not_found", "Bounty not found.", null, 410);
       }
       if (fresh.status !== "funded") {
         throw new BountyError(
@@ -287,7 +302,11 @@ export async function submitHuggingFacePr(
         .select({ id: bountySubmissions.id })
         .from(bountySubmissions)
         .where(
-          and(eq(bountySubmissions.bountyId, bounty.id), eq(bountySubmissions.prNumber, parsed.prNumber)),
+          and(
+            eq(bountySubmissions.bountyId, bounty.id),
+            eq(bountySubmissions.prNumber, parsed.prNumber),
+            eq(bountySubmissions.status, "submitted"),
+          ),
         )
         .limit(1);
       if (taken) {
@@ -325,10 +344,7 @@ export async function submitHuggingFacePr(
   } catch (err) {
     if (err instanceof BountyError || err instanceof ProviderNotSupportedError) throw err;
     if (isUniqueViolation(err)) {
-      throw new BountyError(
-        "already_submitted",
-        "This pull request was already submitted for this bounty.",
-      );
+      throw new BountyError("already_submitted", submissionUniqueConflictMessage(err));
     }
     throw err;
   }
@@ -353,8 +369,11 @@ export async function withdrawBountySubmission(
       .from(bounties)
       .where(eq(bounties.id, bounty.id))
       .limit(1);
-    if (!fresh || fresh.deletedAt) {
+    if (!fresh) {
       throw new BountyError("bounty_not_found", "Bounty not found.");
+    }
+    if (fresh.deletedAt) {
+      throw new BountyError("bounty_not_found", "Bounty not found.", null, 410);
     }
     if (!submissionWithdrawOpen(fresh.status) || (await bountyHasPaidClaim(database, bounty.id))) {
       throw new BountyError(
@@ -363,7 +382,8 @@ export async function withdrawBountySubmission(
       );
     }
     const [row] = await database
-      .delete(bountySubmissions)
+      .update(bountySubmissions)
+      .set({ status: "withdrawn" })
       .where(
         and(
           eq(bountySubmissions.bountyId, bounty.id),
@@ -373,7 +393,10 @@ export async function withdrawBountySubmission(
       )
       .returning({ id: bountySubmissions.id });
     if (!row) {
-      throw new BountyError("bounty_not_found", "You have no pull request submission on this bounty.");
+      throw new BountyError(
+        "submission_not_found",
+        "You have no active pull request submission on this bounty.",
+      );
     }
     return { bountyId: bounty.id, id: row.id, withdrawn: true as const };
   });

@@ -19,7 +19,7 @@ This is **not** Lightning Bounties, LB1, or “Lightning Bounties 2”. Older pr
 
 ## Status now
 
-As of **2026-10-03**. No invented ship dates. `/roadmap`, About, and [docs/roadmap.md](docs/roadmap.md) use this list. Chain differs by environment. PROD serves API 4.5.0. 4.10.1 is the DEV and main API version and adds the provider field. The homepage has no roadmap section.
+As of **2026-10-03**. No invented ship dates. `/roadmap`, About, and [docs/roadmap.md](docs/roadmap.md) use this list. Chain differs by environment. PROD serves API 4.5.0. 4.11.0 is the DEV and main API version and adds the provider field. The homepage has no roadmap section.
 
 | Environment | URL | Chain |
 | --- | --- | --- |
@@ -34,12 +34,12 @@ As of **2026-10-03**. No invented ship dates. `/roadmap`, About, and [docs/roadm
 - **FE epic** — LIVE on PROD 2026-09-20. Homepage stats, public roadmap, and vs-Lightning differentiators. Same aggregates as GET /api/stats. Bounty pages include the payout split charts.
 - **V3 wave** — LIVE on PROD 2026-09-21. Full GitHub issue + Gemini about/stack/complexity (AI estimates, cached). Related polish: board badges/filters, Settings/Post connected-only, homepage motion/roadmap refresh.
 - **Funding wave** — LIVE on PROD 2026-09-24. Crowdfunding (#61): USDC top-ups on already-funded bounties. Fund any public issue (#64) without installing the GitHub App, with Claim running through the public merge poller. Funder avatars (#65 to #67) on the board cards and on the bounty page Funders list.
-- **V4 — API + MCP.** LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp (#76 #79 #80 #81 #78). API money is OFF on PROD. PROD serves 4.5.0. 4.10.1 is the DEV and main API version (29 operations, 30 tools) and adds the provider field. [MCP](https://githubbounties.xyz/mcp).
+- **V4 — API + MCP.** LIVE on PROD 2026-09-25. /api/v1 (OpenAPI) + /mcp (#76 #79 #80 #81 #78). API money is OFF on PROD. PROD serves 4.5.0. 4.11.0 is the DEV and main API version (29 operations, 30 tools) and adds the provider field. [MCP](https://githubbounties.xyz/mcp).
 - **V5 — MCP page, unfunded edits, admin.** DONE. `/mcp` is the MCP server endpoint and its docs page. Posters edit an unfunded bounty amount on the web, REST, and MCP (`update_bounty_amount`). The admin dashboard on admin hosts sets fee and pool, lists bounties with trash and refund, gates refunds on `ADMIN_REFUND_ENABLED`, and gates fee-wallet withdraws on `ADMIN_WITHDRAW_ENABLED` with a single-use confirm token and a duplicate guard. Admin actions write an admin audit log. No recorded PROD date.
 
 ### In progress
 
-- **V6 — Hugging Face.** Bounties on Hugging Face discussions and PRs. In progress. No ship date. Every bounty has `provider`: `github` or `huggingface` (existing rows stay `github`). REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. A signed-in Google user can connect a Hugging Face account when `HF_OAUTH_CLIENT_ID` and `HF_OAUTH_CLIENT_SECRET` are set. Those secrets are optional. Creating a bounty from a public discussion requires `HF_BOUNTIES_ENABLED=1` (off by default). A linked hunter submits a pull request URL on an open funded discussion bounty. Claim, merge detection, and payouts are not in this release. GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`. GitHub bounties keep the claim flow and return `provider_not_supported` for submissions.
+- **V6 — Hugging Face.** Bounties on Hugging Face discussions and PRs. In progress. No ship date. Every bounty has `provider`: `github` or `huggingface` (existing rows stay `github`). REST `GET /api/v1/bounties` and MCP `list_bounties` take `provider=github` or `provider=huggingface`. Migration `0016_hf_provider`. Apply on DEV before remount. A signed-in Google user can connect a Hugging Face account when `HF_OAUTH_CLIENT_ID` and `HF_OAUTH_CLIENT_SECRET` are set. Those secrets are optional. Creating a bounty from a public discussion requires `HF_BOUNTIES_ENABLED=1` (off by default). A linked hunter submits a pull request URL on an open funded discussion bounty. When that pull request is merged, the webhook and the merge poller can write an eligible winner claim. The winner claims with a linked Hugging Face account on the same money path as GitHub. Pool claims stay unsupported. GitHub issue, pull request, and merge calls go through `RepoProvider` via `getProvider(bounty.provider)`. GitHub bounties keep the claim flow and return `provider_not_supported` for submissions.
 
 ### Next
 
@@ -115,7 +115,7 @@ npm run contacts:import -- --master /secure/master_list.csv --suppressed /secure
 
 ### Migrations
 
-`npm run db:migrate` in `apps/web` applies `apps/web/drizzle/` in journal order through `0018_hf_submission_author`.
+`npm run db:migrate` in `apps/web` applies `apps/web/drizzle/` in journal order through `0019_hf_submission_withdrawn`.
 
 | Migration | What it adds |
 | --- | --- |
@@ -138,6 +138,7 @@ npm run contacts:import -- --master /secure/master_list.csv --suppressed /secure
 | `0016_hf_provider` | `provider` on bounties, repos, and webhook deliveries (`github` or `huggingface`, default `github`); `hf_links` (Connect Hugging Face) and `bounty_submissions`. Apply on DEV before remount. No new migration for connect. |
 | `0017_marketing_contacts` | `marketing_contacts` (`ghb`, `lb1`, `both`) plus nullable `utm_*` on contacts and `utm_*`, `signup_landing_path`, `attributed_at` on `users`. Apply on DEV before the import. No required env. `RESEND_AUDIENCE_ID` and `RESEND_WEBHOOK_SECRET` are optional. |
 | `0018_hf_submission_author` | `bounty_submissions.hf_author` and one active submission per user per bounty. Apply on DEV before remount. |
+| `0019_hf_submission_withdrawn` | Withdraw keeps the row (`status=withdrawn`). The pull-request unique index is partial on `status=submitted`, so the same pull request can be submitted again. Apply on DEV before remount. |
 
 ### Environment
 
@@ -152,6 +153,9 @@ Plain env, not Secret Manager. Empty placeholders live in `apps/web/.env.example
 | `RESEND_AUDIENCE_ID` | Optional Secret Manager. Resend audience id for the campaign list. Unset means contact sync is a no-op. DEV/PROD value for LB + GHB Community: `bae17e81-f141-4204-b096-e6e9eee9c490`. |
 | `RESEND_WEBHOOK_SECRET` | Optional Secret Manager. Svix signing secret for `POST /api/webhooks/resend`. Unset rejects the webhook. |
 | `BASE_BUILDER_CODE` | Optional public [base.dev](https://www.base.dev/) builder code (`^[a-z0-9_]{1,32}$`). The registered code is `bc_u97ii222`. When set, server-sent USDC transfers append an ERC-8021 Schema 0 suffix, and x402 fund challenges declare the same code so the facilitator can settle Schema 2 `{ a, w }`. Unset is a no-op. Not a secret. Ops sets `BASE_BUILDER_CODE=bc_u97ii222` on DEV first, then on PROD on Enrique's GO. |
+| `HF_BOUNTIES_ENABLED` | Plain env, not a secret. Exactly `1` enables Hugging Face create, submit, merge detection, and winner claim. Anything else makes no Hub call and writes no Hugging Face claim. |
+| `HF_BOT_TOKEN` | Optional Secret Manager (`WEB_OPTIONAL_SECRETS`). Bearer token on every Hub read and on the watch-list update. Public discussions work without it. Watch sync is a no-op when it is unset. |
+| `HF_WEBHOOK_SECRET` | Optional Secret Manager (`WEB_OPTIONAL_SECRETS`). Compared to the `X-Webhook-Secret` header on `POST /webhooks/huggingface`. Unset returns **503** and writes no claim. |
 
 ## Money path
 
@@ -239,15 +243,13 @@ Accepted URLs:
 
 The repo row is `provider=huggingface`, `connection_kind=public_reference`, `github_repo_id` null, and `provider_repo_id` `{model|dataset|space}:{owner}/{repo}`. The discussion number is stored in `github_issue_number`. No new migration.
 
-A pull-request discussion is `hf_not_a_discussion`. A closed or merged discussion is `hf_discussion_closed`. A missing discussion is `hf_discussion_not_found`. `HF_BOT_TOKEN` is optional. When set, every Hub read (create and submit) sends `Authorization: Bearer`. Public discussions work without it. A non-2xx Hub response logs `hf_hub_read` with the upstream status, the API path (no query string and no token), whether the bot token was sent, and the `RateLimit*`, `Retry-After`, `x-error-code`, and `x-error-message` headers. `hf_rate_limited` is only an upstream **429**. The API error includes `details.retryAfter` and a `Retry-After` header when Hugging Face sent one.
-
-Claiming an HF bounty returns `provider_not_supported`. Merge detection and payouts are not in this release. The board can filter `provider=huggingface`. The intelligence card and the public merge poller skip these bounties.
+A pull-request discussion is `hf_not_a_discussion`. A closed or merged discussion is `hf_discussion_closed`. A missing discussion is `hf_discussion_not_found`. `HF_BOT_TOKEN` is optional. When set, every Hub read (create, submit, merge re-read, and watch sync) sends `Authorization: Bearer`. Public discussions work without it. A non-2xx Hub response logs `hf_hub_read` with the upstream status, the API path (no query string and no token), whether the bot token was sent, and the `RateLimit*`, `Retry-After`, `x-error-code`, and `x-error-message` headers. `hf_rate_limited` is only an upstream **429**. The API error includes `details.retryAfter` and a `Retry-After` header. When Hugging Face omits `Retry-After`, the default is 60 seconds. The board can filter `provider=huggingface`. The intelligence card and the public GitHub merge poller skip these bounties.
 
 ### Hugging Face submissions
 
-A signed-in user with a linked Hugging Face account submits a pull request URL for an open funded Hugging Face bounty. The same checks run on the bounty page, `POST /api/v1/bounties/{id}/submissions` (write scope), and MCP `submit_pr`. `GET` and MCP `list_submissions` need the read scope. `DELETE` and MCP `withdraw_submission` need the write scope and remove the caller's row while the bounty is unpaid. Each stored row has status `submitted`. There is no merge detection and no payout in this release.
+A signed-in user with a linked Hugging Face account submits a pull request URL for an open funded Hugging Face bounty. The same checks run on the bounty page, `POST /api/v1/bounties/{id}/submissions` (write scope), and MCP `submit_pr`. `GET` and MCP `list_submissions` need the read scope. `DELETE` and MCP `withdraw_submission` need the write scope. Withdraw sets `status=withdrawn` and keeps the row. List returns only `submitted`. A deleted bounty on these routes is **410**. A missing bounty is **404**.
 
-The pull request URL is `https://huggingface.co/{owner}/{repo}/discussions/{n}`, or the same path under `datasets/` or `spaces/`. The Hugging Face API must show `isPullRequest: true`, the same repo as the bounty, status `open` or `merged`, and an author username that matches the submitter's `hf_links` row. One active submission per user per bounty.
+The pull request URL is `https://huggingface.co/{owner}/{repo}/discussions/{n}`, or the same path under `datasets/` or `spaces/`. The Hugging Face API must show `isPullRequest: true`, the same repo as the bounty, status `open` or `merged`, and an author username that matches the submitter's `hf_links` row. One active submission per user per bounty. The same pull request can be submitted again after withdraw. Migration `0019_hf_submission_withdrawn`. Apply on DEV before remount.
 
 | Code | When |
 | --- | --- |
@@ -257,12 +259,48 @@ The pull request URL is `https://huggingface.co/{owner}/{repo}/discussions/{n}`,
 | `repo_mismatch` | The pull request is in a different repo. **409**. |
 | `author_mismatch` | The pull request author does not match the linked username. **403**. |
 | `pr_closed` | The pull request is not open or merged (closed or draft). **400**. |
-| `already_submitted` | This user already has a submission, or this pull request number is already stored. **409**. |
-| `provider_not_supported` | The bounty is GitHub. Submissions are not the GitHub claim flow. **501**, same as claim. |
+| `already_submitted` | This user already has an active submission, or this pull request number is already stored as `submitted`. **409**. The caller's own active row says to withdraw first. |
+| `submission_not_found` | Withdraw found no active submission for this user. **404**. |
+| `provider_not_supported` | The bounty is GitHub. Submissions are not the GitHub claim flow. **501**. Documented on the OpenAPI submissions operations and on claim. Expected client **501** responses are not logged as application faults. |
 
-The pull-request read uses the same Hub client and the same optional `HF_BOT_TOKEN` bearer as create. Migration `0018_hf_submission_author` adds `hf_author` and one active submission per user per bounty. Apply on DEV before remount.
+The pull-request read uses the same Hub client and the same optional `HF_BOT_TOKEN` bearer as create. Migration `0018_hf_submission_author` adds `hf_author` and one active submission per user per bounty.
 
 A public discussion to try on DEV: `https://huggingface.co/datasets/stanfordnlp/imdb/discussions/9`.
+
+### Hugging Face merge and winner claim
+
+Winner only. There is no Hugging Face pool in this release. `claim_pool` on a Hugging Face bounty stays **501** `provider_not_supported`.
+
+Two paths write the same claim. Both re-read the Hub discussion before they write. Webhook payloads can omit the merger, so the payload is only a hint.
+
+| Path | What Ops runs |
+| --- | --- |
+| `GET` or `POST /api/jobs/poll-hf-merges` | Cloud Scheduler, same bearer as the public GitHub poller (`Authorization: Bearer <CRON_SECRET>` when `CRON_SECRET` is set). Every 10 minutes is the same cadence as `poll-public-merges`. This repo does not create the job. CLI: `cd apps/web && npm run poll-hf-merges`. |
+| `POST /webhooks/huggingface` | Hugging Face sends `X-Webhook-Secret` (the header name Hub uses; the secret is not read from the query string) and `Webhook-Id`. The id is stored in `webhook_deliveries.delivery_id` with `provider=huggingface`. |
+
+`HF_BOUNTIES_ENABLED` must be exactly `1`. When it is off, the poller returns `skipped: hf_disabled` and the webhook returns **200** `{ skipped: hf_disabled }` after the secret check, with no Hub call and no claim. A missing `HF_WEBHOOK_SECRET` is **503**. A bad secret is **401**. A Hub timeout, **429**, or **5xx** is **503** and the delivery is not recorded, so Hugging Face retries. A discussion **404** is recorded and returns **200** so one missing thread does not suspend the webhook.
+
+Eligibility, in order, for a `submitted` row on a funded or `claim_locked` bounty that is not deleted:
+
+- The discussion is a pull request, status `merged`, with `mergeCommitId`.
+- The base ref is `refs/heads/<default>` or the short name. `main` is the default when the refs API lists it. A missing refs response falls back to `main`.
+- The pull request was created after the bounty.
+- No self-merge: the author is not the repo namespace, not the merger, not the poster's linked Hugging Face account, and not any funder's linked Hugging Face account.
+- No insider: the author is not a public org member and is not `isOrgMember` on the discussion.
+- The merger is an owner or an org member. If the merger is missing or lacks that power, the claim is stored as `disputed` with `rejection_reason=merger_review_required`. That flag is not auto-paid. `get_bounty` (REST and MCP) returns `mergeReview: merger_review_required` plus `winner` and `mergedBy`.
+- If the author has no `hf_links` row, the delivery stays `hunter_not_linked` and Connect Hugging Face backfills the claim. No claim row is written until then.
+
+An eligible claim uses the same escrow settle path as GitHub. `claim_winner` and the website Claim form accept the winner's linked Hugging Face username. Until an eligible or paid claim exists, `claim_winner` still returns **501** `provider_not_supported`. `get_bounty` always includes `winner`, `mergedBy`, and `mergeReview` (`null` when absent).
+
+Watch list: Hugging Face only delivers webhooks for repos on the webhook's `watched` list. After a successful fund, and again on each poll, the app adds `{ type, name }` to the bot webhook whose URL path ends with `/webhooks/huggingface` and keeps `discussion` in `domains`. The update is `POST /api/settings/webhooks/{id}`. A missing token or a missing webhook is logged as `hf_watch_sync` and does not fail the fund.
+
+Ops, before a remount:
+
+1. Apply migration `0019_hf_submission_withdrawn`.
+2. Set plain env `HF_BOUNTIES_ENABLED=1` on the environment that should pay Hugging Face winners.
+3. Create Secret Manager versions for `HF_BOT_TOKEN` and `HF_WEBHOOK_SECRET` when they should attach. Both are `WEB_OPTIONAL_SECRETS`. A remount attaches each when an enabled version exists and skips it when it does not.
+4. On the bot account, create one webhook aimed at `https://dev.githubbounties.xyz/webhooks/huggingface` (PROD: `https://githubbounties.xyz/webhooks/huggingface`). Set its secret to the same value as `HF_WEBHOOK_SECRET`. Include the `discussion` domain. The app adds funded repos to `watched` when the token can list that webhook.
+5. Point Cloud Scheduler at `GET /api/jobs/poll-hf-merges` with the cron bearer. The poller is the safety net when a webhook is missed.
 
 ## Local development
 
