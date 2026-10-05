@@ -181,7 +181,7 @@ Hugging Face connect is optional and is not product login. Set `HF_OAUTH_CLIENT_
 | `POST /webhooks/huggingface` | `X-Webhook-Secret` (`HF_WEBHOOK_SECRET`). Re-reads the Hub discussion before writing a claim |
 | `GET\|POST /api/jobs/sync-contacts` | optional `CRON_SECRET` bearer; push stale `marketing_contacts` and pull Resend unsubscribes. No-op when `RESEND_AUDIENCE_ID` is unset. This repo does not create the schedule |
 | `POST /api/webhooks/resend` | Svix signature (`RESEND_WEBHOOK_SECRET`). Unsubscribes are one-way |
-| `/admin/contacts` | admin host + admin session. Counts (including utm_campaign and utm_content), search, campaign filter, pagination, CSV export (audit `contacts_export`) |
+| `/admin/contacts` | admin host + admin session. Counts (including utm_campaign and utm_content), search, campaign filter, pagination, CSV export (audit `contacts_export`). Search rejects control characters and shows the validation message |
 
 Exclusive 72h claim-lock is **retired**. Optional Working on this is not exclusive and **does not move money.** Merge is still truth (V1-3 eligible Claim). See [docs/bounties.md](../../docs/bounties.md).
 

@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { bounties, bountyStatusValues, repos } from "../db/schema";
+import { controlCharMessage, containsControlChars } from "../http/control-chars";
 import { AdminError } from "./errors";
 
 export type AdminBountyRow = {
@@ -51,7 +52,11 @@ export async function listAdminBounties(
   const limit = clampLimit(input.limit);
   const offset = clampOffset(input.offset);
   const status = parseAdminBountyStatus(input.status);
-  const search = input.search?.trim().slice(0, 200) ?? "";
+  const rawSearch = input.search ?? "";
+  if (containsControlChars(rawSearch)) {
+    throw new AdminError(400, "validation_failed", controlCharMessage("Search"));
+  }
+  const search = rawSearch.trim().slice(0, 200);
   const pattern = search ? `%${escapeLike(search)}%` : "";
   const where = and(
     isNull(bounties.deletedAt),

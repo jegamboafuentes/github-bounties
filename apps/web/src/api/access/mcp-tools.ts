@@ -565,7 +565,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "List marketing contacts",
       description:
-        "Requires API key (admin scope). Search campaign contacts by email, name, or GitHub username. Filter by source (ghb, lb1, both), subscribed, and utm_campaign. Paginated. Each contact includes utmCampaign. A key without the admin scope is forbidden_scope.",
+        "Requires API key (admin scope). Search campaign contacts by email, name, or GitHub username. Filter by source (ghb, lb1, both), subscribed, and utm_campaign. Paginated. Each contact includes utmCampaign. Search cannot include control characters (U+0000–U+001F and U+007F). A key without the admin scope is forbidden_scope.",
       inputSchema: z.object({
         search: z.string().optional(),
         source: z.enum(["ghb", "lb1", "both"]).optional(),

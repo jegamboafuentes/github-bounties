@@ -33,7 +33,9 @@ export const listBountiesInputSchema = z
       .min(1)
       .max(200)
       .optional()
-      .describe("Case-insensitive substring of owner/name, for example octo/hello."),
+      .describe(
+        "Case-insensitive substring of owner/name, for example octo/hello. Control characters (U+0000–U+001F and U+007F) are rejected.",
+      ),
     status: z
       .enum(bountyStatuses)
       .optional()
@@ -50,7 +52,9 @@ export const listBountiesInputSchema = z
       .min(1)
       .max(100)
       .optional()
-      .describe("Case-insensitive substring of the cached language stack. Rows without a ready badge are excluded."),
+      .describe(
+        "Case-insensitive substring of the cached language stack. Rows without a ready badge are excluded. Control characters (U+0000–U+001F and U+007F) are rejected.",
+      ),
     has_intel: z
       .boolean()
       .optional()

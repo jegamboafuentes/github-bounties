@@ -132,6 +132,27 @@ function htmlPathname(pathname: string): string {
   return pathname;
 }
 
+/** `/bounties/{uuid}` when the id would reach the detail page. Non-uuids 404 in the proxy path check. */
+export function bountyDetailId(pathname: string): string | null {
+  const bounty = /^\/bounties\/([^/]+)$/.exec(htmlPathname(pathname));
+  if (!bounty || !isUuid(bounty[1] ?? "")) return null;
+  return bounty[1] ?? null;
+}
+
+/**
+ * `NextResponse.next()` is status 200 before the bounty page calls notFound().
+ * A missing bounty is a 404, so the cookie decision uses 404 and the HTTP
+ * response stays the page's. Other paths keep the proxy status.
+ */
+export function utmProxyStatus(input: {
+  pathname: string;
+  proxyStatus: number;
+  bountyExists: boolean | null;
+}): number {
+  if (input.bountyExists === false && bountyDetailId(input.pathname)) return 404;
+  return input.proxyStatus;
+}
+
 /**
  * Public HTML pages only. API, static, robots, sitemap, MCP, webhooks, and
  * admin routes are not navigations that should take a first touch. An admin
