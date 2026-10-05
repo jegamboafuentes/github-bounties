@@ -86,19 +86,80 @@ function unsupported(): never {
   throw new ProviderNotSupportedError("huggingface");
 }
 
-type DiscussionAuthor = { _id?: unknown; name?: unknown };
+type DiscussionAuthor = { _id?: unknown; id?: unknown; name?: unknown; isOrgMember?: unknown };
 type DiscussionEvent = {
   type?: unknown;
-  data?: { hidden?: unknown; latest?: { raw?: unknown } };
+  createdAt?: unknown;
+  author?: DiscussionAuthor & { isOwner?: unknown };
+  data?: { hidden?: unknown; latest?: { raw?: unknown }; status?: unknown; mergeCommitId?: unknown };
 };
 type DiscussionPayload = {
   title?: unknown;
   status?: unknown;
   isPullRequest?: unknown;
+  createdAt?: unknown;
   author?: DiscussionAuthor;
   events?: unknown;
   repo?: { name?: unknown; type?: unknown };
+  changes?: { base?: unknown; mergeCommitId?: unknown };
+  mergeCommitId?: unknown;
 };
+
+export type HuggingFaceMerger = {
+  id: string | null;
+  login: string | null;
+  isOwner: boolean;
+  isOrgMember: boolean;
+};
+
+function textField(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function authorIsOrgMember(author: DiscussionAuthor | undefined, events: unknown): boolean {
+  if (author?.isOrgMember === true) return true;
+  if (!Array.isArray(events)) return false;
+  const authorId = textField(author?._id) || textField(author?.id);
+  const authorName = textField(author?.name).toLowerCase();
+  for (const raw of events) {
+    const event = asRecord(raw);
+    const eventAuthor = asRecord(event?.author);
+    if (eventAuthor?.isOrgMember !== true) continue;
+    const eventId = textField(eventAuthor._id) || textField(eventAuthor.id);
+    const eventName = textField(eventAuthor.name).toLowerCase();
+    if ((authorId && eventId === authorId) || (authorName && eventName === authorName)) return true;
+  }
+  return false;
+}
+
+function mergerFromEvents(events: unknown): {
+  merger: HuggingFaceMerger;
+  mergeCommitId: string | null;
+  mergedAt: string | null;
+} | null {
+  if (!Array.isArray(events)) return null;
+  let best: { at: number; merger: HuggingFaceMerger; mergeCommitId: string | null; mergedAt: string | null } | null =
+    null;
+  events.forEach((raw, index) => {
+    const event = asRecord(raw);
+    const data = asRecord(event?.data);
+    const status = textField(data?.status).toLowerCase();
+    if (status !== "merged") return;
+    const created = textField(event?.createdAt);
+    const parsed = created ? Date.parse(created) : Number.NaN;
+    const at = Number.isNaN(parsed) ? index : parsed;
+    const eventAuthor = asRecord(event?.author);
+    const merger: HuggingFaceMerger = {
+      id: textField(eventAuthor?._id) || textField(eventAuthor?.id) || null,
+      login: textField(eventAuthor?.name) || null,
+      isOwner: eventAuthor?.isOwner === true,
+      isOrgMember: eventAuthor?.isOrgMember === true,
+    };
+    const mergeCommitId = textField(data?.mergeCommitId) || null;
+    if (!best || at >= best.at) best = { at, merger, mergeCommitId, mergedAt: created || null };
+  });
+  return best;
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null;
@@ -308,6 +369,12 @@ export type HuggingFaceDiscussion = {
   isPullRequest: boolean;
   authorId: string | null;
   authorLogin: string | null;
+  authorIsOrgMember: boolean;
+  createdAt: string | null;
+  merger: HuggingFaceMerger | null;
+  mergeCommitId: string | null;
+  mergedAt: string | null;
+  baseRef: string | null;
   repoType: HfRepoType;
   owner: string;
   repo: string;
@@ -368,16 +435,28 @@ export async function fetchHuggingFaceDiscussion(
   const payload = (asRecord(body) ?? {}) as DiscussionPayload;
   const repo = canonicalRepo(ref, payload);
   const author = payload.author;
-  const authorId = typeof author?._id === "string" ? author._id.trim() : "";
-  const authorLogin = typeof author?.name === "string" ? author.name.trim() : "";
-  const status = typeof payload.status === "string" ? payload.status.trim().toLowerCase() : "";
+  const authorId = textField(author?._id) || textField(author?.id);
+  const authorLogin = textField(author?.name);
+  const status = textField(payload.status).toLowerCase();
+  const merged = mergerFromEvents(payload.events);
+  const changes = asRecord(payload.changes);
+  const mergeCommitId =
+    merged?.mergeCommitId || textField(changes?.mergeCommitId) || textField(payload.mergeCommitId) || null;
+  const baseRef = textField(changes?.base) || null;
+  const createdAt = textField(payload.createdAt) || null;
   return {
-    title: typeof payload.title === "string" ? payload.title.trim() : "",
+    title: textField(payload.title),
     body: firstCommentBody(payload.events),
     status,
     isPullRequest: payload.isPullRequest === true,
     authorId: authorId || null,
     authorLogin: authorLogin || null,
+    authorIsOrgMember: authorIsOrgMember(author, payload.events),
+    createdAt,
+    merger: merged?.merger ?? null,
+    mergeCommitId,
+    mergedAt: merged?.mergedAt ?? null,
+    baseRef,
     repoType: repo.type,
     owner: repo.owner,
     repo: repo.repo,
@@ -388,8 +467,8 @@ export async function fetchHuggingFaceDiscussion(
 
 /**
  * Read-side Hugging Face adapter. Discussion URL parse and fetch are live.
- * Pull-request URLs parse here. Merge detection and payout stay
- * `provider_not_supported` until a later PR.
+ * Pull-request URLs parse here. `verifyMerge` stays unsupported: Hugging Face
+ * winner claims go through `src/huggingface/apply-merge.ts`, not this method.
  */
 export const huggingfaceProvider: RepoProvider = {
   id: "huggingface",

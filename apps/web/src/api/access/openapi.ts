@@ -657,7 +657,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
   });
 
   const claimDescription =
-    "Scope money. Pays the wallet saved for the key owner. The body cannot include an address, destination, or user id. Linked GitHub login must match the winner or the caller's own pool member. Idempotency-Key is required. A replay returns the stored response and does not pay again.";
+    "Scope money. Pays the wallet saved for the key owner. The body cannot include an address, destination, or user id. Linked GitHub login must match the winner or the caller's own pool member. A Hugging Face winner claim uses the linked Hugging Face username once an eligible claim exists. Idempotency-Key is required. A replay returns the stored response and does not pay again.";
 
   registry.registerPath({
     method: "post",
@@ -675,9 +675,14 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       200: { description: "Claim recorded. destination is the saved wallet. legs lists every settle leg.", content: json(claimResultSchema) },
       400: { description: "Address, user id, or Idempotency-Key rejected.", ...errorContent },
       401: { description: "Missing, invalid, or revoked key.", ...errorContent },
-      403: { description: "Money disabled, missing scope, GitHub login mismatch, or not the winner or pool member.", ...errorContent },
+      403: { description: "Money disabled, missing scope, GitHub or Hugging Face login mismatch, or not the winner or pool member.", ...errorContent },
       409: { description: "Idempotency conflict, or the pool is not ready.", ...errorContent },
       429: { description: "Per-key money limit (10/hour).", ...errorContent },
+      501: {
+        description:
+          "provider_not_supported. Hugging Face winner claim returns this only when no eligible claim exists. Hugging Face pool claim stays 501. This is an expected client response and is not logged as an application fault.",
+        ...errorContent,
+      },
     },
   });
 
@@ -687,7 +692,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     operationId: "listSubmissions",
     summary: "List Hugging Face pull requests submitted to a bounty",
     description:
-      "Scope read. Hugging Face bounties only. Returns rows with status submitted. GitHub bounties return provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns 403 hf_disabled when that flag is off.",
+      "Scope read. Hugging Face bounties only. Returns rows with status submitted. GitHub bounties return 501 provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns 403 hf_disabled when that flag is off. A deleted bounty is 410. 501 is an expected client response and is not logged as an application fault.",
     security: bearer,
     request: { params: z.object({ id: idSchema }) },
     responses: {
@@ -695,7 +700,13 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       401: { description: "Missing, invalid, or revoked key.", ...errorContent },
       403: { description: "Missing read scope, or Hugging Face bounties disabled (hf_disabled).", ...errorContent },
       404: { description: "Bounty not found.", ...errorContent },
+      410: { description: "The bounty was deleted.", ...errorContent },
       429: { description: "Per-key read limit (120/min).", ...errorContent },
+      501: {
+        description:
+          "provider_not_supported. GitHub bounties do not accept submissions. This is an expected client response and is not logged as an application fault.",
+        ...errorContent,
+      },
     },
   });
 
@@ -705,7 +716,7 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     operationId: "submitPr",
     summary: "Submit a Hugging Face pull request to a funded bounty",
     description:
-      "Scope write. Same checks as the bounty page. The caller needs a linked Hugging Face account. The pull request must be in the bounty repo, open or merged, and authored by that username. One active submission per user. GitHub bounties return provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns 403 hf_disabled when that flag is off. Idempotency-Key is not required.",
+      "Scope write. Same checks as the bounty page. The caller needs a linked Hugging Face account. The pull request must be in the bounty repo, open or merged, and authored by that username. One active submission per user. GitHub bounties return 501 provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns 403 hf_disabled when that flag is off. A deleted bounty is 410. Idempotency-Key is not required. 501 is an expected client response and is not logged as an application fault.",
     security: bearer,
     request: {
       params: z.object({ id: idSchema }),
@@ -721,7 +732,13 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
       },
       404: { description: "Bounty or pull request not found.", ...errorContent },
       409: { description: "Bounty is not funded, the repo does not match, or a submission already exists.", ...errorContent },
-      429: { description: "Per-key write limit (20/min).", ...errorContent },
+      410: { description: "The bounty was deleted.", ...errorContent },
+      429: { description: "Per-key write limit (20/min), or Hugging Face rate limited the discussion read (hf_rate_limited, Retry-After).", ...errorContent },
+      501: {
+        description:
+          "provider_not_supported. GitHub bounties do not accept submissions. This is an expected client response and is not logged as an application fault.",
+        ...errorContent,
+      },
     },
   });
 
@@ -731,16 +748,22 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     operationId: "withdrawSubmission",
     summary: "Withdraw the caller's Hugging Face submission",
     description:
-      "Scope write. Deletes the caller's active submission while the bounty is unpaid. GitHub bounties return provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns 403 hf_disabled when that flag is off.",
+      "Scope write. Sets the caller's active submission to withdrawn and keeps the row. The active unique index stays on status submitted. GitHub bounties return 501 provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns 403 hf_disabled when that flag is off. No active submission is 404 submission_not_found. A deleted bounty is 410. 501 is an expected client response and is not logged as an application fault.",
     security: bearer,
     request: { params: z.object({ id: idSchema }) },
     responses: {
       200: { description: "Submission withdrawn.", content: json(withdrawnSubmissionSchema) },
       401: { description: "Missing, invalid, or revoked key.", ...errorContent },
       403: { description: "Missing write scope, or Hugging Face bounties disabled (hf_disabled).", ...errorContent },
-      404: { description: "Bounty not found, or this user has no submission.", ...errorContent },
+      404: { description: "Bounty not found, or submission_not_found when this user has no active submission.", ...errorContent },
       409: { description: "The bounty has been paid.", ...errorContent },
+      410: { description: "The bounty was deleted.", ...errorContent },
       429: { description: "Per-key write limit (20/min).", ...errorContent },
+      501: {
+        description:
+          "provider_not_supported. GitHub bounties do not accept submissions. This is an expected client response and is not logged as an application fault.",
+        ...errorContent,
+      },
     },
   });
 

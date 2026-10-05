@@ -505,7 +505,7 @@ export const claims = pgTable(
     prUrl: text("pr_url"),
     /** Winner: merged PR author (login) that closes #N. Pool members are not claims rows. */
     prAuthorLogin: text("pr_author_login"),
-    /** Provider user id of the PR author. Unused until HF claims. */
+    /** Provider user id of the PR author. Set for Hugging Face winner claims. */
     prAuthorProviderId: text("pr_author_provider_id"),
     mergedByLogin: text("merged_by_login"),
     mergedByProviderId: text("merged_by_provider_id"),
@@ -1074,7 +1074,8 @@ export const hfLinks = pgTable(
 
 /**
  * Hunter-submitted pull request for a bounty. One row with status `submitted`
- * per user per bounty. Withdraw deletes that row. `hf_author` is the Hugging
+ * per user per bounty. Withdraw sets status `withdrawn` and keeps the row.
+ * Active unique indexes include only `submitted`. `hf_author` is the Hugging
  * Face username checked at submit time. `pr_author_provider_id` is the Hub user id.
  */
 export const bountySubmissions = pgTable(
@@ -1098,7 +1099,9 @@ export const bountySubmissions = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("bounty_submissions_bounty_pr_uidx").on(table.bountyId, table.prNumber),
+    uniqueIndex("bounty_submissions_bounty_pr_uidx")
+      .on(table.bountyId, table.prNumber)
+      .where(sql`${table.status} = 'submitted'`),
     uniqueIndex("bounty_submissions_active_user_uidx")
       .on(table.bountyId, table.userId)
       .where(sql`${table.status} = 'submitted'`),
@@ -1108,6 +1111,7 @@ export const bountySubmissions = pgTable(
     check("bounty_submissions_pr_positive", sql`${table.prNumber} > 0`),
     check("bounty_submissions_pr_url_present", sql`length(trim(${table.prUrl})) > 0`),
     check("bounty_submissions_status_present", sql`length(trim(${table.status})) > 0`),
+    check("bounty_submissions_status_enum", sql`${table.status} in ('submitted', 'withdrawn')`),
   ],
 );
 

@@ -17,6 +17,8 @@
 # HF_OAUTH_CLIENT_ID and HF_OAUTH_CLIENT_SECRET are WEB_OPTIONAL_SECRETS.
 # They are not required. deploy-web.sh attaches each only when Secret Manager
 # has an enabled version and skips it when absent.
+# HF_BOT_TOKEN and HF_WEBHOOK_SECRET are the same optional shape. HF_BOUNTIES_ENABLED
+# is plain env (exactly 1). Unset, Hugging Face merge detection makes no Hub call.
 #
 # Always tags :$BUILD_ID and :latest so manual `gcloud builds submit` works.
 # $COMMIT_SHA is empty on manual submit unless you pass

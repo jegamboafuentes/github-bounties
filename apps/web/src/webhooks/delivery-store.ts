@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { webhookDeliveries } from "../db/schema";
+import { webhookDeliveries, type BountyProvider } from "../db/schema";
 import type { ClaimWriteResult, EligibilityDecision } from "./types";
 
 export type StoredDelivery = {
@@ -21,6 +21,8 @@ export type DeliveryRecordInput = {
   action?: string;
   decision?: EligibilityDecision;
   claims?: ClaimWriteResult[];
+  /** Defaults to github so existing GitHub deliveries stay unchanged. */
+  provider?: BountyProvider;
 };
 
 function isUniqueViolation(err: unknown): boolean {
@@ -110,6 +112,7 @@ export async function recordDeliveryIfNew(
       deliveryId: entry.deliveryId,
       event: entry.event,
       action: entry.action,
+      provider: entry.provider ?? "github",
       ...outcomeFields(entry),
     });
     return true;

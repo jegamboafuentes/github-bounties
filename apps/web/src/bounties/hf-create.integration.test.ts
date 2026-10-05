@@ -8,6 +8,7 @@ import { bounties, escrows, repos, users } from "../db/schema";
 import type { GitHubHttp } from "../github/api";
 import { createMockRail } from "../escrow/rail";
 import { probeCdpEnv } from "../escrow/env";
+import { ClaimError } from "../claims/errors";
 import { claimPayout, claimPoolPayout } from "../claims/payout";
 import { ProviderNotSupportedError } from "../providers/types";
 import { BountyError } from "./errors";
@@ -136,8 +137,7 @@ describe("Hugging Face bounty create", () => {
 
       await assert.rejects(
         () => claimPayout(hf.id, posterId, { payoutAddress: OTHER }, { db }),
-        (err: unknown) =>
-          err instanceof ProviderNotSupportedError && err.code === "provider_not_supported",
+        (err: unknown) => err instanceof ClaimError && err.code === "not_eligible",
       );
       await assert.rejects(
         () => claimPoolPayout(hf.id, posterId, { payoutAddress: OTHER }, { db }),

@@ -272,6 +272,26 @@ export const bountyDetailResponseSchema = z
         prNumber: z.number().int().nullable(),
       })
       .nullable(),
+    winner: z
+      .object({
+        login: z.string().nullable(),
+        providerUserId: z.string().nullable(),
+      })
+      .nullable()
+      .describe("Merged pull request author. Null until a winner claim exists. Set for GitHub and Hugging Face."),
+    mergedBy: z
+      .object({
+        login: z.string().nullable(),
+        providerUserId: z.string().nullable(),
+      })
+      .nullable()
+      .describe("Account that merged the pull request. Hugging Face claims fill this from the Hub discussion."),
+    mergeReview: z
+      .enum(["merger_review_required"])
+      .nullable()
+      .describe(
+        "merger_review_required when the merge is real but the merger was not an owner or org member. That claim is disputed and is not auto-paid.",
+      ),
     funding: z
       .array(
         z.object({
@@ -387,7 +407,7 @@ publicApiRegistry.registerPath({
   operationId: "getBounty",
   summary: "Read one bounty",
   description:
-    "Issue body snapshot, status, payout breakdown, pool roster, and read-only lock state. Wallet addresses are omitted. The issue body is the stored snapshot and is not refetched. amountUsdc and payout.faceUsdc are the face. totalFundedUsdc is the verified escrow fund plus confirmed contributions, each fund hash once. status cancelled, expired, refunding, or refunded means that sum is not still locked.",
+    "Issue body snapshot, status, payout breakdown, pool roster, and read-only lock state. winner and mergedBy are the merged pull request author and the merger when a claim exists, including Hugging Face. mergeReview is merger_review_required when that claim is held for admin review and is not auto-paid. Wallet addresses are omitted. The issue body is the stored snapshot and is not refetched. amountUsdc and payout.faceUsdc are the face. totalFundedUsdc is the verified escrow fund plus confirmed contributions, each fund hash once. status cancelled, expired, refunding, or refunded means that sum is not still locked.",
   request: { params: bountyIdParamsSchema },
   responses: {
     200: {

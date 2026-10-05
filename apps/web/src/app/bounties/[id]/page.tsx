@@ -235,9 +235,12 @@ export default async function BountyDetailPage({
 
         {bounty.pendingHunterLink ? (
           <p className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100">
-            {pendingHunterLinkCaption(bounty.pendingHunterLink.winnerLogin)}{" "}
+            {pendingHunterLinkCaption(
+              bounty.pendingHunterLink.winnerLogin,
+              bounty.provider === "huggingface" ? "huggingface" : "github",
+            )}{" "}
             <Link href="/settings" className="underline underline-offset-4">
-              Connect GitHub
+              {bounty.provider === "huggingface" ? "Connect Hugging Face" : "Connect GitHub"}
             </Link>{" "}
             as <code>{bounty.pendingHunterLink.winnerLogin}</code>
             {bounty.pendingHunterLink.prNumber != null

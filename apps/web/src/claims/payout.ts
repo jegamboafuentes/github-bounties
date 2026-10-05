@@ -77,13 +77,6 @@ export async function claimPayout(
   if (!bounty || bounty.deletedAt) {
     throw new ClaimError("bounty_not_found", "Bounty not found.");
   }
-  if (bounty.provider === "huggingface") {
-    throw new ProviderNotSupportedError(
-      "huggingface",
-      "Claiming a Hugging Face bounty is not supported yet.",
-    );
-  }
-
   const claim = await loadClaimForPayout(opts.db, bountyId, input.claimId, bounty);
   if (claim.hunterUserId !== actorUserId) {
     throw new ClaimError("not_hunter", NOT_HUNTER_MESSAGE);
@@ -314,7 +307,10 @@ async function loadClaimForPayout(
         repoFullName: repo.fullName,
       });
       if (pending) {
-        throw new ClaimError("hunter_not_linked", pendingHunterLinkGuidance(pending.winnerLogin));
+        throw new ClaimError(
+          "hunter_not_linked",
+          pendingHunterLinkGuidance(pending.winnerLogin, bounty.provider === "huggingface" ? "huggingface" : "github"),
+        );
       }
     }
     throw new ClaimError("not_eligible", NOT_ELIGIBLE_MESSAGE);

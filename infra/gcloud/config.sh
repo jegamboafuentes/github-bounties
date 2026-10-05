@@ -82,6 +82,8 @@ SECRETS=(
   RESEND_WEBHOOK_SECRET
   HF_OAUTH_CLIENT_ID
   HF_OAUTH_CLIENT_SECRET
+  HF_BOT_TOKEN
+  HF_WEBHOOK_SECRET
 )
 
 # First-deploy --set-secrets (Ops: enabled versions present).
@@ -136,6 +138,10 @@ WEB_SKIP_SECRETS=(
 # Not required. Attach each when an enabled SM version exists; skip when absent
 # so Cloud Build does not fail before the OAuth app exists. Connect stays off
 # until both are set. Not product login.
+# HF_BOT_TOKEN: optional bearer for Hub reads and webhook watch-list updates.
+# HF_WEBHOOK_SECRET: optional secret for POST /webhooks/huggingface (X-Webhook-Secret).
+# Both attach when an enabled version exists and skip when absent. Merge detection
+# stays off unless HF_BOUNTIES_ENABLED=1 (plain env, not a secret).
 WEB_OPTIONAL_SECRETS=(
   GEMINI_API_KEY
   RESEND_API_KEY
@@ -144,4 +150,6 @@ WEB_OPTIONAL_SECRETS=(
   RESEND_WEBHOOK_SECRET
   HF_OAUTH_CLIENT_ID
   HF_OAUTH_CLIENT_SECRET
+  HF_BOT_TOKEN
+  HF_WEBHOOK_SECRET
 )

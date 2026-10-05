@@ -95,8 +95,14 @@ printf '%s\n' "${SECRETS[@]}" | grep -qx HF_OAUTH_CLIENT_SECRET || fail "HF_OAUT
 printf '%s\n' "${WEB_REQUIRED_SECRETS[@]}" | grep -qx HF_OAUTH_CLIENT_SECRET && fail "HF_OAUTH_CLIENT_SECRET must not be a required WEB secret"
 printf '%s\n' "${WEB_CDP_SECRETS[@]}" | grep -qx HF_OAUTH_CLIENT_SECRET && fail "HF_OAUTH_CLIENT_SECRET must not be a CDP WEB secret"
 printf '%s\n' "${WEB_SKIP_SECRETS[@]}" | grep -qx HF_OAUTH_CLIENT_SECRET && fail "HF_OAUTH_CLIENT_SECRET must not sit on WEB_SKIP_SECRETS"
+printf '%s\n' "${WEB_OPTIONAL_SECRETS[@]}" | grep -qx HF_BOT_TOKEN || fail "HF_BOT_TOKEN must be in WEB_OPTIONAL_SECRETS"
+printf '%s\n' "${SECRETS[@]}" | grep -qx HF_BOT_TOKEN || fail "HF_BOT_TOKEN must be in SECRETS inventory"
+printf '%s\n' "${WEB_REQUIRED_SECRETS[@]}" | grep -qx HF_BOT_TOKEN && fail "HF_BOT_TOKEN must not be a required WEB secret"
+printf '%s\n' "${WEB_OPTIONAL_SECRETS[@]}" | grep -qx HF_WEBHOOK_SECRET || fail "HF_WEBHOOK_SECRET must be in WEB_OPTIONAL_SECRETS"
+printf '%s\n' "${SECRETS[@]}" | grep -qx HF_WEBHOOK_SECRET || fail "HF_WEBHOOK_SECRET must be in SECRETS inventory"
+printf '%s\n' "${WEB_REQUIRED_SECRETS[@]}" | grep -qx HF_WEBHOOK_SECRET && fail "HF_WEBHOOK_SECRET must not be a required WEB secret"
 
-secret_has_enabled_version() { [[ "$1" == "GEMINI_API_KEY" || "$1" == "RESEND_API_KEY" || "$1" == "API_KEY_HMAC_SECRET" || "$1" == "RESEND_AUDIENCE_ID" || "$1" == "RESEND_WEBHOOK_SECRET" || "$1" == "HF_OAUTH_CLIENT_ID" || "$1" == "HF_OAUTH_CLIENT_SECRET" ]]; }
+secret_has_enabled_version() { [[ "$1" == "GEMINI_API_KEY" || "$1" == "RESEND_API_KEY" || "$1" == "API_KEY_HMAC_SECRET" || "$1" == "RESEND_AUDIENCE_ID" || "$1" == "RESEND_WEBHOOK_SECRET" || "$1" == "HF_OAUTH_CLIENT_ID" || "$1" == "HF_OAUTH_CLIENT_SECRET" || "$1" == "HF_BOT_TOKEN" || "$1" == "HF_WEBHOOK_SECRET" ]]; }
 GEMINI_PRESENT="$(web_static_set_secrets_csv)"
 echo "${GEMINI_PRESENT}" | grep -q "GEMINI_API_KEY=GEMINI_API_KEY:latest" || fail "static remount must attach GEMINI_API_KEY when SM version exists"
 echo "${GEMINI_PRESENT}" | grep -q "RESEND_API_KEY=RESEND_API_KEY:latest" || fail "static remount must attach RESEND_API_KEY when SM version exists"
@@ -105,6 +111,8 @@ echo "${GEMINI_PRESENT}" | grep -q "RESEND_AUDIENCE_ID=RESEND_AUDIENCE_ID:latest
 echo "${GEMINI_PRESENT}" | grep -q "RESEND_WEBHOOK_SECRET=RESEND_WEBHOOK_SECRET:latest" || fail "static remount must attach RESEND_WEBHOOK_SECRET when SM version exists"
 echo "${GEMINI_PRESENT}" | grep -q "HF_OAUTH_CLIENT_ID=HF_OAUTH_CLIENT_ID:latest" || fail "static remount must attach HF_OAUTH_CLIENT_ID when SM version exists"
 echo "${GEMINI_PRESENT}" | grep -q "HF_OAUTH_CLIENT_SECRET=HF_OAUTH_CLIENT_SECRET:latest" || fail "static remount must attach HF_OAUTH_CLIENT_SECRET when SM version exists"
+echo "${GEMINI_PRESENT}" | grep -q "HF_BOT_TOKEN=HF_BOT_TOKEN:latest" || fail "static remount must attach HF_BOT_TOKEN when SM version exists"
+echo "${GEMINI_PRESENT}" | grep -q "HF_WEBHOOK_SECRET=HF_WEBHOOK_SECRET:latest" || fail "static remount must attach HF_WEBHOOK_SECRET when SM version exists"
 echo "${GEMINI_PRESENT}" | grep -q "GITHUB_APP_ID=GITHUB_APP_ID:latest" || fail "static remount with GEMINI must still include required secrets"
 echo "${GEMINI_PRESENT}" | grep -q "CDP_WEBHOOK_SECRET" && fail "optional attach must not bind CDP_WEBHOOK_SECRET"
 GEMINI_DISC="$(web_set_secrets_csv)"
@@ -115,6 +123,8 @@ echo "${GEMINI_DISC}" | grep -q "RESEND_AUDIENCE_ID=RESEND_AUDIENCE_ID:latest" |
 echo "${GEMINI_DISC}" | grep -q "RESEND_WEBHOOK_SECRET=RESEND_WEBHOOK_SECRET:latest" || fail "discover remount must attach RESEND_WEBHOOK_SECRET when SM version exists"
 echo "${GEMINI_DISC}" | grep -q "HF_OAUTH_CLIENT_ID=HF_OAUTH_CLIENT_ID:latest" || fail "discover remount must attach HF_OAUTH_CLIENT_ID when SM version exists"
 echo "${GEMINI_DISC}" | grep -q "HF_OAUTH_CLIENT_SECRET=HF_OAUTH_CLIENT_SECRET:latest" || fail "discover remount must attach HF_OAUTH_CLIENT_SECRET when SM version exists"
+echo "${GEMINI_DISC}" | grep -q "HF_BOT_TOKEN=HF_BOT_TOKEN:latest" || fail "discover remount must attach HF_BOT_TOKEN when SM version exists"
+echo "${GEMINI_DISC}" | grep -q "HF_WEBHOOK_SECRET=HF_WEBHOOK_SECRET:latest" || fail "discover remount must attach HF_WEBHOOK_SECRET when SM version exists"
 
 secret_has_enabled_version() { return 1; }
 GEMINI_ABSENT="$(web_static_set_secrets_csv)"
@@ -125,6 +135,8 @@ echo "${GEMINI_ABSENT}" | grep -q "RESEND_AUDIENCE_ID" && fail "static remount m
 echo "${GEMINI_ABSENT}" | grep -q "RESEND_WEBHOOK_SECRET" && fail "static remount must skip RESEND_WEBHOOK_SECRET when SM version is absent"
 echo "${GEMINI_ABSENT}" | grep -q "HF_OAUTH_CLIENT_ID" && fail "static remount must skip HF_OAUTH_CLIENT_ID when SM version is absent"
 echo "${GEMINI_ABSENT}" | grep -q "HF_OAUTH_CLIENT_SECRET" && fail "static remount must skip HF_OAUTH_CLIENT_SECRET when SM version is absent"
+echo "${GEMINI_ABSENT}" | grep -q "HF_BOT_TOKEN" && fail "static remount must skip HF_BOT_TOKEN when SM version is absent"
+echo "${GEMINI_ABSENT}" | grep -q "HF_WEBHOOK_SECRET" && fail "static remount must skip HF_WEBHOOK_SECRET when SM version is absent"
 echo "${GEMINI_ABSENT}" | grep -q "GITHUB_APP_ID=GITHUB_APP_ID:latest" || fail "static remount without GEMINI must still include required secrets"
 GEMINI_DISC_ABSENT="$(web_set_secrets_csv)"
 echo "${GEMINI_DISC_ABSENT}" | grep -q "GEMINI_API_KEY" && fail "discover remount must skip GEMINI_API_KEY when SM version is absent"
@@ -134,6 +146,8 @@ echo "${GEMINI_DISC_ABSENT}" | grep -q "RESEND_AUDIENCE_ID" && fail "discover re
 echo "${GEMINI_DISC_ABSENT}" | grep -q "RESEND_WEBHOOK_SECRET" && fail "discover remount must skip RESEND_WEBHOOK_SECRET when SM version is absent"
 echo "${GEMINI_DISC_ABSENT}" | grep -q "HF_OAUTH_CLIENT_ID" && fail "discover remount must skip HF_OAUTH_CLIENT_ID when SM version is absent"
 echo "${GEMINI_DISC_ABSENT}" | grep -q "HF_OAUTH_CLIENT_SECRET" && fail "discover remount must skip HF_OAUTH_CLIENT_SECRET when SM version is absent"
+echo "${GEMINI_DISC_ABSENT}" | grep -q "HF_BOT_TOKEN" && fail "discover remount must skip HF_BOT_TOKEN when SM version is absent"
+echo "${GEMINI_DISC_ABSENT}" | grep -q "HF_WEBHOOK_SECRET" && fail "discover remount must skip HF_WEBHOOK_SECRET when SM version is absent"
 
 echo "Checking deploy-web.sh equals-form flags (Ops recovery)..."
 infra/gcloud/deploy-web.sh --secrets=static --image=us-central1-docker.pkg.dev/experiment-jegf/github-bounties/github-bounties-web:testbuild --service=github-bounties-web >/tmp/gb-deploy-web-eq.txt

@@ -516,7 +516,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "List Hugging Face submissions",
       description:
-        "Requires API key (read scope). Pull requests submitted to one Hugging Face bounty. Each row has status submitted. GitHub bounties return provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns hf_disabled when that flag is off.",
+        "Requires API key (read scope). Pull requests submitted to one Hugging Face bounty. Each row has status submitted. GitHub bounties return 501 provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns hf_disabled when that flag is off. A deleted bounty is 410. 501 is an expected client response and is not logged as an application fault.",
       inputSchema: looseClaims,
       annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
@@ -532,7 +532,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Submit a Hugging Face pull request",
       description:
-        "Requires API key (write scope). Submits a Hugging Face pull request URL for an open funded Hugging Face bounty. The key owner must have linked Hugging Face, and the pull request author must be that username. One active submission per user. GitHub bounties return provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns hf_disabled when that flag is off. Do not send an address.",
+        "Requires API key (write scope). Submits a Hugging Face pull request URL for an open funded Hugging Face bounty. The key owner must have linked Hugging Face, and the pull request author must be that username. One active submission per user. GitHub bounties return 501 provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns hf_disabled when that flag is off. A deleted bounty is 410. Do not send an address. 501 is an expected client response and is not logged as an application fault.",
       inputSchema: looseSubmitPr,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
@@ -549,7 +549,7 @@ export function registerAuthedMcpTools(server: McpServer, access?: McpAccess | n
     {
       title: "Withdraw a Hugging Face submission",
       description:
-        "Requires API key (write scope). Deletes the caller's active submission while the bounty is unpaid. GitHub bounties return provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns hf_disabled when that flag is off.",
+        "Requires API key (write scope). Sets the caller's active submission to withdrawn and keeps the row. The active unique index stays on status submitted. No active submission returns submission_not_found. GitHub bounties return 501 provider_not_supported. Requires HF_BOUNTIES_ENABLED=1 and returns hf_disabled when that flag is off. A deleted bounty is 410. 501 is an expected client response and is not logged as an application fault.",
       inputSchema: looseClaims,
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
     },

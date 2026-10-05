@@ -52,6 +52,16 @@ describe("Hugging Face rate limit errors", () => {
     const response = apiResultResponse(result);
     assert.equal(response.headers.get("retry-after"), "30");
   });
+
+  it("defaults Retry-After to 60 seconds when Hugging Face omits the header", () => {
+    const err = bountyErrorForHuggingFace(
+      new HuggingFaceReadError("hf_rate_limited", 429, "slow", null),
+      "stanfordnlp/imdb#9",
+    );
+    assert.equal(err.details?.retryAfter, "60");
+    const response = apiResultResponse(resultFromError(err));
+    assert.equal(response.headers.get("retry-after"), "60");
+  });
 });
 
 describe("Hugging Face create flag", () => {

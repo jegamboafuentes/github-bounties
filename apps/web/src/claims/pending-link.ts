@@ -15,11 +15,23 @@ export type PendingHunterLinkTarget = {
   repoFullName: string;
 };
 
-export function pendingHunterLinkCaption(winnerLogin: string): string {
+export function pendingHunterLinkCaption(
+  winnerLogin: string,
+  provider: "github" | "huggingface" = "github",
+): string {
+  if (provider === "huggingface") {
+    return `Merged PR author ${winnerLogin} must Connect Hugging Face as that username before payout. Working on this is not the winner.`;
+  }
   return `Merged PR author ${winnerLogin} must Connect GitHub as that login before payout. Working on this is not the winner.`;
 }
 
-export function pendingHunterLinkGuidance(winnerLogin: string): string {
+export function pendingHunterLinkGuidance(
+  winnerLogin: string,
+  provider: "github" | "huggingface" = "github",
+): string {
+  if (provider === "huggingface") {
+    return `This bounty has no eligible claim because Hugging Face user ${winnerLogin} (the merged pull request author) is not linked. Sign in and Connect Hugging Face as ${winnerLogin}, then the merge poller or webhook writes the claim. Do not pay anyone who only signaled Working on this.`;
+  }
   return `This bounty has no eligible claim because GitHub user ${winnerLogin} (the merged pull request author) is not linked. Sign in and Connect GitHub as ${winnerLogin}, then Ops can redeliver the merge webhook (or Connect GitHub backfill writes the claim). Do not pay anyone who only signaled Working on this.`;
 }
 

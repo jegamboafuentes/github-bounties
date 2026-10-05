@@ -87,7 +87,12 @@ export function BountyCard({ bounty }: { bounty: BoardBounty }) {
       {bounty.pendingHunterLink ? (
         <p className="flex items-start gap-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/40 dark:text-sky-100">
           <GitHubAvatar login={bounty.pendingHunterLink.winnerLogin} size={20} className="mt-0.5" />
-          <span>{pendingHunterLinkCaption(bounty.pendingHunterLink.winnerLogin)}</span>
+          <span>
+            {pendingHunterLinkCaption(
+              bounty.pendingHunterLink.winnerLogin,
+              bounty.provider === "huggingface" ? "huggingface" : "github",
+            )}
+          </span>
         </p>
       ) : null}
       {bounty.payout ? (

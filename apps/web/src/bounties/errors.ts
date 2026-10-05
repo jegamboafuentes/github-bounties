@@ -23,6 +23,7 @@ export type BountyErrorCode =
   | "author_mismatch"
   | "pr_closed"
   | "already_submitted"
+  | "submission_not_found"
   | "bounty_not_open"
   | "bounty_paid"
   | "bounty_exists"
@@ -43,12 +44,20 @@ export type BountyErrorCode =
 export class BountyError extends Error {
   readonly code: BountyErrorCode;
   readonly details: Record<string, unknown> | null;
+  /** Overrides the domain status map. Deleted bounties on submissions use 410. */
+  readonly httpStatus: number | null;
 
-  constructor(code: BountyErrorCode, message: string, details: Record<string, unknown> | null = null) {
+  constructor(
+    code: BountyErrorCode,
+    message: string,
+    details: Record<string, unknown> | null = null,
+    httpStatus: number | null = null,
+  ) {
     super(message);
     this.name = "BountyError";
     this.code = code;
     this.details = details;
+    this.httpStatus = httpStatus;
   }
 }
 
