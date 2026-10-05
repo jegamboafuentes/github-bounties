@@ -5,11 +5,13 @@ import { CreateBountyForm } from "@/components/create-bounty-form";
 import { GitHubAvatar } from "@/components/github-avatar";
 import { getRuntimeDb } from "@/db/runtime";
 import { findGithubLinkByUserId } from "@/github/persist";
+import { hfBountiesEnabled } from "@/providers/huggingface";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewBountyPage() {
   const user = await requirePageUser("/bounties/new");
+  const hfEnabled = hfBountiesEnabled();
   let githubLogin: string | null = null;
   try {
     githubLogin = (await findGithubLinkByUserId(user.id, getRuntimeDb()))?.githubLogin ?? null;
@@ -27,7 +29,8 @@ export default async function NewBountyPage() {
           <p className="text-zinc-600 dark:text-zinc-400">
             Paste any public GitHub issue URL, or a Hugging Face discussion URL. Google session required.
             Closed issues and closed discussions are rejected. GitHub merge is still truth.
-            Hugging Face payouts are not available yet, and discussion bounties stay off until HF_BOUNTIES_ENABLED=1.
+            Hugging Face payouts are not available yet.
+            {hfEnabled ? null : " Discussion bounties are not available yet."}
           </p>
         </div>
 
@@ -59,7 +62,7 @@ export default async function NewBountyPage() {
           )}
         </section>
 
-        <CreateBountyForm />
+        <CreateBountyForm hfEnabled={hfEnabled} />
 
         <p className="text-sm text-zinc-500">
           <Link href="/board" className="underline underline-offset-4">

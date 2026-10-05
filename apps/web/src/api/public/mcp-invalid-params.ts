@@ -21,8 +21,11 @@ export const MCP_TOOL_CLASS: Record<string, ApiClass> = {
   get_profile: "read",
   get_notification_preferences: "read",
   list_linked_accounts: "read",
+  list_submissions: "read",
   update_profile: "write",
   update_notification_preferences: "write",
+  submit_pr: "write",
+  withdraw_submission: "write",
 };
 
 export function toolClassForMcpTool(name: string | null | undefined): ApiClass {

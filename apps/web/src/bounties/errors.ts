@@ -17,6 +17,14 @@ export type BountyErrorCode =
   | "hf_rate_limited"
   | "hf_timeout"
   | "hf_unavailable"
+  | "hf_not_linked"
+  | "not_a_pull_request"
+  | "repo_mismatch"
+  | "author_mismatch"
+  | "pr_closed"
+  | "already_submitted"
+  | "bounty_not_open"
+  | "bounty_paid"
   | "bounty_exists"
   | "bounty_not_found"
   | "not_poster"
@@ -34,11 +42,13 @@ export type BountyErrorCode =
 
 export class BountyError extends Error {
   readonly code: BountyErrorCode;
+  readonly details: Record<string, unknown> | null;
 
-  constructor(code: BountyErrorCode, message: string) {
+  constructor(code: BountyErrorCode, message: string, details: Record<string, unknown> | null = null) {
     super(message);
     this.name = "BountyError";
     this.code = code;
+    this.details = details;
   }
 }
 

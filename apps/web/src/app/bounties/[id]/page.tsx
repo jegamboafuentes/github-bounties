@@ -31,7 +31,10 @@ import { PayoutBreakdown } from "@/components/payout-breakdown";
 import { PoolRoster } from "@/components/pool-roster";
 import { WorkSignalsPanel } from "@/components/work-signals-panel";
 import { getRuntimeDb } from "@/db/runtime";
-import { githubLinks } from "@/db/schema";
+import { githubLinks, hfLinks } from "@/db/schema";
+import { hfBountiesEnabled } from "@/providers/huggingface";
+import { listBountySubmissions, submissionWithdrawOpen } from "@/bounties/submissions";
+import { HfSubmissionsPanel } from "@/components/hf-submissions";
 import { getEscrowSnapshot, listBountyContributions, probeCdpEnv } from "@/escrow";
 import { refundLegTxHashes } from "@/escrow/refund-display";
 import { presentFundingTransactions } from "@/api/public/present";
@@ -76,6 +79,21 @@ export default async function BountyDetailPage({
   if (!bounty) {
     notFound();
   }
+
+  const hfSubmissionsEnabled = bounty.provider === "huggingface" && hfBountiesEnabled();
+  const [hfLinkRows, submissions] = hfSubmissionsEnabled
+    ? await Promise.all([
+        user
+          ? db
+              .select({ username: hfLinks.hfUsername })
+              .from(hfLinks)
+              .where(eq(hfLinks.userId, user.id))
+              .limit(1)
+          : Promise.resolve([]),
+        listBountySubmissions(bounty.id, { db }).catch(() => []),
+      ])
+    : [[], [] as Awaited<ReturnType<typeof listBountySubmissions>>];
+  const ownSubmission = user ? submissions.find((row) => row.userId === user.id) : undefined;
 
   const mainnetExplorer = isFundMainnetEnabled();
   const funding = presentFundingTransactions({
@@ -165,6 +183,19 @@ export default async function BountyDetailPage({
         </div>
 
         <IssueBodyCard markdown={issue?.markdown ?? null} provider={bounty.provider} />
+        {hfSubmissionsEnabled ? (
+          <HfSubmissionsPanel
+            bountyId={bounty.id}
+            submissions={submissions}
+            canSubmit={Boolean(
+              user && hfLinkRows[0] && bounty.status === "funded" && !ownSubmission,
+            )}
+            canWithdraw={Boolean(user && ownSubmission && submissionWithdrawOpen(bounty.status))}
+            linked={Boolean(hfLinkRows[0])}
+            signedIn={Boolean(user)}
+            signInHref={signInHref}
+          />
+        ) : null}
         <BountyIntelligenceCard intelligence={intelligence} />
 
         <p className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">

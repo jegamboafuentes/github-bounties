@@ -1,5 +1,12 @@
 export { normalizeBountyAmountUsdc } from "./amount";
 export { createBountyFromIssueUrl } from "./create";
+export {
+  listBountySubmissions,
+  submissionWithdrawOpen,
+  submitHuggingFacePr,
+  withdrawBountySubmission,
+} from "./submissions";
+export type { SubmissionView } from "./submissions";
 export { loadBountyIssueBody, readStoredIssueBody } from "./issue-body";
 export {
   bountyStatusLabel,

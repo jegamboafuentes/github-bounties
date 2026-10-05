@@ -115,7 +115,7 @@ export const PUBLIC_ROADMAP = [
     version: "V6",
     title: "Hugging Face",
     summary:
-      "Bounties on Hugging Face discussions and PRs. In progress. No ship date. Creating a discussion bounty requires HF_BOUNTIES_ENABLED=1.",
+      "Bounties on Hugging Face discussions and PRs. In progress. No ship date. Creating a discussion bounty requires HF_BOUNTIES_ENABLED=1. A linked hunter submits a pull request URL on an open funded discussion bounty.",
     status: "in_progress",
   },
   {

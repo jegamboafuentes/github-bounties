@@ -55,7 +55,8 @@ describe("0016_hf_provider on a seeded database", () => {
       const seeded = createDb(url);
       try {
         const journal = JSON.parse(readFileSync(join(migrationsFolder, "meta/_journal.json"), "utf8")) as Journal;
-        const beforeHf = journal.entries.map((entry) => entry.tag).filter((tag) => tag !== "0016_hf_provider");
+        const afterProvider = new Set(["0016_hf_provider", "0018_hf_submission_author"]);
+        const beforeHf = journal.entries.map((entry) => entry.tag).filter((tag) => !afterProvider.has(tag));
         await applyTags(seeded.sql, beforeHf);
         await seeded.sql`
           insert into users (id, google_sub, email, display_name)
@@ -220,6 +221,32 @@ describe("0016_hf_provider on a seeded database", () => {
           (err: unknown) => pgCode(err) === "23505",
         );
 
+        await applyTags(seeded.sql, ["0018_hf_submission_author"]);
+        const authorColumn = await seeded.sql<{ column_name: string }[]>`
+          select column_name
+          from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'bounty_submissions'
+            and column_name = 'hf_author'
+        `;
+        assert.equal(authorColumn[0]?.column_name, "hf_author");
+        await assert.rejects(
+          () =>
+            seeded.sql`
+              insert into bounty_submissions (bounty_id, user_id, provider, pr_number, pr_url, hf_author, status)
+              values (
+                ${hfBountyId}::uuid,
+                ${userId}::uuid,
+                'huggingface',
+                10,
+                ${`https://huggingface.co/hf/model-${suffix}/discussions/10`},
+                'hunter',
+                'submitted'
+              )
+            `,
+          (err: unknown) => pgCode(err) === "23505",
+        );
+
         const api = createPublicReadApi(seeded.db);
         const huggingface = await api.listBounties({
           provider: "huggingface",
@@ -256,7 +283,7 @@ describe("0016_hf_provider on a seeded database", () => {
     }
   });
 
-  it("applies the journal through 0017 on an empty database", async () => {
+  it("applies the journal through 0018 on an empty database", async () => {
     const admin = createDb();
     const dbName = `gb_hf_up_${randomUUID().slice(0, 8)}`;
     const baseUrl = new URL(loadDatabaseUrl());
@@ -272,7 +299,7 @@ describe("0016_hf_provider on a seeded database", () => {
           order by created_at desc
           limit 1
         `;
-        assert.equal(applied[0]?.created_at, "1791100000000");
+        assert.equal(applied[0]?.created_at, "1791200000000");
         const columns = await empty.sql<{ column_name: string; column_default: string | null }[]>`
           select column_name, column_default
           from information_schema.columns
@@ -293,6 +320,14 @@ describe("0016_hf_provider on a seeded database", () => {
             and table_name in ('hf_links', 'bounty_submissions')
         `;
         assert.deepEqual(tables.map((row) => row.table_name).sort(), ["bounty_submissions", "hf_links"]);
+        const authorColumn = await empty.sql<{ column_name: string }[]>`
+          select column_name
+          from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'bounty_submissions'
+            and column_name = 'hf_author'
+        `;
+        assert.equal(authorColumn[0]?.column_name, "hf_author");
         const contacts = await empty.sql<{ table_name: string }[]>`
           select table_name
           from information_schema.tables

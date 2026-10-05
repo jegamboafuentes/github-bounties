@@ -4,6 +4,7 @@ import {
   ProviderNotSupportedError,
   type FetchedIssue,
   type IssueRef,
+  type PrRef,
   type ProviderCallOpts,
   type RepoProvider,
 } from "./types";
@@ -30,12 +31,15 @@ export type HuggingFaceReadCode =
 export class HuggingFaceReadError extends Error {
   readonly code: HuggingFaceReadCode;
   readonly status: number;
+  /** Upstream Retry-After header, when Hugging Face sent one. */
+  readonly retryAfter: string | null;
 
-  constructor(code: HuggingFaceReadCode, status: number, message: string) {
+  constructor(code: HuggingFaceReadCode, status: number, message: string, retryAfter: string | null = null) {
     super(message);
     this.name = "HuggingFaceReadError";
     this.code = code;
     this.status = status;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -110,7 +114,11 @@ function hfMessage(body: unknown): string {
   return "";
 }
 
-export function classifyHuggingFaceStatus(status: number, body: unknown): HuggingFaceReadError | null {
+export function classifyHuggingFaceStatus(
+  status: number,
+  body: unknown,
+  retryAfter: string | null = null,
+): HuggingFaceReadError | null {
   if (status >= 200 && status < 300) return null;
   const message = hfMessage(body);
   if (status === 404) {
@@ -120,11 +128,13 @@ export function classifyHuggingFaceStatus(status: number, body: unknown): Huggin
       message || "Hugging Face discussion was not found.",
     );
   }
-  if (status === 429 || /rate limit/i.test(message)) {
+  // Only a real upstream 429. A 5xx body that mentions "rate limit" stays hf_unavailable.
+  if (status === 429) {
     return new HuggingFaceReadError(
       "hf_rate_limited",
       status,
       message || "Hugging Face rate limit reached.",
+      retryAfter,
     );
   }
   if (status === 401 || status === 403) {
@@ -150,10 +160,16 @@ function defaultHttp(
   input: string,
   init?: { method?: string; headers?: Record<string, string>; body?: string },
 ) {
-  return fetch(input, { ...init, signal: AbortSignal.timeout(HF_DISCUSSION_TIMEOUT_MS) });
+  return fetch(input, { ...init, signal: AbortSignal.timeout(HF_DISCUSSION_TIMEOUT_MS) }).then((res) => ({
+    ok: res.ok,
+    status: res.status,
+    headers: res.headers,
+    json: () => res.json() as Promise<unknown>,
+  }));
 }
 
-function discussionHeaders(env: NodeJS.ProcessEnv | undefined): Record<string, string> {
+/** Bearer token for every Hub read (discussion, pull request, and any later repo read). */
+export function huggingFaceHubHeaders(env: NodeJS.ProcessEnv | undefined): Record<string, string> {
   const headers: Record<string, string> = {
     accept: "application/json",
     "user-agent": "github-bounties",
@@ -161,6 +177,54 @@ function discussionHeaders(env: NodeJS.ProcessEnv | undefined): Record<string, s
   const token = readHfBotToken(env);
   if (token) headers.authorization = `Bearer ${token}`;
   return headers;
+}
+
+function hubPath(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return url.split("?")[0] ?? url;
+  }
+}
+
+function headerEntries(headers: Headers | Record<string, string> | undefined): Array<[string, string]> {
+  if (!headers) return [];
+  if (typeof (headers as Headers).forEach === "function") {
+    const rows: Array<[string, string]> = [];
+    (headers as Headers).forEach((value, key) => rows.push([key, value]));
+    return rows;
+  }
+  return Object.entries(headers);
+}
+
+function headerValue(headers: Headers | Record<string, string> | undefined, name: string): string | null {
+  const found = headerEntries(headers).find(([key]) => key.toLowerCase() === name.toLowerCase());
+  const value = found?.[1]?.trim();
+  return value || null;
+}
+
+const DIAGNOSTIC_HEADER = /^(ratelimit(?:-.+)?|retry-after|x-error-code|x-error-message)$/i;
+
+/** Structured Cloud Run line. Path only: no query string and no bearer token. */
+export function logHuggingFaceHubFailure(args: {
+  status: number;
+  url: string;
+  botToken: boolean;
+  headers?: Headers | Record<string, string>;
+}): void {
+  const rateLimit: Record<string, string> = {};
+  for (const [key, value] of headerEntries(args.headers)) {
+    if (DIAGNOSTIC_HEADER.test(key)) rateLimit[key.toLowerCase()] = value;
+  }
+  console.error(
+    JSON.stringify({
+      event: "hf_hub_read",
+      status: args.status,
+      path: hubPath(args.url),
+      botToken: args.botToken,
+      rateLimit,
+    }),
+  );
 }
 
 function firstCommentBody(events: unknown): string | null {
@@ -237,9 +301,95 @@ function emptyRepo(fullName: string) {
   };
 }
 
+export type HuggingFaceDiscussion = {
+  title: string;
+  body: string | null;
+  status: string;
+  isPullRequest: boolean;
+  authorId: string | null;
+  authorLogin: string | null;
+  repoType: HfRepoType;
+  owner: string;
+  repo: string;
+  fullName: string;
+  htmlUrl: string;
+};
+
+/**
+ * Reads one discussion, including a pull request. Does not reject closed
+ * threads or pull requests. Create-bounty still applies those checks.
+ */
+export async function fetchHuggingFaceDiscussion(
+  ref: IssueRef,
+  opts: ProviderCallOpts = {},
+): Promise<HuggingFaceDiscussion> {
+  const type = ref.hfRepoType;
+  if (!type) {
+    throw new HuggingFaceReadError(
+      "hf_unavailable",
+      0,
+      "Hugging Face discussion is missing a repo type.",
+    );
+  }
+  const http: GitHubHttp = opts.http ?? defaultHttp;
+  const url = `${HF_API}/${apiPrefix(type)}/${ref.owner}/${ref.repo}/discussions/${ref.issueNumber}`;
+  const botToken = Boolean(readHfBotToken(opts.env));
+  let res: Awaited<ReturnType<GitHubHttp>>;
+  try {
+    res = await http(url, { headers: huggingFaceHubHeaders(opts.env) });
+  } catch (err) {
+    if (isHuggingFaceReadError(err)) throw err;
+    if (isTimeout(err)) {
+      throw new HuggingFaceReadError(
+        "hf_timeout",
+        0,
+        "Hugging Face did not respond before the discussion read timed out.",
+      );
+    }
+    throw new HuggingFaceReadError(
+      "hf_unavailable",
+      0,
+      "Hugging Face could not be reached.",
+    );
+  }
+
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+  if (!res.ok) {
+    logHuggingFaceHubFailure({ status: res.status, url, botToken, headers: res.headers });
+  }
+  const retryAfter = headerValue(res.headers, "retry-after");
+  const failed = classifyHuggingFaceStatus(res.status, body, retryAfter);
+  if (failed) throw failed;
+  const payload = (asRecord(body) ?? {}) as DiscussionPayload;
+  const repo = canonicalRepo(ref, payload);
+  const author = payload.author;
+  const authorId = typeof author?._id === "string" ? author._id.trim() : "";
+  const authorLogin = typeof author?.name === "string" ? author.name.trim() : "";
+  const status = typeof payload.status === "string" ? payload.status.trim().toLowerCase() : "";
+  return {
+    title: typeof payload.title === "string" ? payload.title.trim() : "",
+    body: firstCommentBody(payload.events),
+    status,
+    isPullRequest: payload.isPullRequest === true,
+    authorId: authorId || null,
+    authorLogin: authorLogin || null,
+    repoType: repo.type,
+    owner: repo.owner,
+    repo: repo.repo,
+    fullName: repo.fullName,
+    htmlUrl: huggingFaceDiscussionUrl(repo.type, repo.fullName, ref.issueNumber),
+  };
+}
+
 /**
  * Read-side Hugging Face adapter. Discussion URL parse and fetch are live.
- * Merge detection, identity, and payout stay `provider_not_supported` until later PRs.
+ * Pull-request URLs parse here. Merge detection and payout stay
+ * `provider_not_supported` until a later PR.
  */
 export const huggingfaceProvider: RepoProvider = {
   id: "huggingface",
@@ -268,75 +418,46 @@ export const huggingfaceProvider: RepoProvider = {
   },
 
   async fetchIssue(ref: IssueRef, opts: ProviderCallOpts = {}): Promise<FetchedIssue> {
-    const type = ref.hfRepoType;
-    if (!type) {
+    const discussion = await fetchHuggingFaceDiscussion(ref, opts);
+    const label = `${discussion.fullName}#${ref.issueNumber}`;
+    assertOpenDiscussion(
+      { isPullRequest: discussion.isPullRequest, status: discussion.status },
+      label,
+    );
+    if (!discussion.title) {
       throw new HuggingFaceReadError(
         "hf_unavailable",
-        0,
-        "Hugging Face discussion is missing a repo type.",
-      );
-    }
-    const http: GitHubHttp = opts.http ?? defaultHttp;
-    const url = `${HF_API}/${apiPrefix(type)}/${ref.owner}/${ref.repo}/discussions/${ref.issueNumber}`;
-    let res: { ok: boolean; status: number; json: () => Promise<unknown> };
-    try {
-      res = await http(url, { headers: discussionHeaders(opts.env) });
-    } catch (err) {
-      if (isHuggingFaceReadError(err)) throw err;
-      if (isTimeout(err)) {
-        throw new HuggingFaceReadError(
-          "hf_timeout",
-          0,
-          "Hugging Face did not respond before the discussion read timed out.",
-        );
-      }
-      throw new HuggingFaceReadError(
-        "hf_unavailable",
-        0,
-        "Hugging Face could not be reached.",
-      );
-    }
-
-    let body: unknown = null;
-    try {
-      body = await res.json();
-    } catch {
-      body = null;
-    }
-    const failed = classifyHuggingFaceStatus(res.status, body);
-    if (failed) throw failed;
-    const payload = (asRecord(body) ?? {}) as DiscussionPayload;
-    const repo = canonicalRepo(ref, payload);
-    const label = `${repo.fullName}#${ref.issueNumber}`;
-    assertOpenDiscussion(payload, label);
-    const title = typeof payload.title === "string" ? payload.title.trim() : "";
-    if (!title) {
-      throw new HuggingFaceReadError(
-        "hf_unavailable",
-        res.status,
+        200,
         `Hugging Face discussion ${label} did not include a title.`,
       );
     }
-    const author = payload.author;
-    const authorId = typeof author?._id === "string" ? author._id.trim() : "";
-    const authorLogin = typeof author?.name === "string" ? author.name.trim() : "";
     return {
-      title,
-      body: firstCommentBody(payload.events),
+      title: discussion.title,
+      body: discussion.body,
       state: "open",
-      author: { id: authorId || null, login: authorLogin || null },
-      htmlUrl: huggingFaceDiscussionUrl(repo.type, repo.fullName, ref.issueNumber),
+      author: { id: discussion.authorId, login: discussion.authorLogin },
+      htmlUrl: discussion.htmlUrl,
       pullRequest: false,
       repo: {
-        ...emptyRepo(repo.fullName),
-        ownerLogin: repo.owner,
-        hfRepoType: repo.type,
+        ...emptyRepo(discussion.fullName),
+        ownerLogin: discussion.owner,
+        hfRepoType: discussion.repoType,
       },
     };
   },
 
-  parsePrUrl() {
-    unsupported();
+  parsePrUrl(raw: string): PrRef | null {
+    const issue = this.parseIssueUrl(raw);
+    if (!issue?.hfRepoType) return null;
+    return {
+      provider: "huggingface",
+      owner: issue.owner,
+      repo: issue.repo,
+      fullName: issue.fullName,
+      prNumber: issue.issueNumber,
+      url: issue.url,
+      hfRepoType: issue.hfRepoType,
+    };
   },
   verifyMerge() {
     unsupported();

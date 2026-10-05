@@ -22,11 +22,14 @@ import {
   handleMyClaims,
   handleMyBounties,
   handleRefund,
+  handleListSubmissions,
+  handleSubmitPr,
   handleUpdateBountyAmount,
   handleUpdateNotificationPreferences,
   handleUpdateProfile,
   handleUsage,
   handleTopUp,
+  handleWithdrawSubmission,
   handleWorkSignal,
   readIdempotencyKey,
   requirePrincipal,
@@ -56,6 +59,9 @@ export type V1Action =
   | { kind: "claim"; bountyId: string }
   | { kind: "refund"; bountyId: string }
   | { kind: "bounty-claims"; bountyId: string }
+  | { kind: "submissions"; bountyId: string }
+  | { kind: "submit-pr"; bountyId: string }
+  | { kind: "withdraw-submission"; bountyId: string }
   | { kind: "my-claims" }
   | { kind: "profile" }
   | { kind: "profile-patch" }
@@ -75,6 +81,7 @@ function actionClass(action: V1Action): ApiClass {
     action.kind === "my-bounties" ||
     action.kind === "my-claims" ||
     action.kind === "bounty-claims" ||
+    action.kind === "submissions" ||
     action.kind === "profile" ||
     action.kind === "notification-preferences" ||
     action.kind === "linked-accounts" ||
@@ -114,6 +121,12 @@ function actionRoute(action: V1Action): string {
       return `POST /api/v1/bounties/${action.bountyId}/refund`;
     case "bounty-claims":
       return `GET /api/v1/bounties/${action.bountyId}/claims`;
+    case "submissions":
+      return `GET /api/v1/bounties/${action.bountyId}/submissions`;
+    case "submit-pr":
+      return `POST /api/v1/bounties/${action.bountyId}/submissions`;
+    case "withdraw-submission":
+      return `DELETE /api/v1/bounties/${action.bountyId}/submissions`;
     case "my-claims":
       return "GET /api/v1/me/claims";
     case "profile":
@@ -142,7 +155,10 @@ function actionBountyId(action: V1Action): string | null {
     action.kind === "top-up" ||
     action.kind === "claim" ||
     action.kind === "refund" ||
-    action.kind === "bounty-claims"
+    action.kind === "bounty-claims" ||
+    action.kind === "submissions" ||
+    action.kind === "submit-pr" ||
+    action.kind === "withdraw-submission"
   ) {
     return action.bountyId;
   }
@@ -159,18 +175,26 @@ async function readJsonBody(request: Request): Promise<unknown> {
   }
 }
 
+function retryAfterHeader(result: ApiResult): string | null {
+  if (result.status !== 429 || !result.body || typeof result.body !== "object" || !("error" in result.body)) {
+    return null;
+  }
+  const details = (result.body as { error?: { details?: { windowSeconds?: number; retryAfter?: unknown } } }).error
+    ?.details;
+  if (typeof details?.windowSeconds === "number") return String(details.windowSeconds);
+  const retryAfter = details?.retryAfter;
+  if (typeof retryAfter === "number" && Number.isFinite(retryAfter)) return String(Math.ceil(retryAfter));
+  if (typeof retryAfter === "string" && retryAfter.trim()) return retryAfter.trim();
+  return null;
+}
+
 export function apiResultResponse(result: ApiResult): Response {
   const headers = new Headers({ "cache-control": "no-store", "content-type": "application/json; charset=utf-8" });
   for (const [key, value] of Object.entries(PUBLIC_API_CORS_HEADERS)) headers.set(key, value);
   for (const [key, value] of Object.entries(result.headers ?? {})) headers.set(key, value);
   if (result.status === 401) headers.set("WWW-Authenticate", "Bearer");
-  const retryAfter =
-    result.status === 429 &&
-    result.body &&
-    typeof result.body === "object" &&
-    "error" in result.body &&
-    (result.body as { error?: { details?: { windowSeconds?: number } } }).error?.details?.windowSeconds;
-  if (typeof retryAfter === "number") headers.set("Retry-After", String(retryAfter));
+  const retryAfter = retryAfterHeader(result);
+  if (retryAfter) headers.set("Retry-After", retryAfter);
   const payload = typeof result.rawBody === "string" ? result.rawBody : JSON.stringify(result.body);
   return new Response(payload, { status: result.status, headers });
 }
@@ -273,6 +297,12 @@ async function perform(
       );
     case "bounty-claims":
       return handleBountyClaims(principal, action.bountyId, deps);
+    case "submissions":
+      return handleListSubmissions(principal, action.bountyId, deps);
+    case "submit-pr":
+      return handleSubmitPr(principal, action.bountyId, await readJsonBody(request), deps);
+    case "withdraw-submission":
+      return handleWithdrawSubmission(principal, action.bountyId, deps);
     case "my-claims":
       return handleMyClaims(principal, deps);
     case "profile":
