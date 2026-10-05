@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { listBoardBounties } from "../../bounties/list";
 import { PublicApiError } from "./errors";
+import { createBountiesMcpServer } from "./mcp";
+import type { PublicReadApi } from "./service";
 import {
   acceptListInput,
   coerceListSearchParams,
@@ -73,6 +78,86 @@ describe("public bounty list query", () => {
     assert.equal(parsed.status, undefined);
     assert.equal(parsed.complexity, undefined);
     assert.equal(parsed.has_intel, false);
+  });
+
+  it("rejects control characters in repo and language before a query", async () => {
+    for (const [key, value] of [
+      ["repo", "octo/\u0000hello"],
+      ["repo", "ab\u0000cd"],
+      ["language", "Go\u001F"],
+      ["language", "\u007F"],
+    ] as const) {
+      assert.throws(
+        () => acceptListInput(coerceListSearchParams(new URLSearchParams({ [key]: value }))),
+        (err: unknown) => {
+          assert.ok(err instanceof PublicApiError);
+          assert.equal(err.code, "validation_failed");
+          assert.equal(err.status, 400);
+          assert.equal(err.message, "Invalid bounty list query.");
+          const details = err.details as { path: string; message: string }[];
+          assert.equal(details[0]?.path, key);
+          assert.match(details[0]?.message ?? "", /control characters/);
+          return true;
+        },
+      );
+      assert.throws(
+        () => acceptListInput({ [key]: value }),
+        (err: unknown) => err instanceof PublicApiError && err.code === "validation_failed",
+      );
+    }
+    const parsed = acceptListInput({ repo: "octo/hello", language: "TypeScript" });
+    assert.equal(parsed.repo, "octo/hello");
+    assert.equal(parsed.language, "TypeScript");
+
+    await assert.rejects(
+      () => listBoardBounties({} as never, { repo: "a\u0000b" }),
+      (err: unknown) =>
+        err instanceof PublicApiError &&
+        err.status === 400 &&
+        err.message === "Repo cannot include control characters.",
+    );
+    await assert.rejects(
+      () => listBoardBounties({} as never, { language: "\u0000" }),
+      (err: unknown) =>
+        err instanceof PublicApiError && err.message === "Language cannot include control characters.",
+    );
+
+    let queried = false;
+    const api: PublicReadApi = {
+      async listBounties() {
+        queried = true;
+        throw new Error("queried");
+      },
+      async getBounty() {
+        throw new Error("unused");
+      },
+      async listFunders() {
+        throw new Error("unused");
+      },
+      async getIntelligence() {
+        throw new Error("unused");
+      },
+      async getStats() {
+        throw new Error("unused");
+      },
+    };
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    const server = createBountiesMcpServer(api);
+    const client = new Client({ name: "board", version: "0.0.0" });
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    try {
+      const denied = await client.callTool({ name: "list_bounties", arguments: { repo: "ab\u0000cd" } });
+      assert.equal(denied.isError, true);
+      const content = denied.content as Array<{ text?: string }>;
+      const body = JSON.parse(content[0]?.text ?? "") as { error: { code: string; message: string } };
+      assert.equal(body.error.code, "validation_failed");
+      assert.equal(body.error.message, "Invalid bounty list query.");
+      assert.equal(queried, false);
+    } finally {
+      await client.close();
+      await server.close();
+    }
   });
 
   it("rejects limit above 100, unknown status, and a bad cursor", () => {

@@ -16,6 +16,7 @@ import {
 } from "../claims/pending-link";
 import { listPayoutClaimsForBounties, type PayoutClaimView } from "../claims/read";
 import { formatEscrowFailLabel } from "../escrow/fail";
+import { rejectControlChars } from "../http/control-chars";
 import { isUndefinedTableError, logIntelligenceEvent } from "../intelligence/errors";
 import { expireClaimLocks } from "./expire";
 import {
@@ -114,6 +115,11 @@ const BOARD_COLUMNS = {
   participationPoolBps: bounties.participationPoolBps,
 };
 
+function rejectBoardTextFilters(filters: BoardFilters): void {
+  rejectControlChars(filters.repo, "Repo");
+  rejectControlChars(filters.language, "Language");
+}
+
 /**
  * Board listing. Drains residual exclusive V1 claim-locks first so the board
  * never shows “Claimed by X until …”.
@@ -123,6 +129,7 @@ export async function listBoardBounties(
   filters: BoardFilters = {},
   now: Date = new Date(),
 ): Promise<BoardBounty[]> {
+  rejectBoardTextFilters(filters);
   await expireClaimLocks(db, now);
 
   const repoFilter = filters.repo?.trim();
@@ -155,6 +162,7 @@ export async function listBoardBountiesPage(
   page: BoardPageQuery,
   now: Date = new Date(),
 ): Promise<{ bounties: BoardBounty[]; hasMore: boolean }> {
+  rejectBoardTextFilters(filters);
   await expireClaimLocks(db, now);
 
   const repoFilter = filters.repo?.trim();

@@ -988,7 +988,12 @@ export function registerAccessOpenApi(registry: OpenAPIRegistry): void {
     .openapi("MarketingContactCounts");
 
   const contactListQuery = z.object({
-    search: z.string().optional().describe("Case-insensitive match on email, name, or GitHub username."),
+    search: z
+      .string()
+      .optional()
+      .describe(
+        "Case-insensitive match on email, name, or GitHub username. At most 200 characters. Control characters (U+0000–U+001F and U+007F) are validation_failed.",
+      ),
     q: z.string().optional().describe("Alias of search."),
     source: z.enum(["ghb", "lb1", "both"]).optional(),
     subscribed: z.enum(["true", "false"]).optional(),
